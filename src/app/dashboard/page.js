@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User } from 'lucide-react';
 import ThumbnailUpload from "../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
-import { validatePost } from "../../utils/validatePost";
+import { validatePost } from "../../utils/postValidate";
 
 // Constants
 const LANGUAGES = {
