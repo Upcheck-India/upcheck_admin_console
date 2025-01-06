@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User } from 'lucide-react';
 import ThumbnailUpload from "../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
+import { validatePost } from "../../utils/validatePost";
 
 // Constants
 const LANGUAGES = {
@@ -295,31 +296,6 @@ const CategoriesField = ({ value, onChange }) => (
     onChange={(value) => onChange(value.split(',').map(category => category.trim()))}
   />
 );
-
-// Modified Dashboard page with form validation
-export function validatePost(post) {
-    const defaultValues = {
-      title: "New post",
-      content: "In the making",
-      author: "Anonymous",
-      tags: ["shrimpTag"],
-      categories: ["In edit"]
-    };
-  
-    return {
-      ...post,
-      author: post.author || defaultValues.author,
-      translations: Object.entries(post.translations).reduce((acc, [lang, content]) => ({
-        ...acc,
-        [lang]: {
-          title: content.title || defaultValues.title,
-          content: content.content || defaultValues.content
-        }
-      }), post.translations),
-      tags: post.tags.length ? post.tags : defaultValues.tags,
-      categories: post.categories.length ? post.categories : defaultValues.categories
-    };
-  }
 
 // Main Dashboard Component
 export default function Dashboard() {
