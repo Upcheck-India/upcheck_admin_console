@@ -387,15 +387,15 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h1 className="text-3xl font-bold text-gray-900">Posts Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
           <div className="flex items-center space-x-4">
-            <AccountMenu onLogout={handleLogout} />
             <button
               onClick={() => window.location.href = '/new-post'}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               New Post
             </button>
+            <AccountMenu onLogout={handleLogout} />
           </div>
         </div>
 
