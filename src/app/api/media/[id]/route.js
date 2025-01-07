@@ -3,13 +3,16 @@ import { NextResponse } from 'next/server';
 import clientPromise from "../../../../lib/mongodb";
 import { GridFSBucket, ObjectId } from 'mongodb';
 
-export async function GET(req, { params }) {
+export async function GET(req, context) {
   try {
+    const { params } = context;
+    const id = await params.id;
+
     const client = await clientPromise;
     const db = client.db("resources");
     const bucket = new GridFSBucket(db);
     
-    const fileId = new ObjectId(params.id);
+    const fileId = new ObjectId(id);
     const downloadStream = bucket.openDownloadStream(fileId);
 
     const chunks = [];
