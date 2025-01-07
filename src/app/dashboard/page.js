@@ -329,6 +329,7 @@ export default function Dashboard() {
         const res = await fetch('/api/auth/logout', { method: 'POST' });
         if (res.ok) {
           localStorage.removeItem('username');
+          sessionStorage.clear();
           router.push('/login');
         }
       } catch (error) {

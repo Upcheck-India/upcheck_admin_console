@@ -27,18 +27,34 @@ export default function Login() {
       const res = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
+        credentials: 'include' // Important: This ensures cookies are sent/received
       });
 
-      if (res.ok) {
-        localStorage.setItem('username', username);
+      const data = await res.json();
+
+      if (res.ok && data.success) {
         setAlert({ type: 'success', message: 'Login successful!' });
-        setTimeout(() => router.push('/dashboard'), 1000);
+        localStorage.setItem('username', username);
+        
+        // Verify the cookie is set before redirecting
+        const checkAuth = await fetch('/api/auth/check', {
+          credentials: 'include'
+        });
+        
+        if (checkAuth.ok) {
+          router.push('/dashboard');
+          // Force a refresh to ensure middleware picks up the new auth state
+          router.refresh();
+        } else {
+          throw new Error('Authentication failed');
+        }
       } else {
-        setAlert({ type: 'error', message: 'Invalid credentials' });
+        setAlert({ type: 'error', message: data.error || 'Invalid credentials' });
       }
     } catch (error) {
-      setAlert({ type: 'error', message: 'Server error' });
+      console.error('Login error:', error);
+      setAlert({ type: 'error', message: 'Server error. Please try again.' });
     } finally {
       setIsLoading(false);
     }
@@ -46,7 +62,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8 animate-fadeIn">
+      <div className="max-w-md w-full space-y-8">
         <div className="space-y-4">
           <h1 className="mt-6 text-center text-3xl md:text-5xl font-extrabold text-teal-400 tracking-tight">
             Upcheck
@@ -59,7 +75,7 @@ export default function Login() {
           </p>
         </div>
 
-        <div className="bg-white p-8 rounded-xl shadow-lg transform transition-all duration-300 hover:shadow-xl">
+        <div className="bg-white p-8 rounded-xl shadow-lg">
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-4">
               <div className="relative group">
