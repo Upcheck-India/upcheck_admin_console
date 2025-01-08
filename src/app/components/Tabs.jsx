@@ -1,44 +1,45 @@
-// src/app/components/Tabs.jsx
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, memo } from 'react';
 
 const TabsContext = createContext({
   activeTab: '',
   setActiveTab: () => {},
 });
 
-export function Tabs({ value, onValueChange, children, className = '' }) {
-  const [activeTab, setActiveTab] = useState(value);
-
-  const handleTabChange = (newValue) => {
-    setActiveTab(newValue);
-    onValueChange?.(newValue);
-  };
+export const Tabs = memo(({ value, onValueChange, children, className = '' }) => {
+  const contextValue = React.useMemo(() => ({
+    activeTab: value,
+    setActiveTab: onValueChange
+  }), [value, onValueChange]);
 
   return (
-    <TabsContext.Provider value={{ activeTab, setActiveTab: handleTabChange }}>
+    <TabsContext.Provider value={contextValue}>
       <div className={`w-full ${className}`}>
         {children}
       </div>
     </TabsContext.Provider>
   );
-}
+});
 
-export function TabsList({ children, className = '' }) {
+export const TabsList = memo(({ children, className = '' }) => {
   return (
     <div className={`flex flex-wrap gap-2 border-b border-gray-200 ${className}`}>
       {children}
     </div>
   );
-}
+});
 
-export function TabsTrigger({ value, children, icon: Icon }) {
+export const TabsTrigger = memo(({ value, children, icon: Icon }) => {
   const { activeTab, setActiveTab } = useContext(TabsContext);
   const isActive = activeTab === value;
+
+  const handleClick = React.useCallback(() => {
+    setActiveTab(value);
+  }, [setActiveTab, value]);
 
   return (
     <button
       type="button"
-      onClick={() => setActiveTab(value)}
+      onClick={handleClick}
       className={`px-4 py-2 text-sm font-medium rounded-t-lg -mb-px flex items-center gap-2
         ${isActive 
           ? 'border-b-2 border-blue-500 text-blue-600 bg-white' 
@@ -49,9 +50,9 @@ export function TabsTrigger({ value, children, icon: Icon }) {
       {children}
     </button>
   );
-}
+});
 
-export function TabsContent({ value, children }) {
+export const TabsContent = memo(({ value, children }) => {
   const { activeTab } = useContext(TabsContext);
   
   if (activeTab !== value) return null;
@@ -61,4 +62,10 @@ export function TabsContent({ value, children }) {
       {children}
     </div>
   );
-}
+});
+
+// Add display names for debugging
+Tabs.displayName = 'Tabs';
+TabsList.displayName = 'TabsList';
+TabsTrigger.displayName = 'TabsTrigger';
+TabsContent.displayName = 'TabsContent';
