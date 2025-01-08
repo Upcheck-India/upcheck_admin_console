@@ -1,3 +1,4 @@
+//fixed content box with more styling options
 "use client";
 
 import React, {useRef, useState} from 'react';
