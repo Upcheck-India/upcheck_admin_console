@@ -1,10 +1,13 @@
 //fixed content box with more styling options
 "use client";
 
-import React, {useRef, useState} from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Info, Languages, Hash, FolderTree, Bold, Italic, AlignLeft, Pilcrow, List, ListOrdered, Minus, Underline, Link2, Copy, Undo2, Redo2 } from 'lucide-react';
 import ThumbnailUpload from '../components/ThumbnailUpload';
+import SecureLoading from "../components/SecureLoading";
+import { useAuth } from '../../hooks/useAuth';
+import AuthorField from '../components/AuthorField';
 
 const LANGUAGES = {
   en: 'English',
@@ -252,16 +255,19 @@ const initialFormState = {
 
 export default function NewPost() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = React.useState('basic');
-  const [formData, setFormData] = React.useState(initialFormState);
-  const [errors, setErrors] = React.useState({});
-  const [alert, setAlert] = React.useState(null);
+  const { isLoading: authLoading, isAuthenticated } = useAuth(true);
+  
+  // Move all hooks to the top level, before any conditional returns
+  const [activeTab, setActiveTab] = useState('basic');
+  const [formData, setFormData] = useState(initialFormState);
+  const [errors, setErrors] = useState({});
+  const [alert, setAlert] = useState(null);
 
-  const handleInputChange = React.useCallback((field, value) => {
+  const handleInputChange = useCallback((field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   }, []);
 
-  const handleTranslationChange = React.useCallback((lang, field, value) => {
+  const handleTranslationChange = useCallback((lang, field, value) => {
     setFormData(prev => ({
       ...prev,
       translations: {
@@ -271,7 +277,14 @@ export default function NewPost() {
     }));
   }, []);
 
-  const validateForm = () => {
+  // Authentication effect
+  React.useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  const validateForm = useCallback(() => {
     const newErrors = {};
     if (!formData.author.trim()) newErrors.author = 'Required';
     if (!formData.thumbnail) newErrors.thumbnail = 'Required';
@@ -281,9 +294,9 @@ export default function NewPost() {
     if (!formData.translations.en.content.trim()) newErrors.enContent = 'Required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [formData]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     if (!validateForm()) {
       setAlert({ type: 'error', message: 'Please fill in all required fields' });
@@ -301,6 +314,7 @@ export default function NewPost() {
       const res = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(postData)
       });
 
@@ -313,7 +327,17 @@ export default function NewPost() {
         message: 'Failed to create post. Please try again.'
       });
     }
-  };
+  }, [formData, router, validateForm]);
+
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  // If not authenticated, return null (useEffect will handle redirect)
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
@@ -372,129 +396,122 @@ export default function NewPost() {
           {activeTab === 'basic' ? (
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium mb-1">Author*</label>
-                <input
-                  type="text"
-                  value={formData.author}
-                  onChange={e => handleInputChange('author', e.target.value)}
-                  className={`w-full p-3 rounded-lg border ${
-                    errors.author ? 'border-red-500' : 'border-gray-300'
-                  } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
-                />
-                {errors.author && (
-                  <span className="text-red-500 text-sm">{errors.author}</span>
-                )}
+              <AuthorField
+  value={formData.author}
+  onChange={(value) => handleInputChange('author', value)}
+  error={errors.author}
+/>
+                </div>
+  
+                <div>
+                  <label className="block text-sm font-medium mb-1">Thumbnail*</label>
+                  <ThumbnailUpload
+                    value={formData.thumbnail}
+                    onChange={url => handleInputChange('thumbnail', url)}
+                  />
+                  {errors.thumbnail && (
+                    <span className="text-red-500 text-sm">{errors.thumbnail}</span>
+                  )}
+                </div>
+  
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Tags* (comma-separated)
+                  </label>
+                  <div className="relative">
+                    <Hash className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.tags}
+                      onChange={e => handleInputChange('tags', e.target.value)}
+                      placeholder="technology, programming"
+                      className={`w-full p-3 pl-10 rounded-lg border ${
+                        errors.tags ? 'border-red-500' : 'border-gray-300'
+                      } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
+                    />
+                  </div>
+                  {errors.tags && (
+                    <span className="text-red-500 text-sm">{errors.tags}</span>
+                  )}
+                </div>
+  
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Categories* (comma-separated)
+                  </label>
+                  <div className="relative">
+                    <FolderTree className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formData.categories}
+                      onChange={e => handleInputChange('categories', e.target.value)}
+                      placeholder="tutorials, news"
+                      className={`w-full p-3 pl-10 rounded-lg border ${
+                        errors.categories ? 'border-red-500' : 'border-gray-300'
+                      } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
+                    />
+                  </div>
+                  {errors.categories && (
+                    <span className="text-red-500 text-sm">{errors.categories}</span>
+                  )}
+                </div>
               </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Thumbnail*</label>
-                <ThumbnailUpload
-                  value={formData.thumbnail}
-                  onChange={url => handleInputChange('thumbnail', url)}
-                />
-                {errors.thumbnail && (
-                  <span className="text-red-500 text-sm">{errors.thumbnail}</span>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Tags* (comma-separated)
-                </label>
-                <div className="relative">
-                  <Hash className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Title {activeTab === 'en' && '*'}
+                  </label>
                   <input
                     type="text"
-                    value={formData.tags}
-                    onChange={e => handleInputChange('tags', e.target.value)}
-                    placeholder="technology, programming"
-                    className={`w-full p-3 pl-10 rounded-lg border ${
-                      errors.tags ? 'border-red-500' : 'border-gray-300'
+                    value={formData.translations[activeTab].title}
+                    onChange={e => handleTranslationChange(activeTab, 'title', e.target.value)}
+                    className={`w-full p-3 rounded-lg border ${
+                      errors[`${activeTab}Title`] ? 'border-red-500' : 'border-gray-300'
                     } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
                   />
+                  {errors[`${activeTab}Title`] && (
+                    <span className="text-red-500 text-sm">
+                      {errors[`${activeTab}Title`]}
+                    </span>
+                  )}
                 </div>
-                {errors.tags && (
-                  <span className="text-red-500 text-sm">{errors.tags}</span>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Categories* (comma-separated)
-                </label>
-                <div className="relative">
-                  <FolderTree className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={formData.categories}
-                    onChange={e => handleInputChange('categories', e.target.value)}
-                    placeholder="tutorials, news"
-                    className={`w-full p-3 pl-10 rounded-lg border ${
-                      errors.categories ? 'border-red-500' : 'border-gray-300'
-                    } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
+  
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Content {activeTab === 'en' && '*'}
+                  </label>
+                  <RichTextEditor
+                    value={formData.translations[activeTab].content}
+                    onChange={(value) => handleTranslationChange(activeTab, 'content', value)}
+                    error={errors[`${activeTab}Content`]}
                   />
+                  {errors[`${activeTab}Content`] && (
+                    <span className="text-red-500 text-sm">
+                      {errors[`${activeTab}Content`]}
+                    </span>
+                  )}
                 </div>
-                {errors.categories && (
-                  <span className="text-red-500 text-sm">{errors.categories}</span>
-                )}
               </div>
+            )}
+  
+            <div className="flex justify-end space-x-4 mt-8">
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+              >
+                Create Post
+              </button>
             </div>
-          ) : (
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Title {activeTab === 'en' && '*'}
-                </label>
-                <input
-                  type="text"
-                  value={formData.translations[activeTab].title}
-                  onChange={e => handleTranslationChange(activeTab, 'title', e.target.value)}
-                  className={`w-full p-3 rounded-lg border ${
-                    errors[`${activeTab}Title`] ? 'border-red-500' : 'border-gray-300'
-                  } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
-                />
-                {errors[`${activeTab}Title`] && (
-                  <span className="text-red-500 text-sm">
-                    {errors[`${activeTab}Title`]}
-                  </span>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Content {activeTab === 'en' && '*'}
-                </label>
-                <RichTextEditor
-                  value={formData.translations[activeTab].content}
-                  onChange={(value) => handleTranslationChange(activeTab, 'content', value)}
-                  error={errors[`${activeTab}Content`]}
-                />
-                {errors[`${activeTab}Content`] && (
-                  <span className="text-red-500 text-sm">
-                    {errors[`${activeTab}Content`]}
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end space-x-4 mt-8">
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard')}
-              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              Create Post
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }

@@ -1,9 +1,12 @@
+//src/app/login/page.js
+
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Lock, Loader2 } from 'lucide-react';
 import { AlertMessage } from "../components/AlertMessage";
+import { useAuth } from '../../hooks/useAuth';
 
 export default function Login() {
   const [username, setUsername] = useState('');

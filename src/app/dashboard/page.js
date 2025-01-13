@@ -1,9 +1,14 @@
+// src/app/dashboard/page.js
 "use client";
+
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../hooks/useAuth';
 import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User } from 'lucide-react';
 import ThumbnailUpload from "../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
 import { validatePost } from "../../utils/postValidate";
+import SecureLoading from "../components/SecureLoading";
+import DashboardContentLoader from "../components/DashboardLoading";
 
 // Constants
 const LANGUAGES = {
@@ -17,7 +22,10 @@ const LANGUAGES = {
 // Components
 const LoadingState = () => (
   <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+    <div className="text-center">
+      <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
+      <p className="mt-4 text-gray-600">Loading dashboard...</p>
+    </div>
   </div>
 );
 
@@ -299,47 +307,64 @@ const CategoriesField = ({ value, onChange }) => (
 
 // Main Dashboard Component
 export default function Dashboard() {
-    const [posts, setPosts] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [viewingPost, setViewingPost] = useState(null);
-    const [selectedPost, setSelectedPost] = useState(null);
-    const [selectedLanguage, setSelectedLanguage] = useState('en');
-    const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
-    const router = useRouter();
-  
-    useEffect(() => {
+  // Add authentication check using the useAuth hook
+  const { isLoading: authLoading, isAuthenticated } = useAuth(true);
+  const [posts, setPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [viewingPost, setViewingPost] = useState(null);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated) {
       fetchPosts();
-    }, []);
-  
-    const fetchPosts = async () => {
-      try {
-        setIsLoading(true);
-        const res = await fetch('/api/posts');
-        if (res.ok) {
-          const data = await res.json();
-          setPosts(data);
-        }
-      } finally {
-        setIsLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  const fetchPosts = async () => {
+    try {
+      setIsLoading(true);
+      const res = await fetch('/api/posts', {
+        credentials: 'include' // Include credentials for authenticated requests
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(data);
+      } else if (res.status === 401) {
+        // Handle unauthorized access
+        router.push('/login');
       }
-    };
-  
-    const handleLogout = async () => {
-      try {
-        const res = await fetch('/api/auth/logout', { method: 'POST' });
-        if (res.ok) {
-          localStorage.removeItem('username');
-          sessionStorage.clear();
-          router.push('/login');
-        }
-      } catch (error) {
-        console.error('Logout failed:', error);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        localStorage.removeItem('username');
+        sessionStorage.clear();
+        router.push('/login');
       }
-    };
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   const handleDelete = async (id) => {
     if (window.confirm('Are you sure you want to delete this post?')) {
-      const res = await fetch(`/api/posts/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/posts/${id}`, { 
+        method: 'DELETE',
+        credentials: 'include'
+      });
       if (res.ok) {
         fetchPosts();
       }
@@ -347,7 +372,9 @@ export default function Dashboard() {
   };
 
   const handleEdit = async (id) => {
-    const res = await fetch(`/api/posts/${id}`);
+    const res = await fetch(`/api/posts/${id}`, {
+      credentials: 'include'
+    });
     if (res.ok) {
       const data = await res.json();
       setSelectedPost(data);
@@ -357,31 +384,39 @@ export default function Dashboard() {
   const handleUpdate = async (updatedPost) => {
     const validatedPost = validatePost(updatedPost);
     if (JSON.stringify(validatedPost) !== JSON.stringify(updatedPost)) {
-        if (!confirm('Some fields are empty. Would you like to proceed with default values?')) {
-            return;
-        }
+      if (!confirm('Some fields are empty. Would you like to proceed with default values?')) {
+        return;
+      }
     }
     
     try {
-        const res = await fetch(`/api/posts/${updatedPost.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(validatedPost)
-        });
+      const res = await fetch(`/api/posts/${updatedPost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(validatedPost)
+      });
     
-        if (res.ok) {
-            setSelectedPost(null);
-            fetchPosts();
-        } else {
-            console.error('Failed to update post');
-        }
+      if (res.ok) {
+        setSelectedPost(null);
+        fetchPosts();
+      } else if (res.status === 401) {
+        router.push('/login');
+      } else {
+        console.error('Failed to update post');
+      }
     } catch (error) {
-        console.error('Error updating post:', error);
+      console.error('Error updating post:', error);
     }
-};
+  };
 
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  // Show loading state while fetching posts
   if (isLoading) {
-    return <LoadingState />;
+    return <DashboardContentLoader />;
   }
 
   return (
@@ -391,7 +426,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => window.location.href = '/new-post'}
+              onClick={() => router.push('/new-post')}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               New Post
