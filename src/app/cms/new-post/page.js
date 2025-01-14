@@ -4,10 +4,10 @@
 import React, { useRef, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Info, Languages, Hash, FolderTree, Bold, Italic, AlignLeft, Pilcrow, List, ListOrdered, Minus, Underline, Link2, Copy, Undo2, Redo2 } from 'lucide-react';
-import ThumbnailUpload from '../components/ThumbnailUpload';
-import SecureLoading from "../components/SecureLoading";
-import { useAuth } from '../../hooks/useAuth';
-import AuthorField from '../components/AuthorField';
+import ThumbnailUpload from '../../components/ThumbnailUpload';
+import SecureLoading from "../../components/SecureLoading";
+import { useAuth } from '../../../hooks/useAuth';
+import AuthorField from '../../components/AuthorField';
 
 const LANGUAGES = {
   en: 'English',

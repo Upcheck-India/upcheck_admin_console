@@ -13,7 +13,7 @@ export function middleware(request) {
 
   // Redirect authenticated users trying to access login/public pages to dashboard
   if (isPublicPath && token) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
+    return NextResponse.redirect(new URL('/console', request.url))
   }
 
   // Redirect unauthenticated users trying to access protected pages to login
@@ -26,7 +26,8 @@ export function middleware(request) {
 export const config = {
   matcher: [
     // Protected routes
-    '/dashboard',
+    '/cms/dashboard',
+    '/console',
     '/dashboard/:path*',
     '/settings',
     '/settings/:path*',

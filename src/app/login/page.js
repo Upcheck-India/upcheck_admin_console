@@ -46,7 +46,7 @@ export default function Login() {
         });
         
         if (checkAuth.ok) {
-          router.push('/dashboard');
+          router.push('/console');
           // Force a refresh to ensure middleware picks up the new auth state
           router.refresh();
         } else {

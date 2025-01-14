@@ -2,13 +2,13 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../../hooks/useAuth';
 import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User } from 'lucide-react';
-import ThumbnailUpload from "../components/ThumbnailUpload";
+import ThumbnailUpload from "../../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
-import { validatePost } from "../../utils/postValidate";
-import SecureLoading from "../components/SecureLoading";
-import DashboardContentLoader from "../components/DashboardLoading";
+import { validatePost } from "../../../utils/postValidate";
+import SecureLoading from "../../components/SecureLoading";
+import DashboardContentLoader from "../../components/DashboardLoading";
 
 // Constants
 const LANGUAGES = {
@@ -426,7 +426,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => router.push('/new-post')}
+              onClick={() => router.push('/cms/new-post')}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               New Post

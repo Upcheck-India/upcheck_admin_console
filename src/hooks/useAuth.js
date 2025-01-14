@@ -20,7 +20,7 @@ export function useAuth(requireAuth = true) {
         if (requireAuth && !isAuthed) {
           router.push('/login');
         } else if (!requireAuth && isAuthed) {
-          router.push('/dashboard');
+          router.push('/console');
         }
       } catch (error) {
         console.error('Auth check error:', error);
