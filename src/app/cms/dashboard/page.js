@@ -1,9 +1,8 @@
-// src/app/dashboard/page.js
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
-import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User } from 'lucide-react';
+import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User, AlertTriangle } from 'lucide-react';
 import ThumbnailUpload from "../../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
 import { validatePost } from "../../../utils/postValidate";
@@ -17,6 +16,39 @@ const LANGUAGES = {
   hi: 'Hindi',
   te: 'Telugu',
   bn: 'Bengali'
+};
+
+// Access Denied Modal Component
+const AccessDeniedModal = ({ isOpen, onClose }) => {
+  const router = useRouter();
+
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg w-full max-w-md">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <h3 className="text-lg font-semibold text-gray-900">Access Denied</h3>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <p className="text-gray-600 mb-6">You don't have permission to access this page. Required permission: content.manage</p>
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={() => router.push('/console')}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+            >
+              Return to Console
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // Components
@@ -305,36 +337,50 @@ const CategoriesField = ({ value, onChange }) => (
   />
 );
 
-// Main Dashboard Component
 export default function Dashboard() {
-  // Add authentication check using the useAuth hook
-  const { isLoading: authLoading, isAuthenticated } = useAuth(true);
+  const { 
+    isLoading: authLoading, 
+    isAuthenticated, 
+    hasPermission, 
+    authError
+  } = useAuth(true, 'content.manage');
+  
   const [posts, setPosts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [viewingPost, setViewingPost] = useState(null);
   const [selectedPost, setSelectedPost] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState(false);
+  const [showAccessDenied, setShowAccessDenied] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !hasPermission) {
+      setShowAccessDenied(true);
+    }
+  }, [isAuthenticated, hasPermission]);
+
+  useEffect(() => {
+    if (isAuthenticated && hasPermission) {
       fetchPosts();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, hasPermission]);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
 
   const fetchPosts = async () => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/posts', {
-        credentials: 'include' // Include credentials for authenticated requests
+        credentials: 'include'
       });
       if (res.ok) {
         const data = await res.json();
         setPosts(data);
-      } else if (res.status === 401) {
-        // Handle unauthorized access
-        router.push('/login');
+      } else if (res.status === 401 || res.status === 403) {
+        setShowAccessDenied(true);
       }
     } catch (error) {
       console.error('Error fetching posts:', error);
@@ -367,6 +413,8 @@ export default function Dashboard() {
       });
       if (res.ok) {
         fetchPosts();
+      } else if (res.status === 403) {
+        setShowAccessDenied(true);
       }
     }
   };
@@ -378,6 +426,8 @@ export default function Dashboard() {
     if (res.ok) {
       const data = await res.json();
       setSelectedPost(data);
+    } else if (res.status === 403) {
+      setShowAccessDenied(true);
     }
   };
 
@@ -402,6 +452,8 @@ export default function Dashboard() {
         fetchPosts();
       } else if (res.status === 401) {
         router.push('/login');
+      } else if (res.status === 403) {
+        setShowAccessDenied(true);
       } else {
         console.error('Failed to update post');
       }
@@ -410,68 +462,70 @@ export default function Dashboard() {
     }
   };
 
-  if (authLoading) {
-    return <SecureLoading />;
-  }
-
-  // Show loading state while fetching posts
   if (isLoading) {
     return <DashboardContentLoader />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.push('/cms/new-post')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
-            >
-              New Post
-            </button>
-            <AccountMenu onLogout={handleLogout} />
+      {hasPermission ? (
+        <div className="max-w-7xl mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+            <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => router.push('/cms/new-post')}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              >
+                New Post
+              </button>
+              <AccountMenu onLogout={handleLogout} />
+            </div>
           </div>
-        </div>
 
-        <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-          {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              onView={setViewingPost}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
+          <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onView={setViewingPost}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+
+          {viewingPost && (
+            <ViewPostModal
+              post={viewingPost}
+              selectedLanguage={selectedLanguage}
+              onClose={() => setViewingPost(null)}
+              languageControls={{
+                selectedLanguage,
+                onLanguageSelect: (code) => {
+                  setSelectedLanguage(code);
+                  setIsLanguageDropdownOpen(false);
+                },
+                isOpen: isLanguageDropdownOpen,
+                onToggle: () => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)
+              }}
             />
-          ))}
+          )}
+
+          {selectedPost && (
+            <EditPostModal
+              post={selectedPost}
+              onUpdate={handleUpdate}
+              onClose={() => setSelectedPost(null)}
+            />
+          )}
         </div>
-
-        {viewingPost && (
-          <ViewPostModal
-            post={viewingPost}
-            selectedLanguage={selectedLanguage}
-            onClose={() => setViewingPost(null)}
-            languageControls={{
-              selectedLanguage,
-              onLanguageSelect: (code) => {
-                setSelectedLanguage(code);
-                setIsLanguageDropdownOpen(false);
-              },
-              isOpen: isLanguageDropdownOpen,
-              onToggle: () => setIsLanguageDropdownOpen(!isLanguageDropdownOpen)
-            }}
-          />
-        )}
-
-        {selectedPost && (
-          <EditPostModal
-            post={selectedPost}
-            onUpdate={handleUpdate}
-            onClose={() => setSelectedPost(null)}
-          />
-        )}
-      </div>
+      ) : (
+        <AccessDeniedModal 
+          isOpen={showAccessDenied} 
+          onClose={() => router.push('/console')} 
+        />
+      )}
     </div>
   );
 }

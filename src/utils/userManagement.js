@@ -14,12 +14,12 @@ export const departments = [
   export const roleHierarchy = {
     'Console admin': {
       level: 0, // Highest level
-      canManage: ['Admin', 'CMS admin', 'Member'],
+      canManage: ['Console admin','Admin', 'CMS admin', 'Member', 'Mentee'],
       perms: ['console.manage', 'users.manage', 'content.modify', 'department.manage']
     },
     'Admin': {
       level: 1,
-      canManage: ['CMS admin', 'Member'],
+      canManage: ['CMS admin', 'Member', 'Mentee'],
       perms: ['users.manage', 'content.modify', 'department.assign']
     },
     'CMS admin': {
@@ -29,6 +29,11 @@ export const departments = [
     },
     'Member': {
       level: 3,
+      canManage: [],
+      perms: []
+    },
+    'Mentee': {
+      level: 4,
       canManage: [],
       perms: []
     }

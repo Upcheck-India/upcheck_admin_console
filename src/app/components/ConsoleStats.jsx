@@ -1,45 +1,63 @@
 // src/app/components/ConsoleStats.jsx
-import React, { useState, useEffect } from 'react';
-import { Users, MessageSquare, CheckSquare, Bell } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Users, MessageSquare, CheckSquare, Bell } from "lucide-react";
 
 const ConsoleStats = () => {
   const [stats, setStats] = useState({
     totalMembers: 0,
     totalPosts: 0,
-    openTasks: 2,
-    notifications: 1
+    openTasks: 0,
+    notifications: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Get username from localStorage
+  const username = localStorage.getItem("username");
+
   useEffect(() => {
     const fetchStats = async () => {
+      if (!username) {
+        setError("No username found in localStorage.");
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         setError(null);
 
-        const response = await fetch('/api/stats/users');
+        const response = await fetch("/api/stats/users", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "username": username, // Pass username in headers
+          },
+        });
+
         const data = await response.json();
 
         if (!data.success) {
-          throw new Error(data.error || 'Failed to fetch statistics');
+          throw new Error(data.error || "Failed to fetch statistics");
         }
 
-        setStats(prevStats => ({
+        setStats((prevStats) => ({
           ...prevStats,
           totalMembers: data.usersCount || 0,
-          totalPosts: data.postsCount || 0
+          totalPosts: data.postsCount || 0,
+          openTasks: data.tasksCount || 0,
+          notifications: data.notifsCount || 0,
         }));
       } catch (err) {
-        console.error('Error fetching stats:', err);
-        setError('Failed to load statistics. Please try again.');
+        console.error("Error fetching stats:", err);
+        setError("Failed to load statistics. Please try again.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchStats();
-  }, []);
+  }, [username]);
 
   if (loading) {
     return (
@@ -60,8 +78,8 @@ const ConsoleStats = () => {
     return (
       <div className="bg-red-50 border border-red-200 text-red-600 p-4 rounded-lg mb-8">
         <p className="text-sm mt-1">{error}</p>
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="mt-2 text-sm bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1 rounded-md transition-colors"
         >
           Retry
@@ -71,17 +89,17 @@ const ConsoleStats = () => {
   }
 
   const statsData = [
-    { label: 'Total members', value: stats.totalMembers, icon: Users },
-    { label: 'Total posts', value: stats.totalPosts, icon: MessageSquare },
-    { label: 'Open Tasks', value: stats.openTasks, icon: CheckSquare },
-    { label: 'Notifications', value: stats.notifications, icon: Bell }
+    { label: "Total members", value: stats.totalMembers, icon: Users },
+    { label: "Total posts", value: stats.totalPosts, icon: MessageSquare },
+    { label: "Open Tasks", value: stats.openTasks, icon: CheckSquare },
+    { label: "Notifications", value: stats.notifications, icon: Bell },
   ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
       {statsData.map((stat, index) => (
-        <div 
-          key={index} 
+        <div
+          key={index}
           className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
         >
           <div className="flex items-center gap-2 mb-2">

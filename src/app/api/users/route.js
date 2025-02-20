@@ -82,7 +82,8 @@ export async function POST(req) {
       role: body.role,
       department: body.department || 'Unassigned',
       perms: currentUserRole === 'Console admin' ? body.perms : roleHierarchy[body.role].perms,
-      lastLogin: new Date()
+      lastLogin: new Date(),
+      notifs: 0
     };
 
     const result = await db.collection('admin_users').insertOne(newUser);

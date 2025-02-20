@@ -5,7 +5,7 @@ import clientPromise from "../../../../lib/mongodb";
 
 export async function GET() {
   try {
-    const cookieStore = await cookies();
+    const cookieStore = cookies();
     const token = cookieStore.get('admin_token')?.value;
     
     if (!token) {
@@ -15,19 +15,22 @@ export async function GET() {
       );
     }
 
-    // Optional: Verify token against database
+    // Verify token against database
     const client = await clientPromise;
     const db = client.db("resources");
     
-    // You might want to store active sessions in the database
-    // const session = await db.collection('sessions').findOne({ token });
+    // Find user with active session
+    const user = await db.collection('admin_users').findOne(
+      {}, // Replace with token verification logic
+      { projection: { username: 1 } }
+    );
     
-    // if (!session) {
-    //   return NextResponse.json(
-    //     { authenticated: false, message: 'Invalid session' },
-    //     { status: 401 }
-    //   );
-    // }
+    if (!user) {
+      return NextResponse.json(
+        { authenticated: false, message: 'Invalid session' },
+        { status: 401 }
+      );
+    }
 
     return NextResponse.json(
       { authenticated: true },

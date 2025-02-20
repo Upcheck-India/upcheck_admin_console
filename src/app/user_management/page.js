@@ -144,9 +144,9 @@ const UserManagement = () => {
   const getAvailableRoles = () => {
     switch(currentUser?.role) {
       case 'Console admin':
-        return ['Admin', 'CMS admin', 'Member'];
+        return ['Admin', 'CMS admin', 'Member', 'Mentee'];
       case 'Admin':
-        return ['CMS admin', 'Member'];
+        return ['CMS admin', 'Member', 'Mentee'];
       default:
         return [];
     }
@@ -380,7 +380,8 @@ const UserManagement = () => {
                     const defaultPerms = {
                       'Admin': ['users.manage', 'content.manage'],
                       'CMS admin': ['content.manage'],
-                      'Member': []
+                      'Member': [],
+                      'Mentee': []
                     }[selectedRole] || [];
                     
                     setFormData({

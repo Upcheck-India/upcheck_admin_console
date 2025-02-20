@@ -2,38 +2,71 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function useAuth(requireAuth = true) {
+export function useAuth(requireAuth = true, requiredPermission = null) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [user, setUser] = useState(null); // Add state to store user data
   const router = useRouter();
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const checkAuthAndPermissions = async () => {
       try {
-        const response = await fetch('/api/auth/check', {
+        console.log('Checking authentication...');
+        // Check authentication
+        const authResponse = await fetch('/api/auth/check', {
           credentials: 'include'
         });
 
-        const isAuthed = response.ok;
-        setIsAuthenticated(isAuthed);
+        if (!authResponse.ok) {
+          console.log('Authentication failed');
+          if (requireAuth) {
+            router.push('/login');
+          }
+          setIsAuthenticated(false);
+          setIsLoading(false);
+          return;
+        }
 
-        if (requireAuth && !isAuthed) {
-          router.push('/login');
-        } else if (!requireAuth && isAuthed) {
-          router.push('/console');
+        const userData = await authResponse.json();
+        console.log('Authentication successful:', userData);
+        setIsAuthenticated(true);
+        setUser(userData.user); // Store user data
+
+        // If permission check is required
+        if (requiredPermission) {
+          console.log('Checking permissions...');
+          const permResponse = await fetch('/api/auth/permissions', {
+            credentials: 'include'
+          });
+
+          if (!permResponse.ok) {
+            throw new Error('Permission check failed');
+          }
+
+          const { permissions } = await permResponse.json();
+          const permitted = permissions?.includes(requiredPermission);
+          setHasPermission(permitted);
+
+          if (!permitted) {
+            setAuthError('Permission denied');
+          }
+        } else {
+          setHasPermission(true);
         }
       } catch (error) {
-        console.error('Auth check error:', error);
-        if (requireAuth) {
-          router.push('/login');
-        }
+        console.error('Auth/Permission check error:', error);
+        setAuthError(error.message);
+        setHasPermission(false);
       } finally {
+        console.log('Setting isLoading to false');
         setIsLoading(false);
       }
     };
 
-    checkAuth();
-  }, [requireAuth, router]);
+    checkAuthAndPermissions();
+  }, [requireAuth, requiredPermission, router]);
 
-  return { isLoading, isAuthenticated };
+  return { isLoading, isAuthenticated, hasPermission, authError, user };
 }

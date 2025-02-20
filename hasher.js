@@ -1,11 +1,16 @@
-// interactive-hasher.js
 const crypto = require('crypto');
 const readline = require('readline');
+const bcrypt = require('bcrypt');
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
+
+// Hash the password inside an async function
+async function hashPasswordWithBcrypt(password) {
+    return await bcrypt.hash(password, 10);
+}
 
 function hashPassword(password) {
     return crypto
@@ -17,18 +22,20 @@ function hashPassword(password) {
 console.log('Password Hashing Tool');
 console.log('====================');
 
-function askPassword() {
-    rl.question('\nEnter password to hash (or type "exit" to quit): ', (password) => {
+async function askPassword() {
+    rl.question('\nEnter password to hash (or type "exit" to quit): ', async (password) => {
         if (password.toLowerCase() === 'exit') {
             rl.close();
             return;
         }
 
         const hashedPassword = hashPassword(password);
+        const hashedPassword2 = await hashPasswordWithBcrypt(password); // Correct placement of await
+
         console.log('\nResults:');
         console.log('--------');
         console.log('Original password:', password);
-        console.log('Hashed password:  ', hashedPassword);
+        console.log('Bcrypt Hashed password: ', hashedPassword2); // Corrected output label
         
         // MongoDB document format
         console.log('\nMongoDB Format:');

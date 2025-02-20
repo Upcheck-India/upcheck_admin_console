@@ -81,7 +81,7 @@ const AdminLandingPage = () => {
             title: "Project Management",
             description: "Track projects, tasks, and team progress",
             icon: <Briefcase className="w-6 h-6 text-white" />,
-            link: "/coming-soon",
+            link: "/project_management",
             gradient: "from-teal-400 via-green-500 to-blue-600",
             bgLight: "bg-green-50"
           },

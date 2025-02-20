@@ -1,6 +1,7 @@
 // src/app/api/posts/route.js
 import { NextResponse } from 'next/server';
 import clientPromise from "../../../lib/mongodb";
+import { v4 as uuidv4 } from 'uuid'; // Import UUID generator
 
 export async function GET() {
   try {
@@ -18,23 +19,14 @@ export async function POST(req) {
     const client = await clientPromise;
     const db = client.db("resources");
     const body = await req.json();
-    
-    // Generate next ID
-    const lastPost = await db.collection('web')
-      .find({})
-      .sort({ id: -1 })
-      .limit(1)
-      .toArray();
-    
-    const nextId = lastPost.length > 0 ? 
-      (parseInt(lastPost[0].id) + 1).toString() : 
-      "1";
-    
+
     const newPost = {
       ...body,
-      id: nextId
+      id: uuidv4(), // Generate unique UUID
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
-    
+
     const result = await db.collection('web').insertOne(newPost);
     return NextResponse.json(result);
   } catch (error) {
