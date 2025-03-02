@@ -1,7 +1,7 @@
 // src/app/api/documents/upload/route.js
 import { NextResponse } from 'next/server';
 import { GridFSBucket } from 'mongodb';
-import clientPromise from '@/lib/mongodb';
+import clientPromise from '../../../../lib/mongodb';
 
 export async function POST(req) {
   const client = await clientPromise;
