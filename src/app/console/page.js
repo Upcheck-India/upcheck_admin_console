@@ -105,7 +105,7 @@ const AdminLandingPage = () => {
             title: "Documentation",
             description: "Internal announcements, documents and procedure guides",
             icon: <BookOpen className="w-6 h-6 text-white" />,
-            link: "/coming-soon",
+            link: "/documentation",
             gradient: "from-green-400 via-teal-500 to-blue-400",
             bgLight: "bg-green-50"
           }
