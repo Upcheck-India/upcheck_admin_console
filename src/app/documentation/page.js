@@ -1,11 +1,19 @@
-// src/app/documentation/page.jsx
 "use client";
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '../../hooks/useAuth';
+import SecureLoading from "../components/SecureLoading";
 
 export default function DocumentationPage() {
+  const { 
+    isLoading: authLoading, 
+    isAuthenticated, 
+    hasPermission, 
+    authError
+  } = useAuth(true);
+
   const [resources, setResources] = useState([]);
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -13,11 +21,25 @@ export default function DocumentationPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModal, setDeleteModal] = useState({ show: false, resourceId: null });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAccessDenied, setShowAccessDenied] = useState(false);
   const router = useRouter();
 
+  // Move all useEffect hooks before any conditional returns
+  useEffect(() => {
+    if (isAuthenticated && !hasPermission) {
+      setShowAccessDenied(true);
+    }
+  }, [isAuthenticated, hasPermission]);
+
+  // Move this useEffect before the conditional return
   useEffect(() => {
     fetchResources();
   }, []);
+  
+  // Now we can have conditional returns
+  if (authLoading) {
+    return <SecureLoading />;
+  }
 
   async function fetchResources() {
     try {
