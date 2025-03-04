@@ -356,7 +356,7 @@ export default function DocumentationPage() {
                   <div>
                     <div className="font-medium">{storageNames[option] || 'Server'}</div>
                     <div className="text-sm text-gray-500">
-                      {option === 'server' ? 'Direct download from our servers' : `Download via ${storageNames[option]}`}
+                      {option === 'server' ? 'Direct download from Upcheck server' : `Download via ${storageNames[option]}`}
                     </div>
                   </div>
                 </a>
