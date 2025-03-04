@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import SecureLoading from "../components/SecureLoading";
@@ -20,9 +21,28 @@ export default function DocumentationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteModal, setDeleteModal] = useState({ show: false, resourceId: null });
+  const [downloadModal, setDownloadModal] = useState({ show: false, resource: null });
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAccessDenied, setShowAccessDenied] = useState(false);
   const router = useRouter();
+
+  // Storage option icons mapping
+  const storageIcons = {
+    'server': '/icons/server.svg',
+    'google-drive': '/icons/drive.svg',
+    'onedrive': '/icons/onedrive.svg',
+    'mega': '/icons/mega.svg',
+    'mediafire': '/icons/mediafire.svg'
+  };
+
+  // Storage option names mapping
+  const storageNames = {
+    'server': 'Server',
+    'google-drive': 'Google Drive',
+    'onedrive': 'Microsoft OneDrive',
+    'mega': 'Mega',
+    'mediafire': 'MediaFire'
+  };
 
   // Move all useEffect hooks before any conditional returns
   useEffect(() => {
@@ -101,6 +121,23 @@ export default function DocumentationPage() {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const openDownloadModal = (resource) => {
+    setDownloadModal({ show: true, resource });
+  };
+
+  const closeDownloadModal = () => {
+    setDownloadModal({ show: false, resource: null });
+  };
+
+  // Ensure all resources have storageOptions by adding a check function:
+  const getResourceStorageOptions = (resource) => {
+    // Default to server if no storage options are defined
+    if (!resource.storageOptions || !Array.isArray(resource.storageOptions) || resource.storageOptions.length === 0) {
+      return ['server'];
+    }
+    return resource.storageOptions;
   };
 
   return (
@@ -207,15 +244,39 @@ export default function DocumentationPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     </button>
-                    <a
-                      href={resource.fileUrl || `/api/media/${resource.fileId}`}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center transition-colors"
-                    >
-                      <span className="mr-2">Download</span>
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                    </a>
+                    
+                    {/* Download Button */}
+                    {getResourceStorageOptions(resource).length === 1 ? (
+                      /* Single download option */
+                      <a
+                        href={getResourceStorageOptions(resource)[0] === 'server' 
+                          ? `/api/media/${resource.fileId}` 
+                          : (resource.alternativeLinks?.[getResourceStorageOptions(resource)[0]] || '#')}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center transition-colors"
+                        title={`Download from ${storageNames[getResourceStorageOptions(resource)[0]] || 'Server'}`}
+                      >
+                        <div className="w-5 h-5 mr-2 bg-blue-200 p-0.5 rounded">
+                          <Image 
+                            src={storageIcons[getResourceStorageOptions(resource)[0]] || '/icons/server.svg'} 
+                            alt={storageNames[getResourceStorageOptions(resource)[0]] || 'Server'} 
+                            width={20} 
+                            height={20} 
+                          />
+                        </div>
+                        <span>Download</span>
+                      </a>
+                    ) : (
+                      /* Multiple download options - Now uses modal instead of dropdown */
+                      <button
+                        onClick={() => openDownloadModal(resource)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        <span>Download</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -251,6 +312,63 @@ export default function DocumentationPage() {
                 ) : (
                   'Delete'
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Download Options Modal */}
+      {downloadModal.show && downloadModal.resource && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-semibold">Download Options</h3>
+              <button 
+                onClick={closeDownloadModal}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="mb-4 text-gray-600">Choose where to download "{downloadModal.resource.name}" from:</p>
+            
+            <div className="space-y-3">
+              {getResourceStorageOptions(downloadModal.resource).map((option) => (
+                <a
+                  key={option}
+                  href={option === 'server' 
+                    ? `/api/media/${downloadModal.resource.fileId}` 
+                    : (downloadModal.resource.alternativeLinks?.[option] || '#')}
+                  className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors w-full"
+                  onClick={closeDownloadModal}
+                >
+                  <div className="w-10 h-10 mr-3 bg-blue-100 p-2 rounded flex items-center justify-center">
+                    <Image 
+                      src={storageIcons[option] || '/icons/server.svg'} 
+                      alt={storageNames[option] || 'Server'} 
+                      width={24} 
+                      height={24} 
+                    />
+                  </div>
+                  <div>
+                    <div className="font-medium">{storageNames[option] || 'Server'}</div>
+                    <div className="text-sm text-gray-500">
+                      {option === 'server' ? 'Direct download from our servers' : `Download via ${storageNames[option]}`}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+            
+            <div className="mt-6 text-center">
+              <button
+                onClick={closeDownloadModal}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
               </button>
             </div>
           </div>

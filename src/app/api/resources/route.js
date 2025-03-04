@@ -22,25 +22,28 @@ export async function GET() {
     
     // Map GridFS files to the same format as resources
     const resourcesFromGridFS = filesFromGridFS
-      .filter(file => {
-        // Only include files that don't have a corresponding entry in resources collection
-        return !resourcesCollection.some(r => 
-          r.fileId && r.fileId.toString() === file._id.toString()
-        );
-      })
-      .map(file => ({
-        fileId: file._id,
-        name: file.metadata?.name || file.filename,
-        originalName: file.filename,
-        mimeType: file.contentType,
-        fileSize: file.metadata?.fileSize || formatFileSize(file.length),
-        fileSizeBytes: file.length,
-        category: file.metadata?.category || 'documents',
-        description: file.metadata?.description || '',
-        downloads: 0,
-        createdAt: file.uploadDate,
-        updatedAt: file.uploadDate
-      }));
+    .filter(file => {
+      // Only include files that don't have a corresponding entry in resources collection
+      return !resourcesCollection.some(r => 
+        r.fileId && r.fileId.toString() === file._id.toString()
+      );
+    })
+    .map(file => ({
+      fileId: file._id,
+      name: file.metadata?.name || file.filename,
+      originalName: file.filename,
+      mimeType: file.contentType,
+      fileSize: file.metadata?.fileSize || formatFileSize(file.length),
+      fileSizeBytes: file.length,
+      category: file.metadata?.category || 'documents',
+      description: file.metadata?.description || '',
+      downloads: 0,
+      createdAt: file.uploadDate,
+      updatedAt: file.uploadDate,
+      // Add default storageOptions for GridFS files
+      storageOptions: ['server'],
+      alternativeLinks: {}
+    }));
     
     // Combine both sources
     const allResources = [...resourcesCollection, ...resourcesFromGridFS];
