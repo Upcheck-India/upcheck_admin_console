@@ -4,9 +4,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Loader2 } from 'lucide-react';
+import { User, Lock, Loader2, Sparkle, Stars, Sparkles } from 'lucide-react';
 import { AlertMessage } from "../components/AlertMessage";
 import { useAuth } from '../../hooks/useAuth';
+import Link from 'next/link';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -120,6 +121,15 @@ export default function Login() {
                 'Sign in'
               )}
             </button>
+            <div className="flex justify-center pt-2">
+              <Link 
+                href="/login" 
+                className="inline-flex items-center text-l text-blue-500 hover:text-blue-600 transition-colors duration-300"
+              >
+                <Sparkles size={12} className="mr-1" />
+                Use new login
+              </Link>
+            </div>
           </form>
         </div>
       </div>
