@@ -2403,16 +2403,16 @@ export default function DocumentationPage() {
       )}
       
       {/* Floating Action Button for document upload */}
-      <div className="fixed bottom-8 right-8 z-40">
+      <div className="fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-40">
         <Link 
           href="/upload_documentation" 
-          className="bg-blue-600 hover:bg-blue-700 text-white w-16 h-16 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 group"
+          className="bg-blue-600 hover:bg-blue-700 text-white w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center shadow-lg transition-all hover:scale-105 group"
           title="Upload New Document"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" viewBox="0 0 20 20" fill="currentColor">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
           </svg>
-          <span className="absolute right-full mr-4 bg-gray-800 text-white text-sm px-3 py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-md pointer-events-none">
+          <span className="absolute right-full mr-3 sm:mr-4 bg-gray-800 text-white text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-md pointer-events-none hidden sm:block">
             Upload Document
           </span>
         </Link>
