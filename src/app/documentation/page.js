@@ -690,30 +690,30 @@ export default function DocumentationPage() {
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white py-8">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold">Organization Documentation</h1>
-              <p className="mt-2 text-blue-100">Access all documents, files, software and tools in one place</p>
+              <h1 className="text-2xl md:text-3xl font-bold">Organization Documentation</h1>
+              <p className="mt-2 text-blue-100 text-sm md:text-base">Access all documents, files, software and tools in one place</p>
             </div>
             
-            <div className="flex space-x-3">
+            <div className="flex flex-wrap gap-2">
               {/* Create Project Button */}
               <button 
                 onClick={openCreateProjectModal}
-                className="inline-flex items-center px-4 py-2 bg-blue-800 text-white rounded-lg shadow hover:bg-blue-900 transition-colors"
+                className="inline-flex items-center px-3 py-2 bg-blue-800 text-white text-sm rounded-lg shadow hover:bg-blue-900 transition-colors"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                 </svg>
-                Create Project
+                <span className="whitespace-nowrap">Create Project</span>
               </button>
               
               {/* Upload Button */}
-              <Link href="/upload_documentation" className="inline-flex items-center px-4 py-2 bg-white text-blue-700 rounded-lg shadow hover:bg-blue-50 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+              <Link href="/upload_documentation" className="inline-flex items-center px-3 py-2 bg-white text-blue-700 text-sm rounded-lg shadow hover:bg-blue-50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
                 </svg>
-                Upload Document
+                <span className="whitespace-nowrap">Upload Document</span>
               </Link>
             </div>
           </div>
@@ -850,13 +850,13 @@ export default function DocumentationPage() {
           )}
           
           {/* Project Selection */}
-          <div className="flex space-x-2 overflow-x-auto pb-2">
+          <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-thin">
             <button
               onClick={() => setSelectedProject('general')}
-              className={`px-4 py-3 rounded-lg whitespace-nowrap transition-colors ${selectedProject === 'general' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-100'}`}
+              className={`px-3 py-2 sm:px-4 sm:py-3 rounded-lg whitespace-nowrap transition-colors flex-shrink-0 text-sm sm:text-base ${selectedProject === 'general' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-100'}`}
             >
               <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                 </svg>
                 General
@@ -867,14 +867,14 @@ export default function DocumentationPage() {
               <button
                 key={project._id}
                 onClick={() => setSelectedProject(project._id)}
-                className={`px-4 py-3 rounded-lg whitespace-nowrap transition-colors ${
+                className={`px-3 py-2 sm:px-4 sm:py-3 rounded-lg whitespace-nowrap transition-colors flex-shrink-0 text-sm sm:text-base ${
                   selectedProject === project._id 
                     ? 'bg-blue-600 text-white' 
                     : 'bg-white border border-gray-300 hover:bg-gray-100'
                 }`}
               >
                 <div className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                   </svg>
                   {project.name}
