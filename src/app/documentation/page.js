@@ -971,10 +971,10 @@ export default function DocumentationPage() {
                 onClick={() => selectionMode ? toggleItemSelection(resource._id) : null}
               >
                 {/* Status Badge - top left */}
-                <div className="absolute top-3 left-3 z-10 flex gap-2">
+                <div className="absolute top-2 sm:top-3 left-2 sm:left-3 z-10 flex gap-2">
                   {/* Selection Checkbox - shown only in selection mode */}
                   {selectionMode && (
-                    <div className={`w-6 h-6 rounded-full border ${selectedItems.includes(resource._id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'} flex items-center justify-center`}>
+                    <div className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border ${selectedItems.includes(resource._id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'} flex items-center justify-center`}>
                       {selectedItems.includes(resource._id) && (
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -985,11 +985,11 @@ export default function DocumentationPage() {
                 </div>
                 
                 {/* Status Badges - top right */}
-                <div className="absolute top-3 right-3 z-10 flex flex-col space-y-2">
+                <div className="absolute top-2 sm:top-3 right-2 sm:right-3 z-10 flex flex-col space-y-1 sm:space-y-2">
                   {/* Locked indicator */}
                   {resource.isPasswordProtected && (
-                    <div className="bg-amber-100 text-amber-800 px-2 py-1 rounded-md text-xs font-medium flex items-center shadow-sm border border-amber-200">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="bg-amber-100 text-amber-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-medium flex items-center shadow-sm border border-amber-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-0.5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                       Locked
@@ -998,8 +998,8 @@ export default function DocumentationPage() {
                   
                   {/* Temporarily Disabled indicator */}
                   {resource.isDisabled && (
-                    <div className="bg-red-100 text-red-800 px-2 py-1 rounded-md text-xs font-medium flex items-center shadow-sm border border-red-200">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="bg-red-100 text-red-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md text-xs font-medium flex items-center shadow-sm border border-red-200">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-3.5 sm:w-3.5 mr-0.5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                       </svg>
                       Disabled
@@ -1007,16 +1007,16 @@ export default function DocumentationPage() {
                   )}
                 </div>
                 
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="p-4 sm:p-6">
+                  <div className="flex items-center justify-between mb-3 sm:mb-4">
                     <div className="flex items-center">
-                      <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-50 text-blue-600 mr-3">
-                        <span className="text-xl">{getCategoryIcon(resource.category)}</span>
+                      <div className="flex items-center justify-center h-8 w-8 sm:h-10 sm:w-10 rounded-lg bg-blue-50 text-blue-600 mr-2 sm:mr-3">
+                        <span className="text-lg sm:text-xl">{getCategoryIcon(resource.category)}</span>
                       </div>
                       <div>
-                        <h3 className="text-lg font-semibold line-clamp-1">{resource.name}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold line-clamp-1">{resource.name}</h3>
                         <div className="flex items-center mt-0.5">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+                          <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1.5 sm:mr-2">
                             {resource.category}
                           </span>
                           <span className="text-xs text-gray-500">
