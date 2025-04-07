@@ -724,7 +724,7 @@ export default function DocumentationPage() {
       <div className="container mx-auto px-4 py-8">
         {/* Search, Filters and Project Selection */}
         <div className="flex flex-col gap-4 mb-8">
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col md:flex-row gap-3 md:gap-4">
             <div className="relative flex-grow">
               <input
                 type="text"
@@ -733,13 +733,13 @@ export default function DocumentationPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-              <span className="absolute right-3 top-3 text-gray-400">🔍</span>
+              <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
             </div>
             
             {/* Filter Toggle Button */}
             <button
               onClick={() => setFilterDrawer(!filterDrawer)}
-              className={`px-4 py-3 rounded-lg flex items-center gap-2 transition-colors ${filterDrawer ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-white border border-gray-300 hover:bg-gray-100'}`}
+              className={`px-3 py-2 sm:px-4 sm:py-3 rounded-lg flex items-center gap-1 sm:gap-2 transition-colors ${filterDrawer ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-white border border-gray-300 hover:bg-gray-100'}`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -850,13 +850,13 @@ export default function DocumentationPage() {
           )}
           
           {/* Project Selection */}
-          <div className="flex space-x-2 overflow-x-auto pb-2 scrollbar-thin">
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-2 scrollbar-thin">
             <button
               onClick={() => setSelectedProject('general')}
               className={`px-3 py-2 sm:px-4 sm:py-3 rounded-lg whitespace-nowrap transition-colors flex-shrink-0 text-sm sm:text-base ${selectedProject === 'general' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 hover:bg-gray-100'}`}
             >
               <div className="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                 </svg>
                 General
@@ -874,7 +874,7 @@ export default function DocumentationPage() {
                 }`}
               >
                 <div className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 mr-1 sm:mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
                   </svg>
                   {project.name}
@@ -959,7 +959,7 @@ export default function DocumentationPage() {
             <p className="mt-2 text-gray-500">Try changing your search or project selection</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {filteredResources.map(resource => (
               <div 
                 key={resource._id || resource.fileId} 
