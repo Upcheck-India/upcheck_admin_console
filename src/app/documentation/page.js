@@ -1055,10 +1055,10 @@ export default function DocumentationPage() {
                 </div>
                 
                 {!selectionMode && (
-                  <div className="border-t border-gray-100 p-4 bg-gray-50">
+                  <div className="border-t border-gray-100 p-3 sm:p-4 bg-gray-50">
                     <div className="flex justify-between items-center">
-                      <span className="flex items-center text-sm text-gray-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <span className="flex items-center text-xs sm:text-sm text-gray-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-0.5 sm:mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                         </svg>
                         {resource.downloads || 0} downloads
