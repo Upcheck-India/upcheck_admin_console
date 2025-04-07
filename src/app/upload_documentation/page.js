@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -17,6 +17,11 @@ export default function UploadDocumentationPage() {
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
   const router = useRouter();
+  
+  // Project selection state
+  const [projects, setProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState('general'); // Default to general project
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
 
   // Storage options state
   const [useAlternatives, setUseAlternatives] = useState(false);
@@ -27,6 +32,38 @@ export default function UploadDocumentationPage() {
     'mega': '',
     'mediafire': ''
   });
+
+  // Password protection states
+  const [isPasswordProtected, setIsPasswordProtected] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  
+  // Fetch projects on component mount
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setIsLoadingProjects(true);
+        const response = await fetch('/api/projects');
+        if (!response.ok) throw new Error('Failed to fetch projects');
+        let data = await response.json();
+        
+        // Filter out any 'general' project from the API to avoid duplicates
+        data = data.filter(project => project._id !== 'general');
+        
+        // Add our standard general project at the beginning
+        setProjects([{ _id: 'general', name: 'General' }, ...data]);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+        // Ensure we have at least the general project
+        setProjects([{ _id: 'general', name: 'General' }]);
+      } finally {
+        setIsLoadingProjects(false);
+      }
+    }
+    
+    fetchProjects();
+  }, []);
 
   const storageOptions = [
     { id: 'server', name: 'Server', icon: '/icons/server.svg' },
@@ -144,6 +181,13 @@ export default function UploadDocumentationPage() {
       formData.append('category', category);
       formData.append('description', description.trim());
       formData.append('isDocumentationResource', 'true');
+      formData.append('projectId', selectedProject); // Add selected project
+      
+      // Add password protection if enabled
+      formData.append('isPasswordProtected', isPasswordProtected);
+      if (isPasswordProtected) {
+        formData.append('password', password);
+      }
       
       // Add storage options and links
       formData.append('storageOptions', JSON.stringify(selectedStorageOptions));
@@ -178,6 +222,9 @@ export default function UploadDocumentationPage() {
         'mega': '',
         'mediafire': ''
       });
+      setIsPasswordProtected(false);
+      setPassword('');
+      setConfirmPassword('');
       
       // Redirect after a short delay
       setTimeout(() => {
@@ -280,6 +327,96 @@ export default function UploadDocumentationPage() {
                 </select>
               </div>
             </div>
+
+            {/* Project selection */}
+            <div className="mb-6">
+              <label className="block text-gray-700 text-sm font-medium mb-2">Project *</label>
+              <p className="text-sm text-gray-500 mb-3">Select which project this document belongs to</p>
+              
+              {isLoadingProjects ? (
+                <div className="flex items-center space-x-2 h-10">
+                  <div className="w-5 h-5 border-t-2 border-b-2 border-blue-500 rounded-full animate-spin"></div>
+                  <span className="text-gray-600">Loading projects...</span>
+                </div>
+              ) : (
+                <>
+                  {/* Project search for many projects */}
+                  {projects.length > 9 && (
+                    <div className="mb-4 relative">
+                      <input
+                        type="text"
+                        placeholder="Search projects..."
+                        className="w-full px-4 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        onChange={(e) => {
+                          const searchTerm = e.target.value.toLowerCase();
+                          const filteredProjects = document.querySelectorAll('.project-card');
+                          filteredProjects.forEach(card => {
+                            const projectName = card.getAttribute('data-name').toLowerCase();
+                            if (projectName.includes(searchTerm)) {
+                              card.style.display = '';
+                            } else {
+                              card.style.display = 'none';
+                            }
+                          });
+                        }}
+                      />
+                      <div className="absolute top-1/2 right-3 transform -translate-y-1/2 text-gray-400">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Project grid with responsive layout */}
+                  <div className={`grid grid-cols-1 ${projects.length <= 6 ? 'md:grid-cols-2 lg:grid-cols-3' : 
+                                    projects.length <= 12 ? 'md:grid-cols-3 lg:grid-cols-4' : 
+                                    'md:grid-cols-4 lg:grid-cols-5'} gap-3 max-h-96 overflow-y-auto p-1`}>
+                    {projects.map(project => (
+                      <div 
+                        key={project._id}
+                        data-name={project.name}
+                        className={`project-card p-3 border rounded-lg cursor-pointer transition-all ${selectedProject === project._id 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'}`}
+                        onClick={() => setSelectedProject(project._id)}
+                      >
+                        <div className="flex items-center">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center mr-3 ${selectedProject === project._id ? 'bg-blue-100' : 'bg-gray-100'}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" 
+                              className={`h-6 w-6 ${selectedProject === project._id ? 'text-blue-600' : 'text-gray-500'}`} 
+                              fill="none" viewBox="0 0 24 24" stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="flex-grow min-w-0">
+                            <div className="font-medium truncate">{project.name}</div>
+                            <div className="text-xs text-gray-500">
+                              {project._id === 'general' ? 'Default project space' : 'Project space'}
+                            </div>
+                          </div>
+                          {selectedProject === project._id && (
+                            <div className="ml-2 flex-shrink-0">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Project count indicator */}
+                  {projects.length > 6 && (
+                    <div className="mt-2 text-xs text-gray-500">
+                      Showing all {projects.length} available project spaces
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             
             {/* Description */}
             <div className="mb-6">
@@ -325,6 +462,93 @@ export default function UploadDocumentationPage() {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Password Protection */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-gray-700 text-sm font-medium">Password Protection</label>
+                <div className="relative inline-block w-10 mr-2 align-middle select-none">
+                  <input 
+                    type="checkbox" 
+                    id="toggle-password" 
+                    className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-200 ease-in-out" 
+                    checked={isPasswordProtected}
+                    onChange={() => {
+                      setIsPasswordProtected(!isPasswordProtected);
+                      if (isPasswordProtected) {
+                        setPassword('');
+                        setConfirmPassword('');
+                      }
+                    }}
+                    disabled={isUploading}
+                  />
+                  <label 
+                    htmlFor="toggle-password" 
+                    className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors duration-200 ease-in-out ${isPasswordProtected ? 'bg-blue-500' : 'bg-gray-300'}`}
+                  ></label>
+                </div>
+              </div>
+              <p className="text-sm text-gray-500 mb-3">Enable password protection to restrict access to this document</p>
+              
+              {isPasswordProtected && (
+                <div className="space-y-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div>
+                    <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        id="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter password"
+                        required={isPasswordProtected}
+                        disabled={isUploading}
+                      />
+                      <button
+                        type="button"
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        onClick={() => setShowPassword(!showPassword)}
+                        disabled={isUploading}
+                      >
+                        {showPassword ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    {password && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {password.length < 6 ? 'Weak password' : password.length < 10 ? 'Medium strength' : 'Strong password'}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="confirmPassword" className="block text-gray-700 text-sm font-medium mb-2">Confirm Password</label>
+                    <input
+                      type="password"
+                      id="confirmPassword"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`w-full px-3 py-2 border ${password && confirmPassword && password !== confirmPassword ? 'border-red-300 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'} rounded-lg focus:outline-none focus:ring-2`}
+                      placeholder="Confirm password"
+                      required={isPasswordProtected}
+                      disabled={isUploading}
+                    />
+                    {password && confirmPassword && password !== confirmPassword && (
+                      <p className="text-xs text-red-500 mt-1">Passwords do not match</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Server upload area - shown only if server option is selected */}

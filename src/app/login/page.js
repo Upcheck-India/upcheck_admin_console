@@ -24,6 +24,24 @@ export default function Login() {
       initParticlesAndShrimps();
     }
     
+    // Check for autofilled inputs
+    const checkAutoFill = () => {
+      const usernameInput = document.querySelector('input[type="text"]');
+      const passwordInput = document.querySelector('input[type="password"]');
+      
+      if (usernameInput && usernameInput.value && !username) {
+        setUsername(usernameInput.value);
+      }
+      
+      if (passwordInput && passwordInput.value && !password) {
+        setPassword(passwordInput.value);
+      }
+    };
+    
+    // Run immediately and after a short delay for browsers that autofill after page load
+    checkAutoFill();
+    setTimeout(checkAutoFill, 500);
+    
     return () => {
       // Clean up particles and shrimps when component unmounts
       if (typeof window !== 'undefined' && window.animationInstance) {
@@ -388,11 +406,19 @@ export default function Login() {
                 <User className="absolute top-3 left-3 text-blue-300 transition-colors duration-300 group-hover:text-white z-10" size={20} />
                 <input
                   type="text"
+                  name="username"
+                  autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  onAnimationStart={(e) => {
+                    // This catches the animation browsers apply to autofilled fields
+                    if (e.animationName === 'onAutoFillStart' && e.target.value && !username) {
+                      setUsername(e.target.value);
+                    }
+                  }}
                   placeholder="Username"
                   disabled={isLoading}
-                  className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed z-0 relative"
+                  className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed z-0 relative autofill:bg-white/20 autofill:text-white"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:from-blue-500/10 group-hover:via-blue-500/20 group-hover:to-blue-500/10 transition-all duration-700 transform -translate-x-full group-hover:translate-x-0"></div>
               </div>
