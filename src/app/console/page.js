@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Users, 
@@ -158,110 +158,54 @@ const userDropdownItems = [
                 Upcheck Console
               </span>
             </div>
-
-            {/* Mobile menu button */}
-            <button 
-              className="md:hidden p-2"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              <div className="space-y-1">
-                <div className="w-6 h-0.5 bg-gray-600"></div>
-                <div className="w-6 h-0.5 bg-gray-600"></div>
-                <div className="w-6 h-0.5 bg-gray-600"></div>
-              </div>
-            </button>
-
-            <div className="hidden md:flex items-center space-x-4">
-              <button className="p-2 rounded-full hover:bg-gray-100 relative">
-                <Bell className="h-6 w-6 text-gray-600" />
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-              </button>
-              <button className="p-2 rounded-full hover:bg-gray-100">
-                <Settings className="h-6 w-6 text-gray-600" />
-              </button>
+            
+            {/* Profile Dropdown */}
+            <div className="flex items-center">
               <div className="relative">
-                <button 
-                  className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100"
+                <button
                   onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                  className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
                 >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-teal-500 flex items-center justify-center">
                     <span className="text-white text-sm font-medium">{username.slice(0, 1).toUpperCase()}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-700">{username}</span>
+                  <span>{username}</span>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
 
-                {/* User Dropdown modified section */}
-        {isUserDropdownOpen && (
-          <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-10">
-            {userDropdownItems.map((item, index) => (
-              item.onClick ? (
-                // Render button for logout
-                <button
-                  key={index}
-                  onClick={item.onClick}
-                  className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left"
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              ) : (
-                // Render Link for other items
-                <Link
-                  href={item.link}
-                  key={index}
-                  className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </Link>
-              )
-            ))}
-          </div>
-        )}
+                {/* Dropdown Menu */}
+                {isUserDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                    <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                      {username}
+                    </div>
+                    {userDropdownItems.map((item, index) => (
+                      item.onClick ? (
+                        <button
+                          key={index}
+                          onClick={item.onClick}
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center"
+                        >
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </button>
+                      ) : (
+                        <Link
+                          href={item.link}
+                          key={index}
+                          className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </Link>
+                      )
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </div>
-
-        {/* Mobile menu modified section */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden bg-white border-t p-4">
-            <div className="flex flex-col space-y-4">
-              <button className="flex items-center space-x-2 text-gray-600">
-                <Bell className="h-5 w-5" />
-                <span>Notifications</span>
-              </button>
-              <button className="flex items-center space-x-2 text-gray-600">
-                <Settings className="h-5 w-5" />
-                <span>Settings</span>
-              </button>
-              {userDropdownItems.map((item, index) => (
-                item.onClick ? (
-                  // Render button for logout
-                  <button
-                    key={index}
-                    onClick={item.onClick}
-                    className="flex items-center space-x-2 text-gray-600"
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </button>
-                ) : (
-                  // Render Link for other items
-                  <Link
-                    href={item.link}
-                    key={index}
-                    className="flex items-center space-x-2 text-gray-600"
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                  </Link>
-                )
-              ))}
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Main Content */}

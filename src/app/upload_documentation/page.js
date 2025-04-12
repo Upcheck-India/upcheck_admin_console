@@ -1,11 +1,18 @@
-"use client";
+'use client';
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import UnauthorizedAccess from '../../components/UnauthorizedAccess';
 
-export default function UploadDocumentationPage() {
+export default function UploadDocumentation() {
+  const router = useRouter();
+  const fileInputRef = useRef(null);
+
+  // Group all state declarations together
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [file, setFile] = useState(null);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('documents');
@@ -15,15 +22,9 @@ export default function UploadDocumentationPage() {
   const [success, setSuccess] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef(null);
-  const router = useRouter();
-  
-  // Project selection state
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('general'); // Default to general project
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
-
-  // Storage options state
   const [useAlternatives, setUseAlternatives] = useState(false);
   const [selectedStorageOptions, setSelectedStorageOptions] = useState(['server']);
   const [alternativeLinks, setAlternativeLinks] = useState({
@@ -32,38 +33,62 @@ export default function UploadDocumentationPage() {
     'mega': '',
     'mediafire': ''
   });
-
-  // Password protection states
   const [isPasswordProtected, setIsPasswordProtected] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  
-  // Fetch projects on component mount
+
+  // Group all effects together
   useEffect(() => {
-    async function fetchProjects() {
-      try {
-        setIsLoadingProjects(true);
-        const response = await fetch('/api/projects');
-        if (!response.ok) throw new Error('Failed to fetch projects');
-        let data = await response.json();
-        
-        // Filter out any 'general' project from the API to avoid duplicates
-        data = data.filter(project => project._id !== 'general');
-        
-        // Add our standard general project at the beginning
-        setProjects([{ _id: 'general', name: 'General' }, ...data]);
-      } catch (error) {
-        console.error('Error fetching projects:', error);
-        // Ensure we have at least the general project
-        setProjects([{ _id: 'general', name: 'General' }]);
-      } finally {
-        setIsLoadingProjects(false);
-      }
-    }
-    
-    fetchProjects();
+    checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (currentUser && ['Console admin', 'Admin'].includes(currentUser.role)) {
+      fetchProjects();
+    }
+  }, [currentUser]);
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('/api/auth/session');
+      const data = await response.json();
+      setCurrentUser(data.user);
+    } catch (err) {
+      console.error('Auth check failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!currentUser || !['Console admin', 'Admin'].includes(currentUser.role)) {
+    return <UnauthorizedAccess />;
+  }
+
+  const fetchProjects = async () => {
+    try {
+      setIsLoadingProjects(true);
+      const response = await fetch('/api/projects');
+      if (!response.ok) throw new Error('Failed to fetch projects');
+      let data = await response.json();
+      
+      // Filter out any 'general' project from the API to avoid duplicates
+      data = data.filter(project => project._id !== 'general');
+      
+      // Add our standard general project at the beginning
+      setProjects([{ _id: 'general', name: 'General' }, ...data]);
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      // Ensure we have at least the general project
+      setProjects([{ _id: 'general', name: 'General' }]);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
 
   const storageOptions = [
     { id: 'server', name: 'Server', icon: '/icons/server.svg' },

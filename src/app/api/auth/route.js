@@ -1,16 +1,18 @@
 // src/app/api/auth/route.js
-//updated for lastLogin
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import clientPromise from "../../../lib/mongodb";
+import { ObjectId } from 'mongodb';
 
 export async function POST(req) {
   try {
     const client = await clientPromise;
     const { username, password } = await req.json();
+    console.log('Login attempt for:', username);
 
     if (!username || !password) {
+      console.log('Validation failed: Missing username or password');
       return NextResponse.json(
         { error: 'Username and password are required' },
         { status: 400 }
@@ -18,7 +20,6 @@ export async function POST(req) {
     }
 
     const db = client.db("resources");
-    
     const hashedPassword = crypto
       .createHash('sha256')
       .update(password)
@@ -30,34 +31,42 @@ export async function POST(req) {
     });
 
     if (user) {
-      // Update last login timestamp
+      const sessionToken = crypto.randomBytes(32).toString('hex');
+      console.log('Generated session token for user:', user.username);
+
+      // Update user with session token
       await db.collection('admin_users').updateOne(
         { _id: user._id },
-        { $set: { lastLogin: new Date() } }
+        { 
+          $set: { 
+            sessionToken,
+            lastLogin: new Date() 
+          } 
+        }
       );
 
-      // Generate session token
-      const sessionToken = crypto.randomBytes(32).toString('hex');
-
-      // Create the cookie with strict settings
+      // Set cookie with proper settings
       cookies().set('admin_token', sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7200, // 2 hours
+        sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
+        maxAge: 7200,
         path: '/',
       });
 
+      console.log('Login successful, session established');
       return NextResponse.json({
         success: true,
         user: {
           username: user.username,
           role: user.role,
-          perms: user.perms
+          perms: user.perms || [],
+          _id: user._id.toString()
         }
       });
     }
 
+    console.log('Invalid credentials for user:', username);
     return NextResponse.json(
       { error: 'Invalid credentials' },
       { status: 401 }

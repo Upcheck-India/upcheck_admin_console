@@ -1,49 +1,46 @@
 //src/app/session/route.js
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import clientPromise from "../../../../lib/mongodb";
+import { cookies } from 'next/headers';
+import clientPromise from '../../../../lib/mongodb';
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
+    const adminToken = cookies().get('admin_token');
+    console.log('Session check - Token exists:', !!adminToken?.value);
     
-    if (!token) {
-      return NextResponse.json(
-        { user: null },
-        { status: 401 }
-      );
+    if (!adminToken?.value) {
+      console.log('No admin token found in cookies');
+      return NextResponse.json({ user: null });
     }
 
     const client = await clientPromise;
     const db = client.db("resources");
     
-    // Find user by token (you might want to store tokens in a sessions collection)
     const user = await db.collection('admin_users').findOne(
-      { /* query by token */ },
+      { sessionToken: adminToken.value },
       { projection: { password: 0 } }
     );
-    
+
+    console.log('Session check - User found:', !!user, 'Role:', user?.role);
+
     if (!user) {
-      return NextResponse.json(
-        { user: null },
-        { status: 401 }
-      );
+      console.log('No user found with provided session token');
+      cookies().delete('admin_token');
+      return NextResponse.json({ user: null });
     }
 
-    return NextResponse.json({
-      user: {
-        id: user._id,
-        username: user.username,
-        role: user.role,
-        perms: user.perms
-      }
-    });
+    const userData = {
+      username: user.username,
+      role: user.role,
+      perms: user.perms || [],
+      _id: user._id.toString()
+    };
+
+    console.log('Session valid, returning user data:', userData.username, userData.role);
+    return NextResponse.json({ user: userData });
+
   } catch (error) {
     console.error('Session error:', error);
-    return NextResponse.json(
-      { user: null },
-      { status: 500 }
-    );
+    return NextResponse.json({ user: null });
   }
 }

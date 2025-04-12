@@ -6,7 +6,28 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import SecureLoading from "../components/SecureLoading";
-
+import { 
+  Users, 
+  LayoutDashboard, 
+  FileText, 
+  Settings, 
+  Bell, 
+  BookOpen,
+  Building2,
+  ClipboardList,
+  Briefcase,
+  BarChart3,
+  Mail,
+  HelpCircle,
+  LogOut,
+  ChevronDown,
+  User,
+  Key,
+  Shield,
+  Loader2,
+  PenSquareIcon,
+  Navigation
+} from 'lucide-react';
 export default function DocumentationPage() {
   const { 
     isLoading: authLoading, 
@@ -16,6 +37,8 @@ export default function DocumentationPage() {
   } = useAuth(true);
 
   const [resources, setResources] = useState([]);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [username, setUsername] = useState('');
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState('general');
   const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +103,13 @@ export default function DocumentationPage() {
     fetchProjects();
   }, []);
 
+  useEffect(() => {
+            const storedUsername = localStorage.getItem('username');
+            if (storedUsername) {
+              setUsername(storedUsername);
+            }
+          }, []);
+
   // Focus on password input when the modal opens
   useEffect(() => {
     if (passwordModal.show && passwordInputRef.current) {
@@ -121,6 +151,30 @@ export default function DocumentationPage() {
       setIsLoading(false);
     }
   }
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (res.ok) {
+        localStorage.removeItem('username');
+        sessionStorage.clear();
+        router.push('/login');
+      }
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+    // Update the userDropdownItems array:
+    const userDropdownItems = [
+      { icon: <User className="w-4 h-4" />, label: "Account Settings", link: "/coming-soon" },
+      { icon: <Key className="w-4 h-4" />, label: "Security", link: "/coming-soon" },
+      { icon: <Shield className="w-4 h-4" />, label: "Privacy", link: "/coming-soon" },
+      { icon: <LogOut className="w-4 h-4" />, label: "Logout", onClick: handleLogout }
+    ];
 
   async function fetchProjects() {
     try {
@@ -687,6 +741,68 @@ export default function DocumentationPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 relative">
+      <nav className="bg-white border-b shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center">
+              <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-2 rounded-lg">
+                <LayoutDashboard className="h-6 w-6 text-white" />
+              </div>
+              <Link href={"/console"} className="flex items-center ml-2">
+              <span className="ml-2 text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+                Upcheck Console
+              </span>
+              </Link>
+            </div>
+            
+            {/* Profile Dropdown */}
+            <div className="flex items-center">
+              <div className="relative">
+                <button
+                  onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                  className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
+                >
+                  <div className="h-8 w-8 rounded-full bg-gray-200 flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">{username.slice(0, 1).toUpperCase()}</span>
+                  </div>
+                  <span>{username}</span>
+                  <ChevronDown className="w-4 h-4 text-gray-500" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isUserDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                    <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                      {username}
+                    </div>
+                    {userDropdownItems.map((item, index) => (
+                      item.onClick ? (
+                        <button
+                          key={index}
+                          onClick={item.onClick}
+                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center"
+                        >
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </button>
+                      ) : (
+                        <Link
+                          href={item.link}
+                          key={index}
+                          className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          {item.icon}
+                          <span>{item.label}</span>
+                        </Link>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </nav>
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-700 to-blue-600 text-white py-8">
         <div className="container mx-auto px-4">

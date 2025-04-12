@@ -1,13 +1,13 @@
-//fixed content box with more styling options
-"use client";
+'use client';
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, Info, Languages, Hash, FolderTree, Bold, Italic, AlignLeft, Pilcrow, List, ListOrdered, Minus, Underline, Link2, Copy, Undo2, Redo2 } from 'lucide-react';
 import ThumbnailUpload from '../../components/ThumbnailUpload';
 import SecureLoading from "../../components/SecureLoading";
 import { useAuth } from '../../../hooks/useAuth';
 import AuthorField from '../../components/AuthorField';
+import UnauthorizedAccess from '../../../components/UnauthorizedAccess';
 
 const LANGUAGES = {
   en: 'English',
@@ -255,9 +255,8 @@ const initialFormState = {
 
 export default function NewPost() {
   const router = useRouter();
-  const { isLoading: authLoading, isAuthenticated } = useAuth(true);
-  
-  // Move all hooks to the top level, before any conditional returns
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('basic');
   const [formData, setFormData] = useState(initialFormState);
   const [errors, setErrors] = useState({});
@@ -276,13 +275,6 @@ export default function NewPost() {
       }
     }));
   }, []);
-
-  // Authentication effect
-  React.useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [authLoading, isAuthenticated, router]);
 
   const validateForm = useCallback(() => {
     const newErrors = {};
@@ -329,14 +321,28 @@ export default function NewPost() {
     }
   }, [formData, router, validateForm]);
 
-  // Show loading state while checking authentication
-  if (authLoading) {
-    return <SecureLoading />;
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('/api/auth/session');
+      const data = await response.json();
+      setCurrentUser(data.user);
+    } catch (err) {
+      console.error('Auth check failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
   }
 
-  // If not authenticated, return null (useEffect will handle redirect)
-  if (!isAuthenticated) {
-    return null;
+  if (!currentUser || !currentUser.perms?.includes('content.manage')) {
+    return <UnauthorizedAccess />;
   }
 
   return (
@@ -396,122 +402,122 @@ export default function NewPost() {
           {activeTab === 'basic' ? (
             <div className="space-y-6">
               <div>
-              <AuthorField
-  value={formData.author}
-  onChange={(value) => handleInputChange('author', value)}
-  error={errors.author}
-/>
-                </div>
-  
-                <div>
-                  <label className="block text-sm font-medium mb-1">Thumbnail*</label>
-                  <ThumbnailUpload
-                    value={formData.thumbnail}
-                    onChange={url => handleInputChange('thumbnail', url)}
-                  />
-                  {errors.thumbnail && (
-                    <span className="text-red-500 text-sm">{errors.thumbnail}</span>
-                  )}
-                </div>
-  
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Tags* (comma-separated)
-                  </label>
-                  <div className="relative">
-                    <Hash className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
-                      value={formData.tags}
-                      onChange={e => handleInputChange('tags', e.target.value)}
-                      placeholder="technology, programming"
-                      className={`w-full p-3 pl-10 rounded-lg border ${
-                        errors.tags ? 'border-red-500' : 'border-gray-300'
-                      } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
-                    />
-                  </div>
-                  {errors.tags && (
-                    <span className="text-red-500 text-sm">{errors.tags}</span>
-                  )}
-                </div>
-  
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Categories* (comma-separated)
-                  </label>
-                  <div className="relative">
-                    <FolderTree className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
-                      value={formData.categories}
-                      onChange={e => handleInputChange('categories', e.target.value)}
-                      placeholder="tutorials, news"
-                      className={`w-full p-3 pl-10 rounded-lg border ${
-                        errors.categories ? 'border-red-500' : 'border-gray-300'
-                      } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
-                    />
-                  </div>
-                  {errors.categories && (
-                    <span className="text-red-500 text-sm">{errors.categories}</span>
-                  )}
-                </div>
+                <AuthorField
+                  value={formData.author}
+                  onChange={(value) => handleInputChange('author', value)}
+                  error={errors.author}
+                />
               </div>
-            ) : (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Title {activeTab === 'en' && '*'}
-                  </label>
+  
+              <div>
+                <label className="block text-sm font-medium mb-1">Thumbnail*</label>
+                <ThumbnailUpload
+                  value={formData.thumbnail}
+                  onChange={url => handleInputChange('thumbnail', url)}
+                />
+                {errors.thumbnail && (
+                  <span className="text-red-500 text-sm">{errors.thumbnail}</span>
+                )}
+              </div>
+  
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Tags* (comma-separated)
+                </label>
+                <div className="relative">
+                  <Hash className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
                   <input
                     type="text"
-                    value={formData.translations[activeTab].title}
-                    onChange={e => handleTranslationChange(activeTab, 'title', e.target.value)}
-                    className={`w-full p-3 rounded-lg border ${
-                      errors[`${activeTab}Title`] ? 'border-red-500' : 'border-gray-300'
+                    value={formData.tags}
+                    onChange={e => handleInputChange('tags', e.target.value)}
+                    placeholder="technology, programming"
+                    className={`w-full p-3 pl-10 rounded-lg border ${
+                      errors.tags ? 'border-red-500' : 'border-gray-300'
                     } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
                   />
-                  {errors[`${activeTab}Title`] && (
-                    <span className="text-red-500 text-sm">
-                      {errors[`${activeTab}Title`]}
-                    </span>
-                  )}
                 </div>
-  
-                <div>
-                  <label className="block text-sm font-medium mb-1">
-                    Content {activeTab === 'en' && '*'}
-                  </label>
-                  <RichTextEditor
-                    value={formData.translations[activeTab].content}
-                    onChange={(value) => handleTranslationChange(activeTab, 'content', value)}
-                    error={errors[`${activeTab}Content`]}
-                  />
-                  {errors[`${activeTab}Content`] && (
-                    <span className="text-red-500 text-sm">
-                      {errors[`${activeTab}Content`]}
-                    </span>
-                  )}
-                </div>
+                {errors.tags && (
+                  <span className="text-red-500 text-sm">{errors.tags}</span>
+                )}
               </div>
-            )}
   
-            <div className="flex justify-end space-x-4 mt-8">
-              <button
-                type="button"
-                onClick={() => router.replace('/cms/dashboard')}
-                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-              >
-                Create Post
-              </button>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Categories* (comma-separated)
+                </label>
+                <div className="relative">
+                  <FolderTree className="absolute left-3 top-3.5 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={formData.categories}
+                    onChange={e => handleInputChange('categories', e.target.value)}
+                    placeholder="tutorials, news"
+                    className={`w-full p-3 pl-10 rounded-lg border ${
+                      errors.categories ? 'border-red-500' : 'border-gray-300'
+                    } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
+                  />
+                </div>
+                {errors.categories && (
+                  <span className="text-red-500 text-sm">{errors.categories}</span>
+                )}
+              </div>
             </div>
-          </form>
-        </div>
+          ) : (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Title {activeTab === 'en' && '*'}
+                </label>
+                <input
+                  type="text"
+                  value={formData.translations[activeTab].title}
+                  onChange={e => handleTranslationChange(activeTab, 'title', e.target.value)}
+                  className={`w-full p-3 rounded-lg border ${
+                    errors[`${activeTab}Title`] ? 'border-red-500' : 'border-gray-300'
+                  } focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none`}
+                />
+                {errors[`${activeTab}Title`] && (
+                  <span className="text-red-500 text-sm">
+                    {errors[`${activeTab}Title`]}
+                  </span>
+                )}
+              </div>
+  
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Content {activeTab === 'en' && '*'}
+                </label>
+                <RichTextEditor
+                  value={formData.translations[activeTab].content}
+                  onChange={(value) => handleTranslationChange(activeTab, 'content', value)}
+                  error={errors[`${activeTab}Content`]}
+                />
+                {errors[`${activeTab}Content`] && (
+                  <span className="text-red-500 text-sm">
+                    {errors[`${activeTab}Content`]}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+  
+          <div className="flex justify-end space-x-4 mt-8">
+            <button
+              type="button"
+              onClick={() => router.replace('/cms/dashboard')}
+              className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+            >
+              Create Post
+            </button>
+          </div>
+        </form>
       </div>
-    );
-  }
+    </div>
+  );
+}
