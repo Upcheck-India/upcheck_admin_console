@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import UnauthorizedAccess from '../../../components/UnauthorizedAccess';
 import React from 'react';
-import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User, AlertTriangle, Stars } from 'lucide-react';
 import ThumbnailUpload from "../../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
 import { validatePost } from "../../../utils/postValidate";
@@ -101,6 +101,20 @@ const AccountMenu = ({ onLogout }) => {
     </div>
   );
 };
+
+const AIButton = () => (
+  <a
+    href="https://n8n.upcheck.in"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="inline-flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg
+      hover:bg-indigo-500 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] 
+      transition-all duration-200"
+  >
+    <Stars className="w-4 h-4 mr-2" />
+    AI Panel
+  </a>
+);
 
 const PostCard = ({ post, onView, onEdit, onDelete }) => (
   <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
@@ -463,6 +477,7 @@ export default function CMSDashboard() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
           <div className="flex items-center space-x-4">
+            <AIButton />
             <button
               onClick={() => router.push('/cms/new-post')}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
