@@ -107,7 +107,7 @@ const AIButton = () => {
   return (
     <button
       onClick={() => router.push('/cms/dashboard/ai-panel')}
-      className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+      className="flex items-center px-4 py-2 bg-blue-200 text-gray-700 hover:bg-blue-300 rounded-lg transition-colors duration-200"
     >
       <Bot className="w-4 h-4 mr-2" />
       AI Panel
