@@ -265,7 +265,7 @@ const userDropdownItems = [
               </div>
               
               <p className="text-gray-600 mb-4 text-sm md:text-base">
-                Jovan AI is our upcoming artificial intelligence assistant designed to enhance your workflow and productivity. With advanced natural language processing and machine learning capabilities, Jovan will help you manage content, automate tasks, and provide intelligent insights.
+                Jovan AI is Upcheck's upcoming artificial intelligence assistant designed to enhance your workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
               </p>
               
               <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-purple-100">
@@ -283,7 +283,7 @@ const userDropdownItems = [
                 <ul className="space-y-2">
                   <li className="flex items-center text-xs md:text-sm text-gray-600">
                     <Sparkles className="w-4 h-4 text-purple-500 mr-2 flex-shrink-0" />
-                    Smart Content Generation & Management
+                    Smart CMS
                   </li>
                   <li className="flex items-center text-xs md:text-sm text-gray-600">
                     <Brain className="w-4 h-4 text-blue-500 mr-2 flex-shrink-0" />
@@ -291,13 +291,13 @@ const userDropdownItems = [
                   </li>
                   <li className="flex items-center text-xs md:text-sm text-gray-600">
                     <MessageSquare className="w-4 h-4 text-teal-500 mr-2 flex-shrink-0" />
-                    Natural Language Interaction
+                    Chat based operations
                   </li>
                 </ul>
               </div>
               
               <p className="text-xs md:text-sm text-gray-500 mb-4">
-                We're working hard to bring Jovan AI to you soon. Stay tuned for updates!
+                We're working hard to bring Jovan to life. Stay tuned for updates!
               </p>
 
               <div className="flex justify-end">
