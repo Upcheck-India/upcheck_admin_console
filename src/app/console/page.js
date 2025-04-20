@@ -241,17 +241,17 @@ const userDropdownItems = [
 
         {/* Jovan AI Coming Soon Modal */}
         {showJovanModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 my-8 md:mx-auto p-4 md:p-6 relative max-h-[90vh] overflow-y-auto">
               <button
                 onClick={() => setShowJovanModal(false)}
-                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               
-              <div className="flex items-center mb-6">
-                <div className="relative w-16 h-16 mr-4">
+              <div className="flex flex-col md:flex-row md:items-center mb-4 md:mb-6">
+                <div className="relative w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-0 md:mr-4 mx-auto md:mx-0">
                   <Image
                     src="/shrimp_cyborg_logo.png"
                     alt="Jovan AI"
@@ -259,17 +259,17 @@ const userDropdownItems = [
                     className="object-contain"
                   />
                 </div>
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">
+                <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent text-center md:text-left">
                   Meet Jovan AI
                 </h2>
               </div>
               
-              <p className="text-gray-600 mb-4">
-                Jovan AI is Upcheck's upcoming artificial intelligence assistant designed to enhance our workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
+              <p className="text-gray-600 mb-4 text-sm md:text-base">
+                Jovan AI is our upcoming artificial intelligence assistant designed to enhance your workflow and productivity. With advanced natural language processing and machine learning capabilities, Jovan will help you manage content, automate tasks, and provide intelligent insights.
               </p>
               
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 mb-4 border border-purple-100">
-                <h3 className="font-medium text-purple-800 flex items-center">
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-purple-100">
+                <h3 className="font-medium text-purple-800 flex items-center text-sm md:text-base">
                   <Settings className="w-4 h-4 mr-2" />
                   Development Status
                 </h3>
@@ -278,26 +278,26 @@ const userDropdownItems = [
                 </p>
               </div>
               
-              <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Coming Features:</h3>
+              <div className="bg-gray-50 rounded-lg p-3 md:p-4 mb-4">
+                <h3 className="font-medium text-gray-900 mb-2 text-sm md:text-base">Coming Features:</h3>
                 <ul className="space-y-2">
-                  <li className="flex items-center text-sm text-gray-600">
-                    <Sparkles className="w-4 h-4 text-purple-500 mr-2" />
+                  <li className="flex items-center text-xs md:text-sm text-gray-600">
+                    <Sparkles className="w-4 h-4 text-purple-500 mr-2 flex-shrink-0" />
                     Smart Content Generation & Management
                   </li>
-                  <li className="flex items-center text-sm text-gray-600">
-                    <Brain className="w-4 h-4 text-blue-500 mr-2" />
+                  <li className="flex items-center text-xs md:text-sm text-gray-600">
+                    <Brain className="w-4 h-4 text-blue-500 mr-2 flex-shrink-0" />
                     Intelligent Workflow Automation
                   </li>
-                  <li className="flex items-center text-sm text-gray-600">
-                    <MessageSquare className="w-4 h-4 text-teal-500 mr-2" />
+                  <li className="flex items-center text-xs md:text-sm text-gray-600">
+                    <MessageSquare className="w-4 h-4 text-teal-500 mr-2 flex-shrink-0" />
                     Natural Language Interaction
                   </li>
                 </ul>
               </div>
               
-              <p className="text-sm text-gray-500 mb-4">
-                We're working hard to bring Jovan AI to life. Stay tuned for updates!
+              <p className="text-xs md:text-sm text-gray-500 mb-4">
+                We're working hard to bring Jovan AI to you soon. Stay tuned for updates!
               </p>
 
               <div className="flex justify-end">
@@ -306,9 +306,9 @@ const userDropdownItems = [
                     setShowJovanModal(false);
                     router.push('/cms/dashboard/ai-panel');
                   }}
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-300"
+                  className="inline-flex items-center px-3 py-2 md:px-4 md:py-2 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 text-sm md:text-base"
                 >
-                  <Bot className="w-5 h-5 mr-2" />
+                  <Bot className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                   Try Early Access
                 </button>
               </div>
