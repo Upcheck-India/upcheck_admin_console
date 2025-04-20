@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import UnauthorizedAccess from '../../../components/UnauthorizedAccess';
 import React from 'react';
-import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User, AlertTriangle, Stars } from 'lucide-react';
+import { Pencil, Trash2, X, Eye, ChevronDown, Loader2, LogOut, User, AlertTriangle, Stars, Bot } from 'lucide-react';
 import ThumbnailUpload from "../../components/ThumbnailUpload";
 import { useRouter } from 'next/navigation';
 import { validatePost } from "../../../utils/postValidate";
@@ -102,19 +102,18 @@ const AccountMenu = ({ onLogout }) => {
   );
 };
 
-const AIButton = () => (
-  <a
-    href="https://n8n.upcheck.in"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="inline-flex items-center px-6 py-2 bg-indigo-600 text-white rounded-lg
-      hover:bg-indigo-500 hover:shadow-[0_0_15px_rgba(99,102,241,0.5)] 
-      transition-all duration-200"
-  >
-    <Stars className="w-4 h-4 mr-2" />
-    AI Panel
-  </a>
-);
+const AIButton = () => {
+  const router = useRouter();
+  return (
+    <button
+      onClick={() => router.push('/cms/dashboard/ai-panel')}
+      className="flex items-center px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+    >
+      <Bot className="w-4 h-4 mr-2" />
+      AI Panel
+    </button>
+  );
+};
 
 const PostCard = ({ post, onView, onEdit, onDelete }) => (
   <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
