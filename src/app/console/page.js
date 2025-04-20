@@ -22,8 +22,14 @@ import {
   Shield,
   Loader2,
   PenSquareIcon,
-  Navigation
+  Navigation,
+  Bot,
+  X,
+  Sparkles,
+  Brain,
+  MessageSquare
 } from 'lucide-react';
+import Image from 'next/image';
 import { useAuth } from '../../hooks/useAuth';
 import SecureLoading from "../components/SecureLoading";
 import { useRouter } from 'next/navigation';
@@ -45,6 +51,7 @@ const AdminLandingPage = () => {
   const { isLoading: authLoading, isAuthenticated } = useAuth(true);
   const [isLoading, setIsLoading] = useState(true);
   const [username, setUsername] = useState('');
+  const [showJovanModal, setShowJovanModal] = useState(false);
   const router = useRouter();
 
       useEffect(() => {
@@ -218,8 +225,96 @@ const userDropdownItems = [
           <h1 className="text-3xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
             Welcome to your Console ✨
           </h1>
-          <p className="mt-2 text-gray-600">Access and manage all organizational resources from one place</p>
+          <div className="mt-2">
+            <p className="text-gray-600">Access and manage all organizational resources from one place</p>
+            <div className="mt-3">
+              <button
+                onClick={() => setShowJovanModal(true)}
+                className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-full group hover:shadow-lg transition-all duration-300"
+              >
+                <Bot className="w-4 h-4 text-white mr-2" />
+                <span className="text-sm font-medium text-white">Powered by Jovan AI</span>
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Jovan AI Coming Soon Modal */}
+        {showJovanModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 relative">
+              <button
+                onClick={() => setShowJovanModal(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              
+              <div className="flex items-center mb-6">
+                <div className="relative w-16 h-16 mr-4">
+                  <Image
+                    src="/shrimp_cyborg_logo.png"
+                    alt="Jovan AI"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">
+                  Meet Jovan AI
+                </h2>
+              </div>
+              
+              <p className="text-gray-600 mb-4">
+                Jovan AI is Upcheck's upcoming artificial intelligence assistant designed to enhance our workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
+              </p>
+              
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 mb-4 border border-purple-100">
+                <h3 className="font-medium text-purple-800 flex items-center">
+                  <Settings className="w-4 h-4 mr-2" />
+                  Development Status
+                </h3>
+                <p className="text-sm text-purple-700 mt-1">
+                  Jovan AI is currently in active development. Admins can now access the early preview version to explore upcoming features and provide feedback.
+                </p>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                <h3 className="font-medium text-gray-900 mb-2">Coming Features:</h3>
+                <ul className="space-y-2">
+                  <li className="flex items-center text-sm text-gray-600">
+                    <Sparkles className="w-4 h-4 text-purple-500 mr-2" />
+                    Smart Content Generation & Management
+                  </li>
+                  <li className="flex items-center text-sm text-gray-600">
+                    <Brain className="w-4 h-4 text-blue-500 mr-2" />
+                    Intelligent Workflow Automation
+                  </li>
+                  <li className="flex items-center text-sm text-gray-600">
+                    <MessageSquare className="w-4 h-4 text-teal-500 mr-2" />
+                    Natural Language Interaction
+                  </li>
+                </ul>
+              </div>
+              
+              <p className="text-sm text-gray-500 mb-4">
+                We're working hard to bring Jovan AI to life. Stay tuned for updates!
+              </p>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowJovanModal(false);
+                    router.push('/cms/dashboard/ai-panel');
+                  }}
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-300"
+                >
+                  <Bot className="w-5 h-5 mr-2" />
+                  Try Early Access
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Stats */}
         <ConsoleStats />
