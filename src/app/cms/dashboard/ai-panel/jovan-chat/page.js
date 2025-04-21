@@ -482,9 +482,9 @@ export default function JovanChat() {
         <div className="flex-1 flex flex-col relative">
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="sm:hidden fixed bottom-20 left-4 z-50 w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg"
+            className="sm:hidden fixed top-20 left-4 z-50 w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
           >
-            <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
+            <Menu className="w-5 h-5" />
           </button>
 
           {!sessionId ? (
