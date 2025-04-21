@@ -221,66 +221,90 @@ export default function JovanChat() {
     setInput('');
     setIsTyping(true);
 
+    let retryCount = 0;
+    const MAX_RETRIES = 2; // Client-side retries in addition to server-side retries
+
+    const attemptRequest = async () => {
+      try {
+        if (messages.length === 0) {
+          await updateChatTitle(sessionId, originalInput);
+        }
+
+        const response = await fetch('/api/jovan-chat/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sessionId: endpointSessionId,
+            message: messageContent,
+            role: 'user'
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          if (errorData.retryable && retryCount < MAX_RETRIES) {
+            retryCount++;
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+            
+            // Show retry message to user
+            const retryMessage = {
+              role: 'assistant',
+              content: `The request is taking longer than expected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount} of ${MAX_RETRIES})`
+            };
+            setMessages(prev => [...prev, retryMessage]);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return attemptRequest();
+          }
+          throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Received response:', data);
+        
+        let aiContent;
+        if (Array.isArray(data) && data.length > 0) {
+          aiContent = data[0].output;
+        } else if (data.ai_response) {
+          aiContent = data.ai_response;
+        } else if (typeof data === 'object') {
+          aiContent = data.message || data.response;
+        }
+
+        if (!aiContent) {
+          console.error('Invalid response format:', data);
+          throw new Error('Invalid response format');
+        }
+
+        // Remove any retry messages
+        setMessages(prev => prev.filter(msg => !msg.content.includes('Retrying in')));
+
+        const aiMessage = {
+          role: 'assistant',
+          content: aiContent
+        };
+
+        setMessages(prev => [...prev, aiMessage]);
+      } catch (error) {
+        console.error('Chat error:', error);
+        const errorMessage = {
+          role: 'assistant',
+          content: error.message.includes('timed out')
+            ? "I'm sorry, the request timed out. You can try sending your message again."
+            : "I apologize, but I encountered an error processing your message. Please try again in a moment."
+        };
+        // Remove any retry messages before showing the final error
+        setMessages(prev => [
+          ...prev.filter(msg => !msg.content.includes('Retrying in')),
+          errorMessage
+        ]);
+      }
+    };
+
     try {
-      if (messages.length === 0) {
-        await updateChatTitle(sessionId, originalInput);
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      const response = await fetch('/api/jovan-chat/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          sessionId: endpointSessionId,
-          message: messageContent,
-          role: 'user'
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Received response:', data);
-      
-      let aiContent;
-      if (Array.isArray(data) && data.length > 0) {
-        aiContent = data[0].output;
-      } else if (data.ai_response) {
-        aiContent = data.ai_response;
-      } else if (typeof data === 'object') {
-        aiContent = data.message || data.response;
-      }
-
-      if (!aiContent) {
-        console.error('Invalid response format:', data);
-        throw new Error('Invalid response format');
-      }
-
-      const aiMessage = {
-        role: 'assistant',
-        content: aiContent
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-
-    } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage = {
-        role: 'assistant',
-        content: error.name === 'AbortError' 
-          ? "I'm sorry, the request timed out. Please try again."
-          : "I'm sorry, I encountered an error processing your message. Please try again."
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      await attemptRequest();
     } finally {
       setIsTyping(false);
     }
