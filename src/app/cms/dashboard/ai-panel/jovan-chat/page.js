@@ -437,7 +437,7 @@ export default function JovanChat() {
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } fixed sm:relative z-40 h-full`}>
           <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="font-semibold text-gray-800">Chat History</h2>
+            <h2 className="font-semibold text-gray-800">Chat History - Jovan AI</h2>
             <button
               onClick={() => setIsSidebarOpen(false)}
               className="sm:hidden text-gray-500 hover:text-gray-700"
@@ -522,6 +522,9 @@ export default function JovanChat() {
                   <h3 className="text-2xl font-bold text-gray-800 mb-3">Welcome to Jovan AI Chat</h3>
                   <p className="text-gray-600 leading-relaxed mb-8">
                     Start a new chat to begin your conversation with Jovan AI.
+                  </p>
+                  <p className="text-teal-600 leading-relaxed mb-8">
+                    Built by and for Upcheck India
                   </p>
                   <button
                     onClick={startNewChat}
