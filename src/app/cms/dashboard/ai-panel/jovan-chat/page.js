@@ -361,14 +361,14 @@ export default function JovanChat() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
       <nav className="bg-white border-b shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
+        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
+          <div className="flex justify-between h-14 sm:h-16">
             <div className="flex items-center">
-              <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-2 rounded-lg">
-                <LayoutDashboard className="h-6 w-6 text-white" />
+              <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-1.5 sm:p-2 rounded-lg">
+                <LayoutDashboard className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <Link href="/console" className="flex items-center ml-2">
-                <span className="text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
+                <span className="text-base sm:text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent truncate">
                   Upcheck Console
                 </span>
               </Link>
@@ -378,17 +378,16 @@ export default function JovanChat() {
               <div className="relative">
                 <button
                   onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-                  className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
+                  className="flex items-center space-x-1 sm:space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
                 >
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
+                  <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center">
                     <span className="text-white text-sm font-medium">
                       {username.slice(0, 1).toUpperCase()}
                     </span>
                   </div>
-                  <span>{username}</span>
+                  <span className="hidden sm:inline">{username}</span>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
                 </button>
-
                 {isUserDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
                     <div className="px-4 py-2 text-sm text-gray-700 border-b">
@@ -409,13 +408,15 @@ export default function JovanChat() {
         </div>
       </nav>
 
-      <div className="flex h-[calc(100vh-4rem)]">
-        <div className={`w-80 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} absolute md:relative z-40`}>
+      <div className="flex h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)]">
+        <div className={`w-full sm:w-80 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } fixed sm:relative z-40 h-full`}>
           <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="font-semibold text-gray-800">Chat History</h2>
             <button
               onClick={() => setIsSidebarOpen(false)}
-              className="md:hidden text-gray-500 hover:text-gray-700"
+              className="sm:hidden text-gray-500 hover:text-gray-700"
             >
               <X className="h-5 w-5" />
             </button>
@@ -478,12 +479,12 @@ export default function JovanChat() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col relative">
           <button
             onClick={() => setIsSidebarOpen(true)}
-            className="md:hidden fixed bottom-4 left-4 z-50 w-12 h-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg"
+            className="sm:hidden fixed bottom-20 left-4 z-50 w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg"
           >
-            <Menu className="w-6 h-6" />
+            <Menu className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
 
           {!sessionId ? (
@@ -531,79 +532,80 @@ export default function JovanChat() {
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gradient-to-b from-gray-50/50 to-white">
+              <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gradient-to-b from-gray-50/50 to-white">
                 {messages.map((message, index) => (
                   <div
                     key={index}
                     className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideIn`}
                   >
                     {message.role === 'assistant' && (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-3 flex items-center justify-center">
-                        <Bot className="w-5 h-5 text-white" />
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
+                        <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                       </div>
                     )}
                     <div
-                      className={`max-w-[80%] rounded-2xl p-4 ${
+                      className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${
                         message.role === 'user'
                           ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-blue-500/20'
                           : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
-                      } shadow-lg transform hover:scale-[1.02] transition-transform`}
+                      } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
                     >
-                      <p className="leading-relaxed">{message.content}</p>
-                      <span className="text-xs opacity-70 mt-2 block">
+                      <p className="text-sm sm:text-base leading-relaxed break-words">{message.content}</p>
+                      <span className="text-[10px] sm:text-xs opacity-70 mt-1 sm:mt-2 block">
                         {new Date().toLocaleTimeString()}
                       </span>
                     </div>
                     {message.role === 'user' && (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex-shrink-0 ml-3 flex items-center justify-center">
-                        <User className="w-5 h-5 text-white" />
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex-shrink-0 ml-2 sm:ml-3 flex items-center justify-center">
+                        <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                       </div>
                     )}
                   </div>
                 ))}
                 {isTyping && (
                   <div className="flex justify-start animate-slideIn">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-3 flex items-center justify-center">
-                      <Bot className="w-5 h-5 text-white" />
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
+                      <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                     </div>
-                    <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-lg flex items-center space-x-2">
+                    <div className="bg-white border border-gray-200 rounded-xl sm:rounded-2xl p-3 sm:p-4 shadow-lg flex items-center space-x-2">
                       <div className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                       <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                       <div className="w-2 h-2 bg-teal-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
                   </div>
                 )}
-                <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} className="h-4" />
               </div>
 
-              <div className="p-6 border-t bg-white/80 backdrop-blur-sm">
+              <div className="p-3 sm:p-6 border-t bg-white/80 backdrop-blur-sm">
                 <SearchModeSelector 
                   searchMode={searchMode}
                   onSearchModeChange={handleSearchModeChange}
                 />
-                <form onSubmit={handleSubmit} className="flex space-x-4">
+                <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 sm:gap-4">
                   <input
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Type your message..."
-                    className="flex-1 px-6 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm placeholder:text-gray-400 text-gray-700"
+                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm placeholder:text-gray-400 text-gray-700 text-sm sm:text-base"
                     disabled={isTyping}
                   />
                   <button
                     type="submit"
                     disabled={!input.trim() || isTyping}
-                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:scale-105 active:scale-95"
+                    className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] text-sm sm:text-base"
                   >
                     {isTyping ? (
                       <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span>Processing...</span>
+                        <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                        <span className="hidden sm:inline">Processing...</span>
+                        <span className="sm:hidden">...</span>
                       </>
                     ) : (
                       <>
-                        <Send className="w-5 h-5" />
-                        <span>Send</span>
+                        <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <span className="hidden sm:inline">Send</span>
                       </>
                     )}
                   </button>
