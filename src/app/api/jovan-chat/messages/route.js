@@ -46,7 +46,7 @@ export async function POST(req) {
     const { sessionId, message, role } = await req.json();
     
     const response = await fetchWithRetry(
-      `https://upcheck-automate.onrender.com/webhook-test/chat-message-endpoint/chat/${sessionId}`,
+      `https://upcheck-automate.onrender.com/webhook/chat-message-endpoint/chat/${sessionId}`,
       {
         method: 'POST',
         headers: {
