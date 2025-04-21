@@ -226,19 +226,24 @@ export default function AIPanel() {
               status: "Coming Soon"
             },
             {
-              title: "Chat with me!",
-              description: "Converse with Jovan for help",
+              title: "Chat with Jovan",
+              description: "Get instant help and answers",
               icon: MessageSquare,
               color: "from-teal-400 to-teal-600",
-              status: "Coming Soon"
+              status: "Available Now",
+              link: "/cms/dashboard/ai-panel/jovan-chat"
             }
           ].map((feature, index) => (
-            <div key={index} className={`bg-gradient-to-br ${feature.color} text-white rounded-xl shadow-lg p-6 relative overflow-hidden opacity-75`}>
+            <div 
+              key={index} 
+              className={`bg-gradient-to-br ${feature.color} text-white rounded-xl shadow-lg p-6 relative overflow-hidden ${feature.link ? 'cursor-pointer transform transition-transform hover:scale-105 opacity-100' : 'opacity-75'}`}
+              onClick={() => feature.link && router.push(feature.link)}
+            >
               <div className="relative z-10">
                 <feature.icon className="w-8 h-8 mb-4" />
                 <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
                 <p className="mb-4 text-white/90">{feature.description}</p>
-                <span className="inline-flex items-center bg-white/20 px-3 py-1 rounded-full text-sm">
+                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm ${feature.link ? 'bg-white text-teal-600 font-medium' : 'bg-white/20'}`}>
                   {feature.status}
                 </span>
               </div>
