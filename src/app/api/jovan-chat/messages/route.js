@@ -46,7 +46,7 @@ export async function POST(req) {
     const { sessionId, message, role } = await req.json();
     
     const response = await fetchWithRetry(
-      `https://upcheck-automate.onrender.com/webhook/chat-message-endpoint/chat/${sessionId}`,
+      `https://upcheck-automate.onrender.com/webhook-test/chat-message-endpoint/chat/${sessionId}`,
       {
         method: 'POST',
         headers: {
@@ -60,23 +60,21 @@ export async function POST(req) {
       }
     );
 
-    // Check if the response has content
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('Invalid response format: Expected JSON');
-    }
-
     const text = await response.text();
     if (!text) {
       throw new Error('Empty response received');
     }
 
     try {
+      // Try to parse as JSON first
       const data = JSON.parse(text);
       return NextResponse.json(data);
     } catch (parseError) {
-      console.error('JSON Parse Error:', parseError, 'Response text:', text);
-      throw new Error('Invalid JSON in response');
+      // If not JSON, return the plain text as a response object
+      return NextResponse.json({ 
+        message: text,
+        isPlainText: true
+      });
     }
   } catch (error) {
     console.error('Error in chat message proxy:', error);

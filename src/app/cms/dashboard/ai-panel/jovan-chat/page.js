@@ -23,6 +23,9 @@ import {
   Trash2
 } from 'lucide-react';
 import SearchModeSelector from '../../../../components/SearchModeSelector';
+import CodeBlock from '../../../../components/CodeBlock';
+import { parseMessage } from '../../../../utils/messageParser';
+import WhatsNew from '../../../../components/WhatsNew';
 
 export default function JovanChat() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -41,6 +44,7 @@ export default function JovanChat() {
   const [chatToDelete, setChatToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchMode, setSearchMode] = useState(null);
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const router = useRouter();
 
@@ -265,7 +269,10 @@ export default function JovanChat() {
         console.log('Received response:', data);
         
         let aiContent;
-        if (Array.isArray(data) && data.length > 0) {
+        if (data.isPlainText) {
+          // Handle plain text response, replacing \n with actual newlines
+          aiContent = data.message.replace(/\\n/g, '\n');
+        } else if (Array.isArray(data) && data.length > 0) {
           aiContent = data[0].output;
         } else if (data.ai_response) {
           aiContent = data.ai_response;
@@ -396,6 +403,13 @@ export default function JovanChat() {
                   Upcheck Console
                 </span>
               </Link>
+              <button
+                onClick={() => setIsWhatsNewOpen(true)}
+                className="ml-4 px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-medium rounded-full flex items-center gap-1 hover:opacity-90 transition-opacity animate-pulse"
+              >
+                <Sparkles className="w-3 h-3" />
+                I&apos;m getting smarter, baby!
+              </button>
             </div>
 
             <div className="flex items-center">
@@ -577,7 +591,23 @@ export default function JovanChat() {
                           : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
                       } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
                     >
-                      <p className="text-sm sm:text-base leading-relaxed break-words">{message.content}</p>
+                      <div className="space-y-2">
+                        {parseMessage(message.content).map((segment, i) => (
+                          segment.type === 'code' ? (
+                            <CodeBlock 
+                              key={i}
+                              code={segment.content}
+                              language={segment.language}
+                            />
+                          ) : (
+                            <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${
+                              message.role === 'user' ? 'text-white' : 'text-gray-800'
+                            }`}>
+                              {segment.content}
+                            </p>
+                          )
+                        ))}
+                      </div>
                       <span className="text-[10px] sm:text-xs opacity-70 mt-1 sm:mt-2 block">
                         {new Date().toLocaleTimeString()}
                       </span>
@@ -682,6 +712,8 @@ export default function JovanChat() {
           </div>
         </div>
       )}
+
+      <WhatsNew isOpen={isWhatsNewOpen} onClose={() => setIsWhatsNewOpen(false)} />
 
       <style jsx global>{`
         @keyframes float {
