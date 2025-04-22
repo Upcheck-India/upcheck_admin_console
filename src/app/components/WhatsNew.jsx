@@ -15,13 +15,13 @@ const updates = [
   },
   {
     title: "Language Recognition",
-    description: "Automatically detects programming languages in code blocks from markdown-style tags like ```python or ```javascript.",
+    description: "Automatically detects programming languages and adapts to it",
     icon: "🔍"
   },
   {
-    title: "Smart Response Formatting",
-    description: "Better handling of mixed content responses with both text and code blocks.",
-    icon: "✨"
+    title: "New design",
+    description: "Better UI/UX with a fresh look and feel.",
+    icon: "🎨"
   }
 ];
 

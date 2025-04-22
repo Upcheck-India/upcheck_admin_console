@@ -142,8 +142,6 @@ export default function AIPanel() {
                 Much like certain groundbreaking AI characters in modern cinema, Jovan represents the future 
                 of digital assistance. With an empathetic core and adaptive intelligence, Jovan learns and 
                 evolves alongside you, becoming more attuned to your needs and workflows over time.
-                <span className="text-sm text-gray-400 italic"> (Fun fact: If you're a fan of near-future AI films, 
-                you might find Jovan's name intriguingly familiar...)</span>
               </p>
               <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
                 <span className="px-4 py-2 bg-blue-50 text-blue-700 rounded-full flex items-center">

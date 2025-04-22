@@ -20,9 +20,11 @@ import {
   User,
   Menu,
   X,
-  Trash2
+  Trash2,
+  Gamepad2,
+  Settings
 } from 'lucide-react';
-import SearchModeSelector from '../../../../components/SearchModeSelector';
+import ToolSelector, { getToolBadge } from '../../../../components/ToolSelector';
 import CodeBlock from '../../../../components/CodeBlock';
 import { parseMessage } from '../../../../utils/messageParser';
 import WhatsNew from '../../../../components/WhatsNew';
@@ -38,7 +40,7 @@ export default function JovanChat() {
   const [sessionId, setSessionId] = useState(null);
   const [endpointSessionId, setEndpointSessionId] = useState(null);
   const [chatSessions, setChatSessions] = useState([]);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState(null);
@@ -47,6 +49,21 @@ export default function JovanChat() {
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth >= 640) {
+        setIsSidebarOpen(true);
+      } else {
+        setIsSidebarOpen(false);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     checkAuth();
@@ -200,33 +217,39 @@ export default function JovanChat() {
     }
   };
 
-  const handleSearchModeChange = (mode) => {
-    setSearchMode(mode);
+  const handleToolChange = (toolId) => {
+    setSearchMode(toolId);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || !sessionId || !endpointSessionId) return;
 
-    // Store original input for display
     const originalInput = input;
-    
-    // Prepare request message with search mode context
     let messageContent = input;
+    
+    const toolBadge = searchMode ? getToolBadge(searchMode) : null;
+    
     if (searchMode === 'internet') {
       messageContent = "You need to search the internet for this request: " + input;
     } else if (searchMode === 'database') {
       messageContent = "You need to use the mongodb database tool to fetch information regarding this request: " + input;
     }
     
-    // Use original input for display, but send modified message to backend
-    const userMessage = { role: 'user', content: originalInput };
+    const userMessage = { 
+      role: 'user', 
+      content: originalInput,
+      badge: toolBadge
+    };
+    
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
+    
+    setSearchMode(null);
 
     let retryCount = 0;
-    const MAX_RETRIES = 2; // Client-side retries in addition to server-side retries
+    const MAX_RETRIES = 2;
 
     const attemptRequest = async () => {
       try {
@@ -252,7 +275,6 @@ export default function JovanChat() {
             retryCount++;
             const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
             
-            // Show retry message to user
             const retryMessage = {
               role: 'assistant',
               content: `The request is taking longer than expected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount} of ${MAX_RETRIES})`
@@ -270,7 +292,6 @@ export default function JovanChat() {
         
         let aiContent;
         if (data.isPlainText) {
-          // Handle plain text response, replacing \n with actual newlines
           aiContent = data.message.replace(/\\n/g, '\n');
         } else if (Array.isArray(data) && data.length > 0) {
           aiContent = data[0].output;
@@ -285,7 +306,6 @@ export default function JovanChat() {
           throw new Error('Invalid response format');
         }
 
-        // Remove any retry messages
         setMessages(prev => prev.filter(msg => !msg.content.includes('Retrying in')));
 
         const aiMessage = {
@@ -302,7 +322,6 @@ export default function JovanChat() {
             ? "I'm sorry, the request timed out. You can try sending your message again."
             : "I apologize, but I encountered an error processing your message. Please try again in a moment."
         };
-        // Remove any retry messages before showing the final error
         setMessages(prev => [
           ...prev.filter(msg => !msg.content.includes('Retrying in')),
           errorMessage
@@ -408,7 +427,7 @@ export default function JovanChat() {
                 className="ml-4 px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-medium rounded-full flex items-center gap-1 hover:opacity-90 transition-opacity animate-pulse"
               >
                 <Sparkles className="w-3 h-3" />
-                I&apos;m getting smarter, baby!
+                Version 1.4
               </button>
             </div>
 
@@ -447,9 +466,10 @@ export default function JovanChat() {
       </nav>
 
       <div className="flex h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)]">
-        <div className={`w-full sm:w-80 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } fixed sm:relative z-40 h-full`}>
+        <div 
+          className={`w-full sm:w-80 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 fixed sm:relative z-40 h-full
+            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}`}
+        >
           <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h2 className="font-semibold text-gray-800">Chat History - Jovan AI</h2>
             <button
@@ -459,7 +479,7 @@ export default function JovanChat() {
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="p-4">
+          <div className="p-4 space-y-2">
             <button
               onClick={startNewChat}
               disabled={isStarting}
@@ -476,6 +496,23 @@ export default function JovanChat() {
                   <span>New Chat</span>
                 </>
               )}
+            </button>
+
+            <button
+              onClick={() => alert('Game Zone coming soon!')}
+              className="w-full px-4 py-2 bg-gradient-to-r from-green-500 to-teal-500 text-white rounded-lg hover:opacity-90 transition-all flex items-center justify-center space-x-2"
+            >
+              <Gamepad2 className="w-5 h-5" />
+              <span>Game Zone</span>
+              <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">Coming Soon</span>
+            </button>
+
+            <button
+              onClick={() => alert('Settings coming soon!')}
+              className="w-full px-4 py-2 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:opacity-90 transition-all flex items-center justify-center space-x-2"
+            >
+              <Settings className="w-5 h-5" />
+              <span>Jovan Settings</span>
             </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -517,13 +554,15 @@ export default function JovanChat() {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col relative">
-          <button
-            onClick={() => setIsSidebarOpen(true)}
-            className="sm:hidden fixed top-20 left-4 z-50 w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+        <div className="flex-1 flex flex-col relative w-full sm:w-[calc(100%-20rem)]">
+          {!isSidebarOpen && (
+            <button
+              onClick={() => setIsSidebarOpen(true)}
+              className="sm:hidden fixed top-20 left-4 z-50 w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full flex items-center justify-center shadow-lg hover:scale-105 transition-transform"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
 
           {!sessionId ? (
             <div className="flex-1 flex items-center justify-center p-8">
@@ -574,51 +613,60 @@ export default function JovanChat() {
           ) : (
             <>
               <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gradient-to-b from-gray-50/50 to-white">
-                {messages.map((message, index) => (
-                  <div
-                    key={index}
-                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideIn`}
-                  >
-                    {message.role === 'assistant' && (
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
-                        <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                      </div>
-                    )}
+                <div className="max-w-4xl mx-auto w-full">
+                  {messages.map((message, index) => (
                     <div
-                      className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${
-                        message.role === 'user'
-                          ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-blue-500/20'
-                          : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
-                      } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
+                      key={index}
+                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideIn`}
                     >
-                      <div className="space-y-2">
-                        {parseMessage(message.content).map((segment, i) => (
-                          segment.type === 'code' ? (
-                            <CodeBlock 
-                              key={i}
-                              code={segment.content}
-                              language={segment.language}
-                            />
-                          ) : (
-                            <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${
-                              message.role === 'user' ? 'text-white' : 'text-gray-800'
-                            }`}>
-                              {segment.content}
-                            </p>
-                          )
-                        ))}
+                      {message.role === 'assistant' && (
+                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
+                          <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${
+                          message.role === 'user'
+                            ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-blue-500/20'
+                            : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
+                        } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
+                      >
+                        <div className="space-y-2">
+                          {message.badge && (
+                            <div className="mb-2">
+                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+                                {message.badge}
+                              </span>
+                            </div>
+                          )}
+                          {parseMessage(message.content).map((segment, i) => (
+                            segment.type === 'code' ? (
+                              <CodeBlock 
+                                key={i}
+                                code={segment.content}
+                                language={segment.language}
+                              />
+                            ) : (
+                              <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${
+                                message.role === 'user' ? 'text-white' : 'text-gray-800'
+                              }`}>
+                                {segment.content}
+                              </p>
+                            )
+                          ))}
+                        </div>
+                        <span className="text-[10px] sm:text-xs opacity-70 mt-1 sm:mt-2 block">
+                          {new Date().toLocaleTimeString()}
+                        </span>
                       </div>
-                      <span className="text-[10px] sm:text-xs opacity-70 mt-1 sm:mt-2 block">
-                        {new Date().toLocaleTimeString()}
-                      </span>
+                      {message.role === 'user' && (
+                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex-shrink-0 ml-2 sm:ml-3 flex items-center justify-center">
+                          <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                        </div>
+                      )}
                     </div>
-                    {message.role === 'user' && (
-                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex-shrink-0 ml-2 sm:ml-3 flex items-center justify-center">
-                        <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
                 {isTyping && (
                   <div className="flex justify-start animate-slideIn">
                     <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
@@ -635,38 +683,47 @@ export default function JovanChat() {
               </div>
 
               <div className="p-3 sm:p-6 border-t bg-white/80 backdrop-blur-sm">
-                <SearchModeSelector 
-                  searchMode={searchMode}
-                  onSearchModeChange={handleSearchModeChange}
-                />
-                <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-                  <input
-                    type="text"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Type your message..."
-                    className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm placeholder:text-gray-400 text-gray-700 text-sm sm:text-base"
-                    disabled={isTyping}
-                  />
-                  <button
-                    type="submit"
-                    disabled={!input.trim() || isTyping}
-                    className="px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] text-sm sm:text-base"
-                  >
-                    {isTyping ? (
-                      <>
-                        <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
-                        <span className="hidden sm:inline">Processing...</span>
-                        <span className="sm:hidden">...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-4 h-4 sm:w-5 sm:h-5" />
-                        <span className="hidden sm:inline">Send</span>
-                      </>
+                <div className="max-w-4xl mx-auto w-full">
+                  <div className="flex flex-col items-end gap-2">
+                    <ToolSelector 
+                      selectedTool={searchMode}
+                      onToolChange={handleToolChange}
+                    />
+                    {searchMode && (
+                      <p className="text-xs text-gray-500 px-2">
+                        {searchMode === 'internet' ? 
+                          'Using internet search to find information' : 
+                          'Searching Upcheck\'s official database'}
+                      </p>
                     )}
-                  </button>
-                </form>
+                  </div>
+                  <form onSubmit={handleSubmit} className="mt-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        placeholder="Type your message..."
+                        className="w-full px-4 sm:px-6 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm placeholder:text-gray-400 text-gray-700 text-sm sm:text-base pr-20"
+                        disabled={isTyping}
+                      />
+                      <button
+                        type="submit"
+                        disabled={!input.trim() || isTyping}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-lg shadow-blue-500/20 hover:shadow-xl"
+                      >
+                        {isTyping ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4" />
+                            <span className="hidden sm:inline">Send</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               </div>
             </>
           )}
