@@ -231,9 +231,9 @@ export default function JovanChat() {
     const toolBadge = searchMode ? getToolBadge(searchMode) : null;
     
     if (searchMode === 'internet') {
-      messageContent = "You need to search the internet for this request: " + input;
+      messageContent = "You need to search the internet for this request- " + input;
     } else if (searchMode === 'database') {
-      messageContent = "You need to use the mongodb database tool to fetch information regarding this request: " + input;
+      messageContent = "You need to use the mongodb database tool to fetch information regarding this request- " + input;
     }
     
     const userMessage = { 
