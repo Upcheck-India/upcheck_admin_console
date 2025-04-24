@@ -75,8 +75,8 @@ export default function WhatsNew({ isOpen, onClose }) {
       icon: <Code className="w-5 h-5" />,
       description: 'Better syntax highlighting and intelligent code suggestions across multiple programming languages.',
       details: [
-        'Expanded language support',
-        'Smarter code completion',
+        'Now supports a larger set of languages',
+        'Run the code right in the chat',
         'Code generation with a new look',
       ],
       status: '✨ Updated'
