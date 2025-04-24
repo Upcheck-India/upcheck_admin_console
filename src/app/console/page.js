@@ -215,6 +215,19 @@ const userDropdownItems = [
         </div>
       </nav>
 
+      {/* FAB for Jovan Chat */}
+      <Link 
+        href="/cms/dashboard/ai-panel/jovan-chat"
+        className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group z-50"
+      >
+        <div className="relative">
+          <Bot className="w-6 h-6 text-white" />
+          <div className="absolute -top-12 right-0 bg-white px-3 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
+            <span className="text-sm font-medium text-gray-700">Open Jovan Chat</span>
+          </div>
+        </div>
+      </Link>
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Section */}

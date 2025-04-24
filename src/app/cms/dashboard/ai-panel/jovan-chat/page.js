@@ -221,6 +221,88 @@ export default function JovanChat() {
     setSearchMode(toolId);
   };
 
+  // Move attemptRequest outside handleSubmit to make it reusable
+  const attemptRequest = async (messageContent, originalInput, isRetry = false) => {
+    let retryCount = 0;
+    const MAX_RETRIES = 2;
+
+    try {
+      if (messages.length === 0) {
+        await updateChatTitle(sessionId, originalInput);
+      }
+
+      const response = await fetch('/api/jovan-chat/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: endpointSessionId,
+          message: messageContent,
+          role: 'user'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (errorData.retryable && retryCount < MAX_RETRIES) {
+          retryCount++;
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
+          
+          const retryMessage = {
+            role: 'assistant',
+            content: `The request is taking longer than expected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount} of ${MAX_RETRIES})`
+          };
+          setMessages(prev => [...prev, retryMessage]);
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return attemptRequest(messageContent, originalInput, isRetry);
+        }
+        throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Received response:', data);
+      
+      let aiContent;
+      if (data.isPlainText) {
+        aiContent = data.message.replace(/\\n/g, '\n');
+      } else if (Array.isArray(data) && data.length > 0) {
+        aiContent = data[0].output;
+      } else if (data.ai_response) {
+        aiContent = data.ai_response;
+      } else if (typeof data === 'object') {
+        aiContent = data.message || data.response;
+      }
+
+      if (!aiContent) {
+        console.error('Invalid response format:', data);
+        throw new Error('Invalid response format');
+      }
+
+      setMessages(prev => prev.filter(msg => !msg.content.includes('Retrying in')));
+
+      const aiMessage = {
+        role: 'assistant',
+        content: aiContent
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: error.message.includes('timed out')
+          ? "I'm sorry, the request timed out. You can try sending your message again."
+          : "I apologize, but I encountered an error processing your message. Please try again in a moment."
+      };
+      setMessages(prev => [
+        ...prev.filter(msg => !msg.content.includes('Retrying in')),
+        errorMessage
+      ]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || !sessionId || !endpointSessionId) return;
@@ -245,92 +327,36 @@ export default function JovanChat() {
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
-    
     setSearchMode(null);
 
-    let retryCount = 0;
-    const MAX_RETRIES = 2;
+    try {
+      await attemptRequest(messageContent, originalInput);
+    } finally {
+      setIsTyping(false);
+    }
+  };
 
-    const attemptRequest = async () => {
-      try {
-        if (messages.length === 0) {
-          await updateChatTitle(sessionId, originalInput);
-        }
+  const handleRetry = async () => {
+    if (messages.length < 2) return;
+    
+    const lastUserMessage = messages[messages.length - 2];
+    if (lastUserMessage.role !== 'user') return;
 
-        const response = await fetch('/api/jovan-chat/messages', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sessionId: endpointSessionId,
-            message: messageContent,
-            role: 'user'
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          if (errorData.retryable && retryCount < MAX_RETRIES) {
-            retryCount++;
-            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-            
-            const retryMessage = {
-              role: 'assistant',
-              content: `The request is taking longer than expected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount} of ${MAX_RETRIES})`
-            };
-            setMessages(prev => [...prev, retryMessage]);
-            
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return attemptRequest();
-          }
-          throw new Error(errorData.details || `HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Received response:', data);
-        
-        let aiContent;
-        if (data.isPlainText) {
-          aiContent = data.message.replace(/\\n/g, '\n');
-        } else if (Array.isArray(data) && data.length > 0) {
-          aiContent = data[0].output;
-        } else if (data.ai_response) {
-          aiContent = data.ai_response;
-        } else if (typeof data === 'object') {
-          aiContent = data.message || data.response;
-        }
-
-        if (!aiContent) {
-          console.error('Invalid response format:', data);
-          throw new Error('Invalid response format');
-        }
-
-        setMessages(prev => prev.filter(msg => !msg.content.includes('Retrying in')));
-
-        const aiMessage = {
-          role: 'assistant',
-          content: aiContent
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
-      } catch (error) {
-        console.error('Chat error:', error);
-        const errorMessage = {
-          role: 'assistant',
-          content: error.message.includes('timed out')
-            ? "I'm sorry, the request timed out. You can try sending your message again."
-            : "I apologize, but I encountered an error processing your message. Please try again in a moment."
-        };
-        setMessages(prev => [
-          ...prev.filter(msg => !msg.content.includes('Retrying in')),
-          errorMessage
-        ]);
-      }
+    setIsTyping(true);
+    const userMessage = {
+      role: 'user',
+      content: lastUserMessage.content,
+      badge: lastUserMessage.badge
     };
 
+    // Remove the last AI message and add the retry user message
+    setMessages(prev => [
+      ...prev.slice(0, -1),
+      userMessage
+    ]);
+
     try {
-      await attemptRequest();
+      await attemptRequest(lastUserMessage.content, lastUserMessage.content, true);
     } finally {
       setIsTyping(false);
     }
@@ -422,13 +448,6 @@ export default function JovanChat() {
                   Upcheck Console
                 </span>
               </Link>
-              <button
-                onClick={() => setIsWhatsNewOpen(true)}
-                className="ml-4 px-3 py-1 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-xs font-medium rounded-full flex items-center gap-1 hover:opacity-90 transition-opacity animate-pulse"
-              >
-                <Sparkles className="w-3 h-3" />
-                Version 1.4
-              </button>
             </div>
 
             <div className="flex items-center">
@@ -573,6 +592,13 @@ export default function JovanChat() {
                 </div>
                 <div className="max-w-md mx-auto">
                   <h3 className="text-2xl font-bold text-gray-800 mb-3">Welcome to Jovan AI Chat</h3>
+                  <button
+                    onClick={() => setIsWhatsNewOpen(true)}
+                    className="mb-4 px-4 py-1.5 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-sm font-medium rounded-full flex items-center gap-2 hover:opacity-90 transition-opacity animate-pulse mx-auto"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Version 1.5
+                  </button>
                   <p className="text-gray-600 leading-relaxed mb-8">
                     Start a new chat to begin your conversation with Jovan AI.
                   </p>
@@ -615,53 +641,92 @@ export default function JovanChat() {
               <div className="flex-1 overflow-y-auto p-3 sm:p-6 space-y-4 sm:space-y-6 bg-gradient-to-b from-gray-50/50 to-white">
                 <div className="max-w-4xl mx-auto w-full">
                   {messages.map((message, index) => (
-                    <div
-                      key={index}
-                      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideIn`}
-                    >
-                      {message.role === 'assistant' && (
-                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
-                          <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                        </div>
-                      )}
+                    <div key={index}>
                       <div
-                        className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${
-                          message.role === 'user'
-                            ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-blue-500/20'
-                            : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
-                        } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
+                        className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideIn mb-6 sm:mb-8`}
                       >
-                        <div className="space-y-2">
-                          {message.badge && (
-                            <div className="mb-2">
-                              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
-                                {message.badge}
-                              </span>
-                            </div>
-                          )}
-                          {parseMessage(message.content).map((segment, i) => (
-                            segment.type === 'code' ? (
-                              <CodeBlock 
-                                key={i}
-                                code={segment.content}
-                                language={segment.language}
-                              />
-                            ) : (
-                              <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${
-                                message.role === 'user' ? 'text-white' : 'text-gray-800'
-                              }`}>
-                                {segment.content}
-                              </p>
-                            )
-                          ))}
+                        {message.role === 'assistant' && (
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex-shrink-0 mr-2 sm:mr-3 flex items-center justify-center">
+                            <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                          </div>
+                        )}
+                        <div
+                          className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${
+                            message.role === 'user'
+                              ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-blue-500/20'
+                              : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
+                          } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
+                        >
+                          <div className="space-y-2">
+                            {message.badge && (
+                              <div className="mb-2">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">
+                                  {message.badge}
+                                </span>
+                              </div>
+                            )}
+                            {parseMessage(message.content).map((segment, i) => (
+                              segment.type === 'code' ? (
+                                <CodeBlock 
+                                  key={i}
+                                  code={segment.content}
+                                  language={segment.language}
+                                />
+                              ) : (
+                                <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${
+                                  message.role === 'user' ? 'text-white' : 'text-gray-800'
+                                }`}>
+                                  {segment.content}
+                                </p>
+                              )
+                            ))}
+                          </div>
+                          <span className="text-[10px] sm:text-xs opacity-70 mt-1 sm:mt-2 block">
+                            {new Date().toLocaleTimeString()}
+                          </span>
                         </div>
-                        <span className="text-[10px] sm:text-xs opacity-70 mt-1 sm:mt-2 block">
-                          {new Date().toLocaleTimeString()}
-                        </span>
+                        {message.role === 'user' && (
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex-shrink-0 ml-2 sm:ml-3 flex items-center justify-center">
+                            <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+                          </div>
+                        )}
                       </div>
-                      {message.role === 'user' && (
-                        <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex-shrink-0 ml-2 sm:ml-3 flex items-center justify-center">
-                          <User className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+
+                      {/* Show retry button or error retry message */}
+                      {message.role === 'assistant' && index === messages.length - 1 && (
+                        <div className="flex justify-end -mt-2 mb-4 mr-12 sm:mr-14">
+                          <button
+                            onClick={handleRetry}
+                            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ${
+                              message.content.includes("I apologize, but I encountered an error")
+                                ? 'text-red-600 hover:bg-red-50'
+                                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            <svg 
+                              className={`w-4 h-4 transition-transform group-hover:rotate-[-45deg] ${
+                                message.content.includes("I apologize, but I encountered an error")
+                                  ? 'text-red-500'
+                                  : 'text-gray-400 group-hover:text-gray-600'
+                              }`} 
+                              viewBox="0 0 24 24" 
+                              fill="none" 
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path 
+                                d="M4 4V9H4.58152M19.9381 11C19.446 7.05369 16.0796 4 12 4C8.64262 4 5.76829 6.06817 4.58152 9M4.58152 9H9M20 20V15H19.4185M19.4185 15C18.2317 17.9318 15.3574 20 12 20C7.92038 20 4.55399 16.9463 4.06189 13M19.4185 15H15" 
+                                stroke="currentColor" 
+                                strokeWidth="2" 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span className="text-sm font-medium">
+                              {message.content.includes("I apologize, but I encountered an error")
+                                ? "Retry message"
+                                : "Retry"}
+                            </span>
+                          </button>
                         </div>
                       )}
                     </div>
