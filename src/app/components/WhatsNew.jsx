@@ -77,7 +77,7 @@ export default function WhatsNew({ isOpen, onClose }) {
       details: [
         'Now supports a larger set of languages',
         'Run the code right in the chat',
-        'Code generation with a new look',
+        'Code generation with dark and light themes',
       ],
       status: '✨ Updated'
     },

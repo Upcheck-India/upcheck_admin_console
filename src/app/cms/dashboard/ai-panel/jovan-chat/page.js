@@ -769,13 +769,13 @@ export default function JovanChat() {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Type your message..."
-                        className="w-full px-4 sm:px-6 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm placeholder:text-gray-400 text-gray-700 text-sm sm:text-base pr-20"
+                        className="w-full px-4 sm:px-6 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm placeholder:text-gray-400 text-gray-700 text-sm sm:text-base pr-[88px] sm:pr-[100px]"
                         disabled={isTyping}
                       />
                       <button
                         type="submit"
                         disabled={!input.trim() || isTyping}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-lg shadow-blue-500/20 hover:shadow-xl"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1 shadow-lg shadow-blue-500/20 hover:shadow-xl min-w-[70px] sm:min-w-[80px]"
                       >
                         {isTyping ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
