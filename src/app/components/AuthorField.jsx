@@ -1,3 +1,4 @@
+'use client';
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 
@@ -6,6 +7,7 @@ const AuthorField = ({ value, onChange, error }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [tempAuthor, setTempAuthor] = useState('');
+  const [hasConfirmed, setHasConfirmed] = useState(false);
 
   useEffect(() => {
     const storedUsername = localStorage.getItem('username');
@@ -21,13 +23,10 @@ const AuthorField = ({ value, onChange, error }) => {
     const newAuthor = e.target.value;
     setTempAuthor(newAuthor);
     
-    if (!isEditing) {
-      setIsEditing(true);
-    }
-    
     const storedUsername = localStorage.getItem('username');
-    if (storedUsername && newAuthor !== storedUsername) {
+    if (!isEditing && !hasConfirmed && storedUsername && newAuthor !== storedUsername) {
       setShowConfirmDialog(true);
+      setIsEditing(true);
     } else {
       setAuthor(newAuthor);
       onChange(newAuthor);
@@ -38,7 +37,7 @@ const AuthorField = ({ value, onChange, error }) => {
     setAuthor(tempAuthor);
     onChange(tempAuthor);
     setShowConfirmDialog(false);
-    setIsEditing(false);
+    setHasConfirmed(true);
   };
 
   const handleCancelChange = () => {
@@ -48,6 +47,7 @@ const AuthorField = ({ value, onChange, error }) => {
     onChange(storedUsername);
     setShowConfirmDialog(false);
     setIsEditing(false);
+    setHasConfirmed(false);
   };
 
   return (
@@ -88,7 +88,7 @@ const AuthorField = ({ value, onChange, error }) => {
             <div 
               className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
               aria-hidden="true"
-              onClick={() => setShowConfirmDialog(false)}
+              onClick={handleCancelChange}
             ></div>
 
             {/* Modal panel */}
@@ -97,7 +97,7 @@ const AuthorField = ({ value, onChange, error }) => {
                 <button
                   type="button"
                   className="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none"
-                  onClick={() => setShowConfirmDialog(false)}
+                  onClick={handleCancelChange}
                 >
                   <X className="h-6 w-6" />
                 </button>
