@@ -13,9 +13,9 @@ const transporter = nodemailer.createTransport({
 const mailOptions = {
   from: 'upcheck.team@gmail.com', // Sender address
   to: 'robin@upcheck.in', // Recipient's email
-  subject: 'Welcome to Upcheck!', // Subject line
+  subject: 'Welcome to Upcheck India!', // Subject line
   html: `<!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <style>
     body {
@@ -72,32 +72,6 @@ const mailOptions = {
       line-height: 1.6;
       margin: 16px 0;
     }
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin: 24px 0;
-    }
-    .feature-item {
-      background: linear-gradient(135deg, #e3f2fd 0%, #e0f2f1 100%);
-      padding: 20px;
-      border-radius: 8px;
-      border: 1px solid rgba(0, 137, 123, 0.1);
-    }
-    .feature-item h4 {
-      color: #0288d1;
-      margin: 0 0 8px 0;
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .feature-item p {
-      margin: 0;
-      font-size: 14px;
-      color: #546e7a;
-      line-height: 1.5;
-    }
     .welcome-box {
       background: linear-gradient(135deg, #e1f5fe 0%, #e0f2f1 100%);
       border-left: 4px solid #0288d1;
@@ -106,7 +80,7 @@ const mailOptions = {
       border-radius: 8px;
       position: relative;
     }
-    .credentials-container {
+    .internship-details {
       background: linear-gradient(145deg, #ffffff 0%, #f8faff 100%);
       border-radius: 12px;
       padding: 24px;
@@ -114,21 +88,7 @@ const mailOptions = {
       border: 1px solid #e0e0e0;
       box-shadow: 0 2px 12px rgba(0, 137, 123, 0.08);
     }
-    .security-alert {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background-color: #fff4e5;
-      color: #b45309;
-      padding: 12px 16px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-      font-weight: 600;
-    }
-    .security-icon {
-      color: #b45309;
-    }
-    .credential-item {
+    .detail-item {
       display: flex;
       align-items: center;
       margin: 16px 0;
@@ -138,37 +98,32 @@ const mailOptions = {
       border-radius: 8px;
       border: 1px solid #e0e0e0;
     }
-    .credential-label {
-      min-width: 100px;
+    .detail-label {
+      min-width: 120px;
       color: #1a237e;
       font-weight: 600;
     }
-    .credential-value {
-      font-family: 'Consolas', monospace;
-      background-color: #f8faff;
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: 1px solid #e0e0e0;
-      color: #0288d1;
+    .detail-value {
+      color: #37474f;
       font-weight: 500;
     }
-    .security-notes {
+    .notes {
       background-color: #f8faff;
       border-left: 4px solid #0288d1;
       padding: 16px 20px;
       margin: 20px 0;
       border-radius: 0 8px 8px 0;
     }
-    .security-notes ul {
+    .notes ul {
       margin: 0;
       padding-left: 20px;
     }
-    .security-notes li {
+    .notes li {
       color: #37474f;
       margin: 8px 0;
       line-height: 1.5;
     }
-    .security-notes strong {
+    .notes strong {
       color: #0288d1;
     }
     .button {
@@ -226,92 +181,105 @@ const mailOptions = {
       color: #607d8b;
       margin: 8px 0;
     }
-    .email-footer a {
-      color: #0288d1;
-      text-decoration: none;
+    .feature-item {
+      background: linear-gradient(135deg, #e3f2fd 0%, #e0f2f1 100%);
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 137, 123, 0.1);
+      margin-bottom: 16px;
     }
-    .email-footer a:hover {
-      text-decoration: underline;
+    .feature-item h4 {
+      color: #0288d1;
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .feature-item p {
+      margin: 0;
+      font-size: 14px;
+      color: #546e7a;
+      line-height: 1.5;
     }
   </style>
 </head>
 <body>
   <div class="email-container">
     <div class="email-header">
-      <h1>Welcome to Upcheck! 🎉</h1>
+      <h1>Congratulations! 🎉</h1>
     </div>
     
     <div class="email-body">
-      <h2>Your Journey Begins Here</h2>
+      <h2>Your Upcheck Journey Begins Here</h2>
       
-      <p>Hi Nithishkumar,</p>
+      <p>Hi Robin,</p>
       
       <div class="welcome-box">
-        <p>Great news! Your Upcheck console is now ready for action. We've set up everything you need to get started!</p>
+        <p>We are excited to offer you the position of <strong>Junior Content Associate Intern</strong> at <strong>Upcheck India Pvt Ltd</strong>. Please find your official offer letter attached to this email. Your skills and enthusiasm make you a perfect fit for our team!</p>
       </div>
 
-      <h3>Your Console Features</h3>
-      <div class="feature-grid">
-        <div class="feature-item">
-          <h4>📑 Content Management</h4>
-          <p>Create, edit, and organize content for the resource page. Manage documentation, guides, and knowledge base articles with version control.</p>
+      <div class="internship-details">
+        <h3>Internship Details</h3>
+        <div class="detail-item">
+          <span class="detail-label">Position:</span>
+          <span class="detail-value">Junior Content Associate Intern</span>
         </div>
-        <div class="feature-item">
-          <h4>💬 Team Communication</h4>
-          <p>Send emails and private messages directly through the console. Enjoy secure, encrypted communication channels with team members.</p>
+        <div class="detail-item">
+          <span class="detail-label">Duration:</span>
+          <span class="detail-value">1 month</span>
         </div>
-        <div class="feature-item">
-          <h4>📋 Task Tracking</h4>
-          <p>Create, assign, and track tasks with detailed progress monitoring. Set priorities, deadlines, and receive automated notifications.</p>
+        <div class="detail-item">
+          <span class="detail-label">Work Type:</span>
+          <span class="detail-value">Remote</span>
         </div>
-        <div class="feature-item">
-          <h4>📚 Documentation Hub</h4>
-          <p>Central repository for all team documents, notes, and resources. Search, organize, and never lose important information again.</p>
-        </div>
-      </div>
-
-      <div class="credentials-container">
-        <h3>Your Login Credentials</h3>
-        <div class="security-alert">
-          <svg class="security-icon" viewBox="0 0 24 24" width="24" height="24">
-            <path fill="currentColor" d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.4 0 2.8 1.1 2.8 2.5V11c.6 0 1.2.6 1.2 1.2v3.5c0 .7-.6 1.3-1.2 1.3H9.2c-.6 0-1.2-.6-1.2-1.2v-3.5c0-.7.6-1.3 1.2-1.3V9.5C9.2 8.1 10.6 7 12 7zm0 1.2c-.8 0-1.5.5-1.5 1.3V11h3v-1.5c0-.8-.7-1.3-1.5-1.3z"/>
-          </svg>
-          <span>Important Security Information</span>
-        </div>
-        <div class="credential-item">
-          <span class="credential-label">Username:</span>
-          <span class="credential-value">Nithishkumar B</span>
-        </div>
-        <div class="credential-item">
-          <span class="credential-label">Password:</span>
-          <span class="credential-value">Hockey@2025</span>
+        <div class="detail-item">
+          <span class="detail-label">Compensation:</span>
+          <span class="detail-value">Unpaid, with potential for stipend based on performance</span>
         </div>
         
-        <div class="security-notes">
+        <div class="notes">
           <ul>
-            <li><strong>Password Change Required:</strong> For security purposes, please change your password upon first login</li>
-            <li><strong>Session Duration:</strong> Login sessions automatically expire after 2 hours</li>
-            <li><strong>Role-Based Access:</strong> Your access is strictly controlled based on your assigned role</li>
+            <li><strong>Performance Review:</strong> Your work will be evaluated throughout the internship period</li>
+            <li><strong>Full-time Opportunity:</strong> Outstanding performance may lead to a full-time position offer</li>
+            <li><strong>Onboarding Test:</strong> Required before joining to assess your skills and readiness</li>
           </ul>
         </div>
       </div>
 
-      <p>Ready to get started? Access your console now:</p>
-      <a href="https://console.upcheck.in" class="button">Launch Upcheck Console</a>
+      <h3>What You'll Be Working On</h3>
+      <div class="feature-item">
+        <h4>📑 Content Creation</h4>
+        <p>Develop engaging content for our digital platforms, including blog posts, social media, and resource pages.</p>
+      </div>
+      <div class="feature-item">
+        <h4>📚 Documentation</h4>
+        <p>Assist in creating user guides, tutorials, and knowledge base articles for our products and services.</p>
+      </div>
+      <div class="feature-item">
+        <h4>🔍 Content Research</h4>
+        <p>Conduct research on industry trends and topics to support our content strategy and development.</p>
+      </div>
+
+      <p>Before your joining date, you are required to complete a short formal test to confirm your onboarding process</p>
+      <p>You will receive the credentials to access the test portal within 2 to 3 working days, If not please reach out to us.</p>
+      <div style="text-align: center;">
+        <a href="https://console.upcheck.in/recruitment" class="button">Complete Onboarding Test</a>
+      </div>
 
       <div class="support-info">
-        <h4>Need Support?</h4>
-        <p>Contact us at:</p>
+        <h4>Questions or Concerns?</h4>
+        <p>Feel free to reach out to us:</p>
         <ul>
-          <li>General Support: <a href="mailto:care@upcheck.in">care@upcheck.in</a></li>
-          <li>Technical Support: <a href="mailto:admin@upcheck.in">admin@upcheck.in</a></li>
+          <li>HR Department: <a href="mailto:hr@upcheck.in">hr@upcheck.in</a></li>
+          <li>Admin: <a href="mailto:admin@upcheck.in">admin@upcheck.in</a></li>
         </ul>
       </div>
     </div>
 
     <div class="email-footer">
-      <p>Welcome to the team!</p>
-      <p>Best regards,<br>Upcheck Team</p>
+      <p>We look forward to welcoming you to the Upcheck India team!</p>
+      <p>Best regards,<br>Robinkumar J<br>Chief HR<br>Upcheck India Pvt Ltd</p>
     </div>
   </div>
 </body>

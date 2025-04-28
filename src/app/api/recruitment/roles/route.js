@@ -57,10 +57,10 @@ export async function POST(req) {
       );
     }
 
-    const { id, name, description, isActive, questions } = await req.json();
+    const { id, name, description, isActive, questions, randomizeOrder } = await req.json();
 
     // Validate required fields
-    if (!id || !name || !questions?.length) {
+    if (!id || !name || !questions?.length || typeof randomizeOrder !== 'boolean') {
       return NextResponse.json(
         { message: 'Missing required fields' },
         { status: 400 }
@@ -69,8 +69,11 @@ export async function POST(req) {
 
     // Validate questions format
     const isValidQuestions = questions.every(q => 
-      q.text && q.type && 
-      (q.type === 'text' ? Array.isArray(q.expectedKeywords) : Array.isArray(q.options))
+      q.text && q.type && typeof q.weight === 'number' &&
+      (q.type === 'text' ? 
+        Array.isArray(q.expectedKeywords) && q.expectedKeywords.length > 0 :
+        Array.isArray(q.options) && q.options.length > 2
+      )
     );
 
     if (!isValidQuestions) {
@@ -88,7 +91,14 @@ export async function POST(req) {
           name,
           description,
           isActive,
-          questions,
+          questions: questions.map(q => ({
+            text: q.text,
+            type: q.type,
+            weight: q.weight,
+            expectedKeywords: q.expectedKeywords,
+            options: q.options
+          })),
+          randomizeOrder,
           updatedAt: new Date()
         }
       },
@@ -97,7 +107,13 @@ export async function POST(req) {
 
     return NextResponse.json({
       success: true,
-      message: 'Role updated successfully'
+      message: 'Role updated successfully',
+      evaluationParameters: {
+        baseScore: 100,
+        lengthWeight: 0.2,
+        keywordMatchWeight: 0.8,
+        minimumAnswerLength: 20
+      }
     });
   } catch (error) {
     console.error('Error updating role:', error);

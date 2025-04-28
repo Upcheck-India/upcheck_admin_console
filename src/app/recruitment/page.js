@@ -212,7 +212,7 @@ export default function RecruitmentTest() {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-blue-700">
-                  <strong>Important:</strong> This test must be taken in full-screen mode. Exiting full-screen, switching tabs, or opening other applications during the test will trigger warnings. After 5 warnings, your test will be automatically revoked.
+                  <strong>Important:</strong> This test must be taken in full-screen mode. Exiting full-screen, switching tabs, or opening other applications during the test will trigger warnings. After too many violations, your test will be automatically revoked.
                 </p>
               </div>
             </div>

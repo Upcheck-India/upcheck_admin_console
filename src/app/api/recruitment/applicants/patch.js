@@ -39,11 +39,32 @@ export async function PATCH(req) {
       );
     }
 
-    if (!['trash', 'revoke', 'restore'].includes(action)) {
+    if (!['trash', 'revoke', 'restore', 'delete'].includes(action)) {
       return NextResponse.json(
         { message: 'Invalid action' },
         { status: 400 }
       );
+    }
+
+    if (action === 'delete') {
+      const applicant = await db.collection('applicants').findOne({ applicantId });
+      if (!applicant) {
+        return NextResponse.json(
+          { message: 'Applicant not found' },
+          { status: 404 }
+        );
+      }
+      if (!applicant.deleted && applicant.status !== 'revoked') {
+        return NextResponse.json(
+          { message: 'Applicant must be in trash or revoked state for deletion' },
+          { status: 400 }
+        );
+      }
+      await db.collection('applicants').deleteOne({ applicantId });
+      return NextResponse.json({
+        success: true,
+        message: 'Applicant permanently deleted'
+      });
     }
 
     let updateData = {};

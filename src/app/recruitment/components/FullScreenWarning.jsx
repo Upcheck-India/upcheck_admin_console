@@ -30,10 +30,10 @@ export default function FullScreenWarning({ warningCount, maxWarnings, onDismiss
         
         <div className="mb-6">
           <p className="text-gray-700 mb-4">
-            You have exited full-screen mode. This is warning {warningCount} of {maxWarnings}.
+            You have exited full-screen mode. This is a warning. Too many warning will result in your test being revoked.
           </p>
           <p className="text-gray-700 mb-4">
-            <strong>Important:</strong> After {maxWarnings} warnings, your test will be automatically revoked and you will not be able to complete it.
+            <strong>Important:</strong> If violated too many times, your test will be automatically revoked and you will not be able to complete it.
           </p>
           <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
             <p className="text-amber-800 text-sm">
