@@ -136,9 +136,8 @@ const AdminLandingPage = () => {
 
 // Update the userDropdownItems array:
 const userDropdownItems = [
-  { icon: <User className="w-4 h-4" />, label: "Account Settings", link: "/coming-soon" },
-  { icon: <Key className="w-4 h-4" />, label: "Security", link: "/coming-soon" },
-  { icon: <Shield className="w-4 h-4" />, label: "Privacy", link: "/coming-soon" },
+  { icon: <User className="w-4 h-4" />, label: "Profile", link: "/console/profile" },
+  { icon: <Key className="w-4 h-4" />, label: "Security", link: "/console/profile" },
   { icon: <LogOut className="w-4 h-4" />, label: "Logout", onClick: handleLogout }
 ];
 
