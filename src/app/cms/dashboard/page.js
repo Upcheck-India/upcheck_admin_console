@@ -54,10 +54,54 @@ const AccessDeniedModal = ({ isOpen, onClose }) => {
 
 // Components
 const LoadingState = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-    <div className="text-center">
-      <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-      <p className="mt-4 text-gray-600">Loading dashboard...</p>
+  <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="max-w-7xl mx-auto">
+      {/* Header skeleton */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+        <div className="flex items-center space-x-4">
+          <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-24 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-32 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+
+      {/* Posts grid skeleton */}
+      <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+        {[1, 2, 3, 4, 5, 6].map((index) => (
+          <div key={index} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300">
+            <div className="p-6">
+              {/* Thumbnail skeleton */}
+              <div className="mb-4">
+                <div className="w-full h-48 bg-gray-200 rounded-md animate-pulse" />
+              </div>
+              
+              {/* Title skeleton */}
+              <div className="h-6 w-3/4 bg-gray-200 rounded animate-pulse mb-2" />
+              
+              {/* Author skeleton */}
+              <div className="h-4 w-1/2 bg-gray-200 rounded animate-pulse mb-2" />
+              
+              {/* Date skeleton */}
+              <div className="h-4 w-1/3 bg-gray-200 rounded animate-pulse mb-4" />
+              
+              {/* Tags skeleton */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {[1, 2, 3].map((tagIndex) => (
+                  <div key={tagIndex} className="h-6 w-16 bg-gray-200 rounded-full animate-pulse" />
+                ))}
+              </div>
+              
+              {/* Action buttons skeleton */}
+              <div className="flex justify-end gap-2">
+                <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-20 bg-gray-200 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   </div>
 );
@@ -249,6 +293,7 @@ const EditPostForm = ({ post, onSubmit, onCancel }) => {
           <ThumbnailUpload
             value={formData.thumbnail}
             onChange={(url) => setFormData({ ...formData, thumbnail: url })}
+            required={false}
           />
         </div>
 
