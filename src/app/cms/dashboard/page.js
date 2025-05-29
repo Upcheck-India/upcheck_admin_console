@@ -524,9 +524,15 @@ export default function CMSDashboard() {
             <AIButton />
             <button
               onClick={() => router.push('/cms/new-post')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-200"
             >
               New Post
+            </button>
+            <button
+              onClick={() => router.push('/survey_management')}
+              className="bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors duration-200"
+            >
+              Surveys
             </button>
             <AccountMenu onLogout={handleLogout} />
           </div>
