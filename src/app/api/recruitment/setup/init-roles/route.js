@@ -4,11 +4,68 @@ import { cookies } from 'next/headers';
 
 const initialRoles = [
   {
+    id: 'jr-content-associate',
+    name: 'Jr Content Associate',
+    description: 'Entry-level content writing and management assessment',
+    isActive: true,
+    order: 1,
+    questions: [
+      {
+        text: "What is the primary purpose of a content style guide?",
+        type: "multiple-choice",
+        difficulty: "easy",
+        options: [
+          "To restrict creativity in content creation",
+          "To ensure consistency and maintain brand voice across all content",
+          "To make content creation more time-consuming",
+          "To eliminate the need for content editors"
+        ],
+        correctAnswer: 1
+      },
+      {
+        text: "When writing for the web, what is the most effective way to structure content?",
+        type: "multiple-choice",
+        difficulty: "easy",
+        options: [
+          "Long paragraphs with detailed information",
+          "Short, scannable sections with clear headings",
+          "Single block of text without breaks",
+          "Decorative fonts and complex layouts"
+        ],
+        correctAnswer: 1
+      },
+      {
+        text: "What makes content accessible and easy to read?",
+        type: "text",
+        difficulty: "easy",
+        expectedKeywords: ["headings", "bullet points", "white space", "short paragraphs", "simple language"]
+      },
+      {
+        text: "How would you optimize content for search engines while keeping it reader-friendly?",
+        type: "text",
+        difficulty: "medium",
+        expectedKeywords: ["keywords", "readability", "headings", "natural", "valuable", "structure"]
+      },
+      {
+        text: "What is the importance of a call-to-action (CTA) in content?",
+        type: "multiple-choice",
+        difficulty: "medium",
+        options: [
+          "To make the content longer",
+          "To guide users toward taking a desired action",
+          "To fill empty space on the page",
+          "To showcase writing skills"
+        ],
+        correctAnswer: 1
+      }
+    ]
+  },
+  {
     id: 'content',
     name: 'Content Management',
     description: 'Test for content writing, strategy, and management skills',
     isActive: true,
-    order: 1,
+    order: 2,
     questions: [
       {
         text: "What is the primary purpose of a content style guide?",
@@ -116,7 +173,7 @@ const initialRoles = [
     name: 'Technical',
     description: 'Technical skills assessment for developers',
     isActive: false,
-    order: 2,
+    order: 3,
     questions: []
   },
   {
@@ -124,7 +181,7 @@ const initialRoles = [
     name: 'Marketing',
     description: 'Marketing strategy and execution assessment',
     isActive: false,
-    order: 3,
+    order: 4,
     questions: []
   },
   {
@@ -132,7 +189,7 @@ const initialRoles = [
     name: 'Human Resources',
     description: 'HR management and practices assessment',
     isActive: false,
-    order: 4,
+    order: 5,
     questions: []
   },
   {
@@ -140,7 +197,7 @@ const initialRoles = [
     name: 'Product Management',
     description: 'Product strategy and management assessment',
     isActive: false,
-    order: 5,
+    order: 6,
     questions: []
   }
 ];

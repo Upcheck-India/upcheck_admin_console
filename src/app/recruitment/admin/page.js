@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, UserPlus, Copy, X, RefreshCw } from 'lucide-react';
+import { Plus, UserPlus, Copy, X, RefreshCw, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../../hooks/useAuth';
 import ErrorMessage from '../components/ErrorMessage';
 import LoadingState from '../components/LoadingState';
@@ -22,6 +22,7 @@ export default function ApplicantsManagement() {
   const [setupLoading, setSetupLoading] = useState(false);
   const [initRolesLoading, setInitRolesLoading] = useState(false);
   const [copySuccess, setCopySuccess] = useState('');
+  const [showTrashed, setShowTrashed] = useState(false);
   const router = useRouter();
   const { isLoading: authLoading, isAuthenticated, hasPermission, user: currentUser } = useAuth(true, 'recruitment.manage');
 
@@ -94,7 +95,7 @@ export default function ApplicantsManagement() {
       setLoading(true);
       const [rolesRes, applicantsRes] = await Promise.all([
         fetch('/api/recruitment/roles'),
-        fetch('/api/recruitment/applicants')
+        fetch(`/api/recruitment/applicants?includeDeleted=${showTrashed}`)
       ]);
 
       if (!rolesRes.ok || !applicantsRes.ok) {
@@ -141,19 +142,20 @@ export default function ApplicantsManagement() {
     }
   };
 
-  const handleDelete = async (applicantId) => {
-    if (!confirm('Are you sure you want to delete this applicant?')) return;
+  const handleAction = async (applicantId, action) => {
+    if (!confirm(`Are you sure you want to ${action} this applicant?`)) return;
 
     try {
-      const res = await fetch('/api/recruitment/applicants', {
-        method: 'DELETE',
+      const res = await fetch('/api/recruitment/applicants/patch', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ applicantId })
+        body: JSON.stringify({ applicantId, action })
       });
 
-      if (!res.ok) throw new Error('Failed to delete applicant');
+      if (!res.ok) throw new Error(`Failed to ${action} applicant`);
       
-      setApplicants(applicants.filter(a => a.applicantId !== applicantId));
+      // Refresh the applicants list
+      await fetchData();
     } catch (error) {
       setError(error.message);
     }
@@ -237,9 +239,24 @@ export default function ApplicantsManagement() {
         )}
 
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Manage Applicants
-          </h1>
+          <div className="flex items-center space-x-4">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Manage Applicants
+            </h1>
+            <button
+              onClick={() => {
+                setShowTrashed(!showTrashed);
+                fetchData();
+              }}
+              className={`px-3 py-1 rounded-md text-sm ${
+                showTrashed
+                  ? 'bg-gray-200 text-gray-800'
+                  : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {showTrashed ? 'Hide Trashed' : 'Show Trashed'}
+            </button>
+          </div>
           <div className="flex space-x-4">
             <button
               onClick={() => router.push('/recruitment/roles')}
@@ -277,7 +294,9 @@ export default function ApplicantsManagement() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {applicants.map((applicant) => (
+                {applicants
+                  .filter(a => showTrashed ? a.deleted : !a.deleted)
+                  .map((applicant) => (
                   <tr key={applicant.applicantId}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{applicant.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{applicant.email}</td>
@@ -326,23 +345,66 @@ export default function ApplicantsManagement() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        applicant.hasAttempted
+                        applicant.deleted
+                          ? 'bg-red-100 text-red-800'
+                          : applicant.status === 'revoked'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : applicant.hasAttempted
                           ? 'bg-green-100 text-green-800'
-                          : 'bg-yellow-100 text-yellow-800'
+                          : 'bg-blue-100 text-blue-800'
                       }`}>
-                        {applicant.hasAttempted ? 'Completed' : 'Pending'}
+                        {applicant.deleted 
+                          ? 'Trashed'
+                          : applicant.status === 'revoked'
+                          ? 'Revoked'
+                          : applicant.hasAttempted 
+                          ? 'Completed' 
+                          : 'Pending'
+                        }
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {!applicant.hasAttempted && (
-                        <button
-                          onClick={() => handleDelete(applicant.applicantId)}
-                          className="text-red-600 hover:text-red-900"
-                          title="Delete"
-                        >
-                          <X className="h-5 w-5" />
-                        </button>
-                      )}
+                      <div className="flex items-center space-x-2">
+                        {applicant.deleted ? (
+                          <>
+                            <button
+                              onClick={() => handleAction(applicant.applicantId, 'restore')}
+                              className="text-green-600 hover:text-green-900"
+                              title="Restore"
+                            >
+                              <RefreshCw className="h-5 w-5" />
+                            </button>
+                            <button
+                              onClick={() => handleAction(applicant.applicantId, 'delete')}
+                              className="text-red-600 hover:text-red-900"
+                              title="Delete Permanently"
+                            >
+                              <X className="h-5 w-5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {!applicant.hasAttempted && (
+                              <button
+                                onClick={() => handleAction(applicant.applicantId, 'trash')}
+                                className="text-red-600 hover:text-red-900"
+                                title="Move to Trash"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            )}
+                            {applicant.hasAttempted && !applicant.deleted && (
+                              <button
+                                onClick={() => handleAction(applicant.applicantId, 'revoke')}
+                                className="text-yellow-600 hover:text-yellow-900"
+                                title="Revoke Access"
+                              >
+                                <X className="h-5 w-5" />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

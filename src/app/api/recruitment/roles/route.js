@@ -57,24 +57,45 @@ export async function POST(req) {
       );
     }
 
-    const { id, name, description, isActive, questions, randomizeOrder } = await req.json();
+    const { id, name, description, isActive, questions } = await req.json();
 
     // Validate required fields
-    if (!id || !name || !questions?.length || typeof randomizeOrder !== 'boolean') {
+    if (!id || !name || !questions?.length) {
       return NextResponse.json(
         { message: 'Missing required fields' },
         { status: 400 }
       );
     }
 
+    // Check if role ID already exists (for new roles)
+    const existingRole = await db.collection('recruitment_roles').findOne({ id });
+    if (existingRole && !existingRole._id) {
+      return NextResponse.json(
+        { message: 'Role ID already exists' },
+        { status: 400 }
+      );
+    }
+
     // Validate questions format
-    const isValidQuestions = questions.every(q => 
-      q.text && q.type && typeof q.weight === 'number' &&
-      (q.type === 'text' ? 
-        Array.isArray(q.expectedKeywords) && q.expectedKeywords.length > 0 :
-        Array.isArray(q.options) && q.options.length > 2
-      )
-    );
+    const isValidQuestions = questions.every(q => {
+      if (!q.text || !q.type || !['text', 'multiple-choice'].includes(q.type)) {
+        return false;
+      }
+
+      if (q.type === 'text') {
+        return Array.isArray(q.expectedKeywords) && q.expectedKeywords.length > 0;
+      }
+
+      if (q.type === 'multiple-choice') {
+        return Array.isArray(q.options) && 
+               q.options.length >= 2 &&
+               typeof q.correctAnswer === 'number' &&
+               q.correctAnswer >= 0 &&
+               q.correctAnswer < q.options.length;
+      }
+
+      return false;
+    });
 
     if (!isValidQuestions) {
       return NextResponse.json(
@@ -94,12 +115,12 @@ export async function POST(req) {
           questions: questions.map(q => ({
             text: q.text,
             type: q.type,
-            weight: q.weight,
-            expectedKeywords: q.expectedKeywords,
-            options: q.options
-          })),
-          randomizeOrder,
-          updatedAt: new Date()
+            difficulty: q.difficulty || 'medium',
+            options: q.options || [],
+            correctAnswer: q.correctAnswer,
+            expectedKeywords: q.expectedKeywords || [],
+            updatedAt: new Date()
+          }))
         }
       },
       { upsert: true }
@@ -107,18 +128,12 @@ export async function POST(req) {
 
     return NextResponse.json({
       success: true,
-      message: 'Role updated successfully',
-      evaluationParameters: {
-        baseScore: 100,
-        lengthWeight: 0.2,
-        keywordMatchWeight: 0.8,
-        minimumAnswerLength: 20
-      }
+      message: existingRole ? 'Role updated successfully' : 'Role created successfully'
     });
   } catch (error) {
-    console.error('Error updating role:', error);
+    console.error('Error creating/updating role:', error);
     return NextResponse.json(
-      { message: 'Failed to update role' },
+      { message: 'Failed to create/update role' },
       { status: 500 }
     );
   }
@@ -157,6 +172,24 @@ export async function DELETE(req) {
     if (!id) {
       return NextResponse.json(
         { message: 'Role ID is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if role exists
+    const role = await db.collection('recruitment_roles').findOne({ id });
+    if (!role) {
+      return NextResponse.json(
+        { message: 'Role not found' },
+        { status: 404 }
+      );
+    }
+
+    // Check if there are any applicants assigned to this role
+    const hasApplicants = await db.collection('applicants').findOne({ role: id });
+    if (hasApplicants) {
+      return NextResponse.json(
+        { message: 'Cannot delete role with assigned applicants' },
         { status: 400 }
       );
     }

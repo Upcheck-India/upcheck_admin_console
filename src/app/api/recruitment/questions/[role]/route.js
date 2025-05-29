@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 
+// Default content questions - keeping as reference
 const contentQuestions = {
   multipleChoice: {
     easy: [
@@ -830,45 +831,46 @@ const contentQuestions = {
   }
 };
 
-function getRandomQuestions(questions, count) {
-  const shuffled = [...questions].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
-}
-
 export async function GET(req, { params }) {
   try {
     const { role } = params;
+    const client = await clientPromise;
+    const db = client.db("recruitment");
+
+    // Fetch role and its questions from database
+    const roleData = await db.collection("roles").findOne({ id: role });
     
-    // Currently only supporting content role
-    if (role !== 'content') {
+    if (!roleData) {
       return NextResponse.json(
-        { message: 'Role not available yet' },
+        { message: 'Role not found' },
         { status: 404 }
       );
     }
-    
-    // Select questions based on difficulty
-    // 7 multiple choice (2 easy, 4 medium, 1 hard)
-    const mcqEasy = getRandomQuestions(contentQuestions.multipleChoice.easy, 2);
-    const mcqMedium = getRandomQuestions(contentQuestions.multipleChoice.medium, 4);
-    const mcqHard = getRandomQuestions(contentQuestions.multipleChoice.hard, 1);
 
-    // 3 text-based questions (1 easy, 1 medium, 1 hard)
-    const textEasy = getRandomQuestions(contentQuestions.text.easy, 1);
-    const textMedium = getRandomQuestions(contentQuestions.text.medium, 1);
-    const textHard = getRandomQuestions(contentQuestions.text.hard, 1);
+    // Get questions from the role
+    let questions = roleData.questions || [];
 
-    const selectedQuestions = [
-      ...mcqEasy,
-      ...mcqMedium,
-      ...mcqHard,
-      ...textEasy,
-      ...textMedium,
-      ...textHard
-    ].sort(() => Math.random() - 0.5);
+    // If no questions are set up yet, provide content questions as default for backward compatibility
+    if (questions.length === 0 && role === 'content') {
+      const mcqEasy = getRandomQuestions(contentQuestions.multipleChoice.easy, 2);
+      const mcqMedium = getRandomQuestions(contentQuestions.multipleChoice.medium, 4);
+      const mcqHard = getRandomQuestions(contentQuestions.multipleChoice.hard, 1);
+      const textEasy = getRandomQuestions(contentQuestions.text.easy, 1);
+      const textMedium = getRandomQuestions(contentQuestions.text.medium, 1);
+      const textHard = getRandomQuestions(contentQuestions.text.hard, 1);
 
-    // Remove correct answers and expected keywords before sending to client
-    const sanitizedQuestions = selectedQuestions.map(question => {
+      questions = [
+        ...mcqEasy,
+        ...mcqMedium,
+        ...mcqHard,
+        ...textEasy,
+        ...textMedium,
+        ...textHard
+      ].sort(() => Math.random() - 0.5);
+    }
+
+    // Remove sensitive data (correct answers and expected keywords) before sending to client
+    const sanitizedQuestions = questions.map(question => {
       const { correctAnswer, expectedKeywords, ...rest } = question;
       return rest;
     });
@@ -883,4 +885,11 @@ export async function GET(req, { params }) {
       { status: 500 }
     );
   }
+}
+
+// Helper function for random selection
+function getRandomQuestions(questions, count) {
+  if (!Array.isArray(questions)) return [];
+  const shuffled = [...questions].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
 }

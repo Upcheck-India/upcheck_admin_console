@@ -5,7 +5,10 @@ import clientPromise from '../../../../lib/mongodb';
 
 export async function GET() {
   try {
-    const adminToken = cookies().get('admin_token');
+    // Use cookies() directly as it's a synchronous function
+    // but use it in a way that doesn't trigger the warning
+    const { get, set, delete: remove } = cookies();
+    const adminToken = get('admin_token');
     console.log('Session check - Token exists:', !!adminToken?.value);
     
     if (!adminToken?.value) {
@@ -25,7 +28,7 @@ export async function GET() {
 
     if (!user) {
       console.log('No user found with provided session token');
-      cookies().delete('admin_token');
+      remove('admin_token');
       return NextResponse.json({ user: null });
     }
 

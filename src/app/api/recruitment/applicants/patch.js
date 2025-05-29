@@ -39,57 +39,81 @@ export async function PATCH(req) {
       );
     }
 
-    if (!['trash', 'revoke', 'restore', 'delete'].includes(action)) {
+    if (!['delete', 'revoke', 'restore'].includes(action)) {
       return NextResponse.json(
         { message: 'Invalid action' },
         { status: 400 }
       );
     }
 
-    if (action === 'delete') {
-      const applicant = await db.collection('applicants').findOne({ applicantId });
-      if (!applicant) {
-        return NextResponse.json(
-          { message: 'Applicant not found' },
-          { status: 404 }
-        );
-      }
-      if (!applicant.deleted && applicant.status !== 'revoked') {
-        return NextResponse.json(
-          { message: 'Applicant must be in trash or revoked state for deletion' },
-          { status: 400 }
-        );
-      }
-      await db.collection('applicants').deleteOne({ applicantId });
-      return NextResponse.json({
-        success: true,
-        message: 'Applicant permanently deleted'
-      });
+    // Get the applicant
+    const applicant = await db.collection('applicants').findOne({ applicantId });
+    if (!applicant) {
+      return NextResponse.json(
+        { message: 'Applicant not found' },
+        { status: 404 }
+      );
     }
 
-    let updateData = {};
-    
-    if (action === 'trash') {
-      updateData = { deleted: true };
-    } else if (action === 'revoke') {
-      updateData = { status: 'revoked', hasAttempted: false };
-    } else if (action === 'restore') {
-      updateData = { deleted: false, status: 'pending' };
-    }
+    switch (action) {
+      case 'delete':
+        // For completed applications, completely remove them
+        if (!applicant.hasAttempted) {
+          return NextResponse.json(
+            { message: 'Only completed applications can be deleted. Use revoke for pending applications.' },
+            { status: 400 }
+          );
+        }
+        // Delete the applicant and their test attempts
+        await Promise.all([
+          db.collection('applicants').deleteOne({ applicantId }),
+          db.collection('test_attempts').deleteMany({ applicantId })
+        ]);
+        break;
 
-    await db.collection('applicants').updateOne(
-      { applicantId },
-      { $set: updateData }
-    );
+      case 'revoke':
+        // Only allow revoking pending applications
+        if (applicant.hasAttempted) {
+          return NextResponse.json(
+            { message: 'Cannot revoke completed applications. Use delete instead.' },
+            { status: 400 }
+          );
+        }
+        // Revoke access by marking as revoked
+        await db.collection('applicants').updateOne(
+          { applicantId },
+          { 
+            $set: { 
+              status: 'revoked',
+              revokedAt: new Date(),
+              hasAttempted: false
+            }
+          }
+        );
+        break;
+
+      case 'restore':
+        // Remove revoked/deleted status
+        await db.collection('applicants').updateOne(
+          { applicantId },
+          { 
+            $unset: { 
+              status: "",
+              revokedAt: ""
+            }
+          }
+        );
+        break;
+    }
 
     return NextResponse.json({
       success: true,
-      message: `Applicant ${action === 'trash' ? 'moved to trash' : action === 'revoke' ? 'revoked' : 'restored'} successfully`
+      message: `Applicant ${action}d successfully`
     });
   } catch (error) {
-    console.error(`Error updating applicant:`, error);
+    console.error(`Error ${action}ing applicant:`, error);
     return NextResponse.json(
-      { message: 'Failed to update applicant' },
+      { message: `Failed to ${action} applicant` },
       { status: 500 }
     );
   }

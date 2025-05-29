@@ -24,6 +24,7 @@ export default function RecruitmentTest() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [timeLeft, setTimeLeft] = useState(30 * 60); // 30 minutes
+  const [availableRole, setAvailableRole] = useState(null);
   const { 
     isFullScreen, 
     enterFullScreen, 
@@ -55,6 +56,38 @@ export default function RecruitmentTest() {
     }
   }, [isRevoked, testStarted]);
 
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/recruitment/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ applicantId, password })
+        });
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || 'Invalid credentials');
+        }
+
+        const data = await res.json();
+        if (data.hasAttempted) {
+          router.push('/recruitment/completed');
+          return;
+        }
+
+        setIsLoggedIn(true);
+        setAvailableRole(data.role); // Store the assigned role
+      } catch (error) {
+        setError(error.message);
+      }
+    };
+
+    if (applicantId && password) {
+      checkAuth();
+    }
+  }, [applicantId, password]);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
@@ -76,6 +109,7 @@ export default function RecruitmentTest() {
       }
 
       setIsLoggedIn(true);
+      setAvailableRole(data.role); // Store the assigned role
     } catch (error) {
       setError(error.message);
     }
@@ -202,7 +236,7 @@ export default function RecruitmentTest() {
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">
-            Select Your Role
+            Start Your Test
           </h1>
           
           <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-8">
@@ -222,10 +256,10 @@ export default function RecruitmentTest() {
             {roles.map((role) => (
               <button
                 key={role.id}
-                onClick={() => role.active && handleTestStart(role.id)}
-                disabled={!role.active}
+                onClick={() => role.id === availableRole && handleTestStart(role.id)}
+                disabled={role.id !== availableRole}
                 className={`p-6 rounded-lg shadow-sm border-2 ${
-                  role.active
+                  role.id === availableRole
                     ? 'border-blue-500 hover:border-blue-600 cursor-pointer'
                     : 'border-gray-200 opacity-50 cursor-not-allowed'
                 }`}
@@ -234,8 +268,8 @@ export default function RecruitmentTest() {
                 <h3 className="text-lg font-medium text-gray-900">
                   {role.name}
                 </h3>
-                {!role.active && (
-                  <span className="text-sm text-gray-500">Coming soon</span>
+                {role.id !== availableRole && (
+                  <span className="text-sm text-gray-500">Not available</span>
                 )}
               </button>
             ))}
