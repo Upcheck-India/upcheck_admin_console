@@ -969,7 +969,7 @@ const ViewSurvey = ({ params }) => {
                           <div className="pl-4">
                             {Array.isArray(response.answer) ? 
                               response.answer.map((ans, i) => (
-                                <div key={i} className="text-gray-800">• {ans}</div>
+                                <div key={i} className="text-gray-800">• {ans.text ? ans.text : (typeof ans === 'object' ? JSON.stringify(ans) : ans)}</div>
                               )) : 
                               <div className="text-gray-800">• {response.answer}</div>
                             }

@@ -1,46 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Loader2, RotateCcw, Sparkle } from 'lucide-react';
-import { AlertMessage } from "../components/AlertMessage";
+import { AlertTriangle, ArrowLeft, Lock, Coffee, Frown, ChevronRight, ChevronLeft, Key, Hand, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useState, useEffect } from 'react';
 
-export default function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [alert, setAlert] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+export default function Register() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
-
-  // Set mounted state after component mounts to prevent hydration issues
+  const [currentPage, setCurrentPage] = useState(0);
+  
+  // Initialize the particles and shrimps background on component mount
   useEffect(() => {
-    setMounted(true);
-    
-    // Initialize the particles and shrimps
     if (typeof window !== 'undefined') {
       initParticlesAndShrimps();
     }
-    
-    // Check for autofilled inputs
-    const checkAutoFill = () => {
-      const usernameInput = document.querySelector('input[type="text"]');
-      const passwordInput = document.querySelector('input[type="password"]');
-      
-      if (usernameInput && usernameInput.value && !username) {
-        setUsername(usernameInput.value);
-      }
-      
-      if (passwordInput && passwordInput.value && !password) {
-        setPassword(passwordInput.value);
-      }
-    };
-    
-    // Run immediately and after a short delay for browsers that autofill after page load
-    checkAutoFill();
-    setTimeout(checkAutoFill, 500);
     
     return () => {
       // Clean up particles and shrimps when component unmounts
@@ -50,7 +24,7 @@ export default function Login() {
     };
   }, []);
 
-  // Function to initialize particles and shrimps
+  // Function to initialize particles and shrimps (same as login page)
   const initParticlesAndShrimps = () => {
     if (!document.getElementById('particles-container')) return;
     
@@ -316,51 +290,73 @@ export default function Login() {
     };
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Content for each page
+  const pages = [
+    // Page 1: Introduction
+    <div key="intro" className="space-y-6">
+      <div className="flex items-center justify-center">
+        <div className="bg-yellow-400/20 p-3 rounded-full">
+          <Hand className="text-yellow-300" size={32} />
+        </div>
+      </div>
+      
+      <h3 className="text-center text-l font-bold text-white">Woah Woah, wait a minute!</h3>
+      
+      <div className="space-y-4 text-center text-blue-100">
+        <p>
+          This isn't like signing up for yet another social media platform to share pictures of your lunch. 🍱
+        </p>
+        
+        <div className="bg-white/5 p-4 rounded-lg border border-white/10 my-4">
+          <p className="text-lg font-medium text-yellow-200 flex items-center justify-center gap-2">
+            <Lock size={18} />
+            Exclusive Access Only
+          </p>
+          <p className="mt-2 text-sm">
+            The Upcheck India Dashboard is strictly for authorized team members only.
+          </p>
+        </div>
+      </div>
+    </div>,
     
-    if (!username || !password) {
-      setAlert({ type: 'error', message: 'Please fill in all fields' });
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setAlert({ type: 'loading', message: 'Authenticating...' });
-
-      const res = await fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-        credentials: 'include'
-      });
-
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setAlert({ type: 'success', message: 'Login successful!' });
-        localStorage.setItem('username', username);
+    // Page 2: Humor
+    <div key="humor" className="space-y-6">
+      <h3 className="text-center text-l font-bold text-white">🙆‍♂️ Plot Twist!</h3>
+      <div className="space-y-4 text-center text-blue-100">
+        <p>
+          If you're looking for cat videos, you've taken a wrong turn at the internet. <Frown className="inline-block" size={16} />
+        </p>
         
-        const checkAuth = await fetch('/api/auth/check', {
-          credentials: 'include'
-        });
+        <p className="italic text-sm text-blue-200/70">
+          "With great dashboard access comes great responsibility."
+          <br />
+          <span className="text-xs">- Probably someone important at Upcheck</span>
+        </p>
+      </div>
+    </div>,
+    
+    // Page 3: Instructions
+    <div key="instructions" className="space-y-6">
+      <h3 className="text-center text-l font-bold text-white">If you are a member then you can...</h3>
+      <div className="space-y-4 text-center text-blue-100">
+        <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+          <p className="text-base">
+            Contact your friendly administrator with:
+          </p>
+          <ul className="text-sm mt-2 space-y-1 text-left pl-6 list-disc">
+            <li>Your full name (the one on your ID, not your gaming handle)</li>
+            <li>Your work email (sorry, no hotmail accounts from 2003)</li>
+            <li>Your department ("Chief Meme Officer" is not a department)</li>
+            <li>A cup of coffee wouldn't hurt either <Coffee className="inline-block" size={14} /></li>
+          </ul>
+        </div>
         
-        if (checkAuth.ok) {
-          router.push('/console');
-          router.refresh();
-        } else {
-          throw new Error('Authentication failed');
-        }
-      } else {
-        setAlert({ type: 'error', message: data.error || 'Invalid credentials' });
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      setAlert({ type: 'error', message: 'Server error. Please try again.' });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+        <p className="text-xs text-center text-blue-200/50 mt-4">
+          P.S. The shrimps in the background are just for fun. They don't grant access either.
+        </p>
+      </div>
+    </div>
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 via-teal-500 to-green-600 flex items-center justify-center p-4 overflow-hidden relative">
@@ -390,98 +386,59 @@ export default function Login() {
               Upcheck
             </h1>
             <h2 className="text-center text-2xl md:text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-200 to-teal-200 mt-2 hover-subtitle">
-              Official Dashboard
+              Registration Portal
             </h2>
-            <p className="text-center text-lg text-blue-100/80 mt-3">
-              Enter your credentials to access
-            </p>
           </div>
         </div>
 
         <div className="backdrop-blur-xl bg-white/10 p-8 rounded-2xl shadow-2xl border border-white/20 transition-all duration-500 animate-fadeIn opacity-0 hover:shadow-blue-500/20 hover:border-blue-300/30" 
              style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              <div className="relative group overflow-hidden rounded-lg">
-                <User className="absolute top-3 left-3 text-blue-300 transition-colors duration-300 group-hover:text-white z-10" size={20} />
-                <input
-                  type="text"
-                  name="username"
-                  autoComplete="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  onAnimationStart={(e) => {
-                    // This catches the animation browsers apply to autofilled fields
-                    if (e.animationName === 'onAutoFillStart' && e.target.value && !username) {
-                      setUsername(e.target.value);
-                    }
-                  }}
-                  placeholder="Username"
-                  disabled={isLoading}
-                  className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed z-0 relative autofill:bg-white/20 autofill:text-white"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:from-blue-500/10 group-hover:via-blue-500/20 group-hover:to-blue-500/10 transition-all duration-700 transform -translate-x-full group-hover:translate-x-0"></div>
-              </div>
-
-              <div className="relative group overflow-hidden rounded-lg">
-                <Lock className="absolute top-3 left-3 text-blue-300 transition-colors duration-300 group-hover:text-white z-10" size={20} />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
-                  disabled={isLoading}
-                  className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed z-0 relative"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:from-blue-500/10 group-hover:via-blue-500/20 group-hover:to-blue-500/10 transition-all duration-700 transform -translate-x-full group-hover:translate-x-0"></div>
-              </div>
-            </div>
-
+          
+          {/* Current page content */}
+          {pages[currentPage]}
+          
+          {/* Navigation */}
+          <div className="flex justify-between items-center mt-6">
             <button
-              type="submit"
-              disabled={isLoading}
-              className="relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-lg text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 overflow-hidden transition-all duration-300 shadow-lg hover:shadow-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-none group"
+              onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+              disabled={currentPage === 0}
+              className={`flex items-center px-3 py-2 rounded-lg text-sm ${currentPage === 0 ? 'text-blue-300/30 cursor-not-allowed' : 'text-blue-300 hover:text-blue-100 hover:bg-white/10'}`}
             >
-              <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-400 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-              <span className="relative flex items-center justify-center gap-2">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="animate-spin" size={20} />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign in'
-                )}
-              </span>
+              <ChevronLeft size={16} className="mr-1" />
+              Previous
             </button>
             
-            <div className="flex flex-col items-center space-y-2 pt-2">
-              <Link 
-                href="/legacy_login" 
-                className="inline-flex items-center text-xs text-blue-200 hover:text-blue-100 transition-colors duration-300"
-              >
-                <RotateCcw size={12} className="mr-1" />
-                Use legacy login
-              </Link>
-              <Link 
-                href="/register" 
-                className="inline-flex items-center text-xs text-blue-200 hover:text-blue-100 transition-colors duration-300"
-              >
-                <Sparkle size={12} className="mr-1" />
-                Wanna create a new account?
-              </Link>
+            <div className="flex space-x-1">
+              {pages.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentPage(index)}
+                  className={`w-2 h-2 rounded-full ${currentPage === index ? 'bg-blue-300' : 'bg-blue-300/30'}`}
+                  aria-label={`Go to page ${index + 1}`}
+                />
+              ))}
             </div>
-          </form>
+            
+            {currentPage < pages.length - 1 ? (
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(pages.length - 1, prev + 1))}
+                className="flex items-center px-3 py-2 rounded-lg text-sm text-blue-300 hover:text-blue-100 hover:bg-white/10"
+              >
+                Next
+                <ChevronRight size={16} className="ml-1" />
+              </button>
+            ) : (
+              <Link 
+                href="/login" 
+                className="flex items-center px-3 py-2 rounded-lg text-sm text-blue-300 hover:text-blue-100 hover:bg-white/10"
+              >
+                Login
+                <ArrowRight size={16} className="ml-1" />
+              </Link>
+            )}
+          </div>
         </div>
       </div>
-
-      {alert && (
-        <AlertMessage 
-          type={alert.type} 
-          message={alert.message} 
-          onClose={() => setAlert(null)} 
-        />
-      )}
       
       <style jsx>{`
         .bg-gradient-radial {
