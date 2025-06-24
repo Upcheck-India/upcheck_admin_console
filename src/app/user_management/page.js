@@ -1,11 +1,12 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Users, Trash2, Edit2, Plus, X, Search, User, 
   AlertCircle, Building2, Filter, Mail, MessageCircle, 
-  CodeXml
+  CodeXml, FileText, Settings as SettingsIcon
 } from 'lucide-react';
+import DocumentationSettingsModal from './components/DocumentationSettingsModal';
 
 // Add this function outside of the component
 const preventFocusLoss = (e) => e.target.select();
@@ -40,6 +41,29 @@ const UserManagement = () => {
     role: 'all',
     department: 'all'
   });
+  
+  const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Handle click outside for settings dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && 
+          !dropdownRef.current.contains(event.target) && 
+          !event.target.closest('.settings-dropdown-button')) {
+        setSettingsDropdownOpen(false);
+      }
+    };
+
+    if (settingsDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [settingsDropdownOpen]);
+  const [showDocSettings, setShowDocSettings] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [usersPerPage] = useState(10);
@@ -579,6 +603,18 @@ const UserManagement = () => {
     );
   };
 
+  const DocumentationSettingsModalComponent = () => {
+    return (
+      <DocumentationSettingsModal
+        isOpen={showDocSettings}
+        onClose={() => {
+          setShowDocSettings(false);
+          setSettingsDropdownOpen(false);
+        }}
+      />
+    );
+  };
+
   if (!currentUser) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -639,6 +675,12 @@ const UserManagement = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      {/* Documentation Settings Modal */}
+      <DocumentationSettingsModal 
+        isOpen={showDocSettings}
+        onClose={() => setShowDocSettings(false)}
+      />
+      
       <div className="max-w-7xl mx-auto">
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center">
@@ -658,18 +700,69 @@ const UserManagement = () => {
               />
             </div>
             
-            {ROLES_HIERARCHY[currentUser?.role]?.length > 0 && (
-              <button
-                onClick={() => {
-                  setModalMode('add');
-                  setIsModalOpen(true);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
-              >
-                <Plus className="h-5 w-5 mr-2" />
-                Add User
-              </button>
-            )}
+            <div className="flex gap-3">
+              {ROLES_HIERARCHY[currentUser?.role]?.length > 0 && (
+                <button
+                  onClick={() => {
+                    setModalMode('add');
+                    setIsModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
+                >
+                  <Plus className="h-5 w-5 mr-2" />
+                  Add User
+                </button>
+              )}
+
+              {/* Settings Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setSettingsDropdownOpen(!settingsDropdownOpen)}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
+                >
+                  <SettingsIcon className="h-5 w-5 mr-2" />
+                  Settings
+                  <svg 
+                    className={`ml-2 w-4 h-4 transition-transform ${settingsDropdownOpen ? 'transform rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24" 
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {/* Dropdown Menu */}
+                {settingsDropdownOpen && (
+                  <div 
+                    className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200"
+                    ref={dropdownRef}
+                  >
+                    <div className="py-1">
+                      {(currentUser?.role === 'Admin' || currentUser?.role === 'Console admin') && (
+                        <>
+                          <button
+                            onClick={() => {
+                              setShowDocSettings(true);
+                              setSettingsDropdownOpen(false);
+                            }}
+                            className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          >
+                            <FileText className="h-4 w-4 mr-2 text-gray-500" />
+                            Documentation Settings
+                          </button>
+                          <div className="border-t border-gray-100 my-1"></div>
+                        </>
+                      )}
+                      <div className="px-4 py-2 text-xs text-gray-500">
+                        More settings coming soon...
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

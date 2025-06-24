@@ -32,6 +32,7 @@ export default function DocumentationPage() {
   const { 
     isLoading: authLoading, 
     isAuthenticated, 
+    user,
     hasPermission, 
     authError
   } = useAuth(true);
@@ -68,6 +69,16 @@ export default function DocumentationPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [filterDrawer, setFilterDrawer] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const [serverSettings, setServerSettings] = useState({
+    allowInternUpload: false,
+    allowInternDownload: true,
+    allowedFileTypes: ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.png'],
+    maxFileSize: 10, // in MB
+    uploadDeadline: null,
+    allowedProjectsForDownload: ['general']
+  });
+  const [hasUploadPermission, setHasUploadPermission] = useState(false);
+  const [hasDownloadPermission, setHasDownloadPermission] = useState(true);
   const router = useRouter();
   const passwordInputRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -90,17 +101,69 @@ export default function DocumentationPage() {
     'mediafire': 'MediaFire'
   };
 
-  // Move all useEffect hooks before any conditional returns
+  // Check access based on authentication and permissions
   useEffect(() => {
-    if (isAuthenticated && !hasPermission) {
+    // Only show access denied if we're not an admin and don't have permission
+    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
+    if (isAuthenticated && !isAdmin && !hasPermission) {
       setShowAccessDenied(true);
+    } else {
+      setShowAccessDenied(false);
     }
-  }, [isAuthenticated, hasPermission]);
+  }, [isAuthenticated, hasPermission, user]);
 
   // Move this useEffect before the conditional return
+  // Render upload deadline message
+  const renderUploadDeadlineMessage = () => {
+    if (!hasUploadPermission) {
+      return <p className="text-sm text-red-500 mt-1">Uploads are currently disabled</p>;
+    }
+    
+    if (serverSettings.uploadDeadline) {
+      const deadline = new Date(serverSettings.uploadDeadline);
+      const now = new Date();
+      
+      if (deadline < now) {
+        return <p className="text-sm text-red-500 mt-1">Upload deadline was {deadline.toLocaleDateString()}</p>;
+      } else {
+        return <p className="text-sm text-gray-500 mt-1">Uploads accepted until {deadline.toLocaleDateString()}</p>;
+      }
+    }
+    
+    return null;
+  };
+
+  // Fetch server settings
+  const fetchServerSettings = async () => {
+    try {
+      const response = await fetch('/api/server-settings');
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Server settings:', data); // Debug log
+        
+        if (data.success) {
+          setServerSettings(data.data);
+          
+          // Check if upload is allowed based on deadline and user role
+          const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
+          const canUpload = isAdmin || (data.data.allowInternUpload && 
+            (!data.data.uploadDeadline || new Date(data.data.uploadDeadline) > new Date()));
+          
+          console.log('Can upload:', canUpload, 'isAdmin:', isAdmin, 'allowInternUpload:', data.data.allowInternUpload); // Debug log
+          
+          setHasUploadPermission(canUpload);
+          setHasDownloadPermission(isAdmin || data.data.allowInternDownload);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching server settings:', error);
+    }
+  };
+
   useEffect(() => {
     fetchResources();
     fetchProjects();
+    fetchServerSettings();
   }, []);
 
   useEffect(() => {
@@ -587,6 +650,23 @@ export default function DocumentationPage() {
   };
 
   const openDownloadModal = (resource) => {
+    // Check if user is an admin/console admin (they always have download permission)
+    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
+    
+    // If user is an intern and downloads are disabled, show error
+    if (!isAdmin && !serverSettings.allowInternDownload) {
+      alert('Download access is currently restricted. Please contact an administrator.');
+      return;
+    }
+    
+    // Check if the resource's project is in allowed projects for download
+    const resourceProject = resource.projectId || 'general';
+    if (!serverSettings.allowedProjectsForDownload.includes(resourceProject) && 
+        !serverSettings.allowedProjectsForDownload.includes('all')) {
+      alert('You do not have permission to download files from this project.');
+      return;
+    }
+    
     setDownloadModal({ show: true, resource });
   };
 
@@ -825,12 +905,54 @@ export default function DocumentationPage() {
               </button>
               
               {/* Upload Button */}
-              <Link href="/upload_documentation" className="inline-flex items-center px-3 py-2 bg-white text-blue-700 text-sm rounded-lg shadow hover:bg-blue-50 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
-                <span className="whitespace-nowrap">Upload Document</span>
-              </Link>
+              <div className="relative group">
+                <button
+                  onClick={() => {
+                    if (hasUploadPermission) {
+                      router.push('/upload_documentation');
+                    } else {
+                      const message = serverSettings.uploadDeadline && new Date(serverSettings.uploadDeadline) < new Date()
+                        ? 'The upload deadline has passed.'
+                        : 'You do not have permission to upload files.';
+                      alert(message);
+                    }
+                  }}
+                  disabled={!hasUploadPermission}
+                  className={`inline-flex items-center px-3 py-2 text-sm rounded-lg shadow transition-colors ${
+                    hasUploadPermission 
+                      ? 'bg-white text-blue-700 hover:bg-blue-50' 
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  <svg 
+                    xmlns="http://www.w3.org/2000/svg" 
+                    className={`h-4 w-4 mr-1 ${hasUploadPermission ? 'text-blue-700' : 'text-gray-400'}`} 
+                    viewBox="0 0 20 20" 
+                    fill="currentColor"
+                  >
+                    <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                  </svg>
+                  <span className="whitespace-nowrap">
+                    {hasUploadPermission ? 'Upload New' : 'Upload Disabled'}
+                  </span>
+                </button>
+                {serverSettings.uploadDeadline && (
+                  <div className="absolute left-0 right-0 mt-1 text-center">
+                    <span className="text-xs text-gray-500">
+                      {new Date(serverSettings.uploadDeadline) > new Date() 
+                        ? `Until ${new Date(serverSettings.uploadDeadline).toLocaleDateString()}`
+                        : 'Upload deadline passed'}
+                    </span>
+                  </div>
+                )}
+                {!hasUploadPermission && (
+                  <div className="invisible group-hover:visible absolute left-1/2 -translate-x-1/2 mt-2 w-48 bg-gray-800 text-white text-xs rounded py-1 px-2">
+                    {serverSettings.uploadDeadline && new Date(serverSettings.uploadDeadline) < new Date()
+                      ? 'The upload deadline has passed.'
+                      : 'You do not have permission to upload files.'}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
