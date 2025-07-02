@@ -275,14 +275,12 @@ export default function UserProfilePage() {
                     </div>
                   </div>
                   
-                  {/* Connected Accounts - Read Only */}
-                {/* Connected Accounts - Social Profiles */}
-                {(userData.connectedAccounts?.length > 0 || userData.oauth) && (
+                  {/* Social Profiles Section */}
                   <div className="mt-8">
                     <h3 className="text-sm font-medium text-gray-500 mb-3">SOCIAL PROFILES</h3>
                     <div className="space-y-3">
-                      {/* GitHub Profile */}
-                      {userData.connectedAccounts?.includes('github') && (userData.oauth?.github?.login || userData.githubUsername) && (
+                      {/* GitHub Profile - Show if connected via OAuth or has githubUsername */}
+                      {(userData.oauth?.github?.login || userData.githubUsername) && (
                         <a 
                           href={`https://github.com/${userData.oauth?.github?.login || userData.githubUsername}`}
                           target="_blank"
@@ -292,24 +290,22 @@ export default function UserProfilePage() {
                           <div className="p-2 rounded-lg bg-gray-100 bg-opacity-30">
                             <Github className="h-5 w-5 text-gray-800" />
                           </div>
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-700">GitHub Profile</p>
-                            <p className="text-xs text-gray-500">View on GitHub</p>
+                          <div className="ml-3 flex-1">
+                            <p className="text-sm font-medium text-gray-700">GitHub</p>
+                            <p className="text-xs text-gray-500">
+                              @{userData.oauth?.github?.login || userData.githubUsername}
+                            </p>
                           </div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Connected
+                          </span>
                         </a>
                       )}
 
-                      {/* Google Profile */}
-                      {/* Google Profile */}
-                      {userData.connectedAccounts?.includes('google') && (userData.oauth?.google?.email || userData.email) && (
+                      {/* Google Profile - Show if connected via OAuth */}
+                      {userData.oauth?.google?.email && (
                         <a 
-                          href={`https://myaccount.google.com/profile`}
-                          onClick={(e) => {
-                            if (!userData.oauth?.google?.email && !userData.email) {
-                              e.preventDefault();
-                              toast.error('No Google email found');
-                            }
-                          }}
+                          href="https://myaccount.google.com/profile"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
@@ -317,11 +313,45 @@ export default function UserProfilePage() {
                           <div className="p-2 rounded-lg bg-red-100 bg-opacity-30">
                             <Google className="h-5 w-5 text-red-600" />
                           </div>
+                          <div className="ml-3 flex-1">
+                            <p className="text-sm font-medium text-gray-700">Google</p>
+                            <p className="text-xs text-gray-500">
+                              {userData.oauth.google.email}
+                            </p>
+                          </div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Connected
+                          </span>
+                        </a>
+                      )}
+
+                      {/* LinkedIn Profile - Show if available */}
+                      {userData.linkedinProfile && (
+                        <a 
+                          href={userData.linkedinProfile.startsWith('http') ? 
+                              userData.linkedinProfile : 
+                              `https://linkedin.com/in/${userData.linkedinProfile}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                        >
+                          <div className="p-2 rounded-lg bg-blue-100 bg-opacity-30">
+                            <FaLinkedin className="h-5 w-5 text-blue-600" />
+                          </div>
                           <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-700">Google Account</p>
-                            <p className="text-xs text-gray-500">View Google Profile</p>
+                            <p className="text-sm font-medium text-gray-700">LinkedIn</p>
+                            <p className="text-xs text-gray-500">View Profile</p>
                           </div>
                         </a>
+                      )}
+
+                      {/* No profiles connected message */}
+                      {!userData.oauth?.github?.login && !userData.githubUsername && 
+                       !userData.oauth?.google?.email && !userData.linkedinProfile && (
+                        <div className="text-center py-4 text-gray-500">
+                          <p>No social profiles connected</p>
+                          <p className="text-xs mt-1">Connect accounts in the profile settings</p>
+                        </div>
                       )}
 
                       {/* Other connected accounts without OAuth data */}
@@ -346,7 +376,6 @@ export default function UserProfilePage() {
                       })}
                     </div>
                   </div>
-                )}
                 </div>
                 
                 {/* Account Status - Read Only */}

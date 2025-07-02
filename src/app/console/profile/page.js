@@ -116,49 +116,86 @@ export default function ProfilePage() {
   ];
 
   const fetchConnectedAccounts = async () => {
+    console.log('Fetching connected accounts...');
     try {
-      const res = await fetch('/api/auth/connected-accounts', {
-        credentials: 'include',
-        cache: 'no-store' // Ensure we get fresh data
-      });
+      const [res, userRes] = await Promise.all([
+        fetch('/api/auth/connected-accounts', {
+          credentials: 'include',
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        }),
+        fetch('/api/users/profile/get', { 
+          credentials: 'include',
+          cache: 'no-store'
+        })
+      ]);
       
-      if (res.ok) {
-        const data = await res.json();
-        const accounts = data.connectedAccounts || [];
-        setConnectedAccounts(accounts);
-        
-        // If GitHub is connected, fetch repositories
-        if (accounts.includes('github')) {
-          await fetchGithubRepos();
-        } else {
-          setGithubRepos([]);
-        }
-      } else {
-        throw new Error('Failed to fetch connected accounts');
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch connected accounts');
       }
-      return res;
+
+      const data = await res.json();
+      console.log('Connected accounts from API:', data.connectedAccounts);
+      
+      // Get user data to check OAuth connections
+      let userOAuth = {};
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        userOAuth = userData.user?.oauth || {};
+        console.log('User OAuth data:', userOAuth);
+      }
+      
+      // Check which OAuth providers are connected
+      const connected = [];
+      if (userOAuth.github) connected.push('github');
+      if (userOAuth.google) connected.push('google');
+      
+      // Combine with any other connected accounts from the API
+      const allAccounts = [...new Set([
+        ...(data.connectedAccounts || []),
+        ...connected
+      ])];
+      
+      console.log('All connected accounts:', allAccounts);
+      setConnectedAccounts(allAccounts);
+      
+      // If GitHub is connected, fetch repositories
+      if (allAccounts.includes('github')) {
+        console.log('GitHub is connected, fetching repositories...');
+        await fetchGithubRepos();
+      } else {
+        console.log('GitHub is not connected');
+        setGithubRepos([]);
+      }
+      
+      return allAccounts;
+      
     } catch (error) {
-      console.error('Error fetching connected accounts:', error);
-      toast.error('Failed to load connected accounts');
-      throw error;
+      console.error('Error in fetchConnectedAccounts:', error);
+      toast.error(`Failed to load connected accounts: ${error.message}`);
+      return [];
     }
   };
   
   const fetchGithubRepos = async (searchTerm = '') => {
-    if (!connectedAccounts.includes('github')) {
-      console.log('GitHub not in connected accounts, skipping fetch');
-      return;
-    }
+    console.log('fetchGithubRepos called with searchTerm:', searchTerm);
     
     try {
-      setIsLoadingRepos(true);
-      console.log('Fetching GitHub repos with search:', searchTerm);
-      
-      // First, verify we have a valid session
-      const sessionRes = await fetch('/api/auth/session', {
-        credentials: 'include',
-        cache: 'no-store'
-      });
+      // First, verify we have a valid session and user data
+      const [sessionRes, userRes] = await Promise.all([
+        fetch('/api/auth/session', {
+          credentials: 'include',
+          cache: 'no-store'
+        }),
+        fetch('/api/users/profile/get', {
+          credentials: 'include',
+          cache: 'no-store'
+        })
+      ]);
       
       if (!sessionRes.ok) {
         console.error('Failed to verify session');
@@ -168,10 +205,50 @@ export default function ProfilePage() {
       const sessionData = await sessionRes.json();
       console.log('Session data:', sessionData);
       
-      // Then fetch the repositories
-      const apiUrl = `/api/github/repos?q=${encodeURIComponent(searchTerm)}`;
-      console.log('Fetching from:', apiUrl);
+      let userData = {};
+      if (userRes.ok) {
+        userData = await userRes.json();
+        console.log('User data in fetchGithubRepos:', userData);
+      }
       
+      // Check if GitHub is connected in the user data
+      const isGithubConnected = userData?.user?.oauth?.github || 
+                              userData?.user?.connectedAccounts?.includes('github');
+      
+      if (!isGithubConnected) {
+        console.log('GitHub not connected in user data, skipping fetch');
+        setGithubRepos([]);
+        return;
+      }
+      
+      setIsLoadingRepos(true);
+      
+      // Get the GitHub username from OAuth data or user data
+      const githubUsername = userData?.user?.oauth?.github?.login || 
+                           userData?.user?.githubUsername;
+      
+      if (!githubUsername) {
+        console.error('No GitHub username found in user data');
+        throw new Error('GitHub username not found');
+      }
+      
+      console.log('Fetching GitHub repos for user:', githubUsername);
+      
+      // Build the API URL
+      let apiUrl = '/api/github/repos';
+      const params = new URLSearchParams();
+      
+      if (searchTerm) {
+        params.append('q', searchTerm);
+      }
+      
+      if (params.toString()) {
+        apiUrl += `?${params.toString()}`;
+      }
+      
+      console.log('Making request to:', apiUrl);
+      
+      // Fetch the repositories
       const res = await fetch(apiUrl, {
         credentials: 'include',
         cache: 'no-store',
@@ -181,32 +258,48 @@ export default function ProfilePage() {
         }
       });
       
-      console.log('Response status:', res.status);
-      const data = await res.json();
-      console.log('Response data:', data);
+      console.log('GitHub API response status:', res.status);
       
       if (!res.ok) {
-        console.error('GitHub API error:', data);
-        throw new Error(data.error || 'Failed to fetch repositories');
+        const errorData = await res.json().catch(() => ({}));
+        console.error('GitHub API error:', errorData);
+        
+        if (res.status === 401) {
+          // Token might be expired or invalid
+          toast.error('GitHub session expired. Please reconnect your GitHub account.');
+          // Update connected accounts to reflect the disconnection
+          setConnectedAccounts(prev => prev.filter(acc => acc !== 'github'));
+        }
+        
+        throw new Error(errorData.error || 'Failed to fetch repositories');
       }
       
-      console.log('GitHub repos received:', data.repositories?.length || 0);
+      const data = await res.json();
+      console.log('GitHub repos received:', data.repositories?.length || 0, 'repositories');
+      
+      // Update the repositories state
       setGithubRepos(data.repositories || []);
       
-      if (data.repositories && data.repositories.length === 0) {
-        console.log('No repositories found - checking if this is expected');
-        // Check if we have a valid GitHub username
-        if (userData?.oauth?.github?.login) {
-          console.log(`User has GitHub username: ${userData.oauth.github.login}`);
-          console.log('This might be because the token has no repository access or the user has no repositories');
+      if (!data.repositories || data.repositories.length === 0) {
+        console.log('No repositories found for user:', githubUsername);
+        
+        // If we have a search term and no results, show a message
+        if (searchTerm) {
+          toast('No repositories found matching your search');
         } else {
-          console.log('No GitHub username found in user data');
+          toast('No repositories found for your GitHub account');
         }
       }
+      
     } catch (error) {
-      console.error('Error fetching GitHub repositories:', error);
-      toast.error(`Failed to load repositories: ${error.message}`);
-      setGithubRepos([]); // Clear any previous repos on error
+      console.error('Error in fetchGithubRepos:', error);
+      
+      // Only show error toast if it's not a 404 (no repos)
+      if (!error.message.includes('404')) {
+        toast.error(`Failed to load repositories: ${error.message}`);
+      }
+      
+      setGithubRepos([]);
     } finally {
       setIsLoadingRepos(false);
     }
@@ -229,23 +322,57 @@ export default function ProfilePage() {
 
   // Check URL for success/error messages
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.has('success') && searchParams.get('success') === 'github_connected') {
-      toast.success('Successfully connected GitHub account');
-      // Remove the success parameter from URL
-      const newUrl = new URL(window.location);
-      newUrl.searchParams.delete('success');
-      window.history.replaceState({}, '', newUrl);
-      // Refresh connected accounts
-      fetchConnectedAccounts();
-    } else if (searchParams.has('error')) {
-      const error = searchParams.get('error');
-      toast.error(`GitHub connection failed: ${error}`);
-      // Remove the error parameter from URL
-      const newUrl = new URL(window.location);
-      newUrl.searchParams.delete('error');
-      window.history.replaceState({}, '', newUrl);
-    }
+    const handleOAuthCallback = async () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      
+      if (searchParams.has('success') && searchParams.get('success') === 'github_connected') {
+        try {
+          // Show loading state
+          setIsConnecting(true);
+          
+          // Remove the success parameter from URL
+          const newUrl = new URL(window.location);
+          newUrl.searchParams.delete('success');
+          window.history.replaceState({}, '', newUrl);
+          
+          // Show success message
+          toast.success('Successfully connected GitHub account');
+          
+          // Refresh user data and connected accounts
+          const [profileRes] = await Promise.all([
+            fetch('/api/users/profile/get', { 
+              credentials: 'include',
+              cache: 'no-store' 
+            })
+          ]);
+          
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            setUserData(profileData.user);
+          }
+          
+          // Refresh connected accounts and repositories
+          await fetchConnectedAccounts();
+          
+        } catch (error) {
+          console.error('Error handling GitHub connection:', error);
+          toast.error(`Failed to complete GitHub connection: ${error.message}`);
+        } finally {
+          setIsConnecting(false);
+        }
+        
+      } else if (searchParams.has('error')) {
+        const error = searchParams.get('error');
+        toast.error(`GitHub connection failed: ${error}`);
+        
+        // Remove the error parameter from URL
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.delete('error');
+        window.history.replaceState({}, '', newUrl);
+      }
+    };
+    
+    handleOAuthCallback();
   }, []);
 
   useEffect(() => {
