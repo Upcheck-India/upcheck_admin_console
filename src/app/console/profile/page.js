@@ -567,6 +567,23 @@ export default function ProfilePage() {
               <div>
                 <h1 className="text-2xl font-bold text-white">{userData?.username}</h1>
                 <p className="text-blue-100">{userData?.role}</p>
+                {userData?._id && (
+                      <div className="text-xs text-white mt-1 flex items-center">
+                        <span className="mr-1">Account ID: {userData._id}</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(userData._id);
+                            toast.success('Account ID copied to clipboard');
+                          }}
+                          className="text-white"
+                          title="Copy to clipboard"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
               </div>
             </div>
           </div>
@@ -725,10 +742,12 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-gray-600">Role</span>
-                  <span className="text-gray-900 flex items-center">
-                    <Briefcase className="w-4 h-4 mr-2 text-blue-500" />
-                    {userData?.role}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-gray-900 flex items-center">
+                      <Briefcase className="w-4 h-4 mr-2 text-blue-500" />
+                      {userData?.role}
+                    </span>
+                  </div>
                 </div>
                 {userData?.phone && (
                   <div className="flex items-center justify-between">
