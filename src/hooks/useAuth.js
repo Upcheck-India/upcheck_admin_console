@@ -7,7 +7,7 @@ export function useAuth(requireAuth = true, requiredPermission = null) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
   const [authError, setAuthError] = useState(null);
-  const [user, setUser] = useState(null); // Add state to store user data
+  const [user, setUser] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -16,7 +16,10 @@ export function useAuth(requireAuth = true, requiredPermission = null) {
         console.log('Checking authentication...');
         // Check authentication
         const authResponse = await fetch('/api/auth/check', {
-          credentials: 'include'
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
         });
 
         if (!authResponse.ok) {
@@ -29,28 +32,43 @@ export function useAuth(requireAuth = true, requiredPermission = null) {
           return;
         }
 
-        const userData = await authResponse.json();
-        console.log('Authentication successful:', userData);
+        const responseData = await authResponse.json();
+        console.log('Authentication response:', responseData);
+        
+        // Handle different response structures
+        const userData = responseData.user || responseData;
+        
+        if (!userData) {
+          throw new Error('No user data in response');
+        }
+        
+        console.log('Setting user data:', userData);
         setIsAuthenticated(true);
-        setUser(userData.user); // Store user data
+        setUser(userData);
 
         // If permission check is required
         if (requiredPermission) {
           console.log('Checking permissions...');
           const permResponse = await fetch('/api/auth/permissions', {
-            credentials: 'include'
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
           });
 
           if (!permResponse.ok) {
             throw new Error('Permission check failed');
           }
 
-          const { permissions } = await permResponse.json();
-          const permitted = permissions?.includes(requiredPermission);
+          const permissionsData = await permResponse.json();
+          const permissions = permissionsData.permissions || [];
+          const permitted = permissions.includes(requiredPermission);
           setHasPermission(permitted);
 
           if (!permitted) {
             setAuthError('Permission denied');
+          } else {
+            setAuthError(null);
           }
         } else {
           setHasPermission(true);

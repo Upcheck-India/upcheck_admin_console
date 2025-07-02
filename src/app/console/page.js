@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { 
   Users, 
   LayoutDashboard, 
@@ -46,6 +47,7 @@ const LoadingState = () => (
   );
 
 const AdminLandingPage = () => {
+  const pathname = usePathname();
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isLoading: authLoading, isAuthenticated } = useAuth(true);
@@ -134,12 +136,19 @@ const AdminLandingPage = () => {
     }
   };
 
-// Update the userDropdownItems array:
-const userDropdownItems = [
-  { icon: <User className="w-4 h-4" />, label: "Profile", link: "/console/profile" },
-  { icon: <Key className="w-4 h-4" />, label: "Security", link: "/console/profile" },
-  { icon: <LogOut className="w-4 h-4" />, label: "Logout", onClick: handleLogout }
-];
+  const navItems = [
+    { name: 'Dashboard', href: '/console', icon: LayoutDashboard },
+    { name: 'Users', href: '/console/users', icon: Users },
+    { name: 'Documents', href: '/console/documents', icon: FileText },
+    { name: 'Console Admin', href: '/console-admin', icon: Shield },
+    { name: 'Settings', href: '/console/settings', icon: Settings },
+  ];
+
+  const userDropdownItems = [
+    { icon: <User className="w-4 h-4" />, label: "Profile", link: "/console/profile" },
+    { icon: <Key className="w-4 h-4" />, label: "Security", link: "/console/profile" },
+    { icon: <LogOut className="w-4 h-4" />, label: "Logout", onClick: handleLogout }
+  ];
 
   if (authLoading) {
     return <SecureLoading />;
@@ -175,6 +184,16 @@ const userDropdownItems = [
               >
                 <Mail className="h-5 w-5" />
                 <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+              </Link>
+
+              {/* Admin Console Icon */}
+              <Link 
+                href="/console-admin" 
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
+                title="Console admin"
+              >
+                <Shield className="h-5 w-5" />
+                <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white"></span>
               </Link>
               
               {/* Profile Dropdown */}
@@ -237,6 +256,30 @@ const userDropdownItems = [
           </div>
         </div>
       </Link>
+
+      {/* Sidebar
+      <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-md z-40">
+        <div className="p-4 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-800">Console</h2>
+        </div>
+        <nav className="p-4 space-y-1">
+          {navItems.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center px-4 py-3 rounded-lg transition-colors ${
+                pathname === item.href
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              <item.icon className="w-5 h-5 mr-3" />
+              <span>{item.name}</span>
+            </Link>
+          ))}
+        </nav>
+      </div>
+       */}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

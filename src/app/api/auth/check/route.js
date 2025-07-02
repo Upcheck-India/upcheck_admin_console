@@ -21,8 +21,15 @@ export async function GET() {
     
     // Find user with active session
     const user = await db.collection('admin_users').findOne(
-      {}, // Replace with token verification logic
-      { projection: { username: 1 } }
+      { sessionToken: token }, // Match the session token
+      { 
+        projection: { 
+          username: 1, 
+          role: 1,
+          email: 1,
+          name: 1
+        } 
+      }
     );
     
     if (!user) {
@@ -32,8 +39,18 @@ export async function GET() {
       );
     }
 
+    // Return user data along with authentication status
     return NextResponse.json(
-      { authenticated: true },
+      { 
+        authenticated: true,
+        user: {
+          id: user._id?.toString(),
+          username: user.username,
+          email: user.email,
+          name: user.name,
+          role: user.role || 'user' // Default role if not specified
+        }
+      },
       { status: 200 }
     );
   } catch (error) {

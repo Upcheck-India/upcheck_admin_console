@@ -338,7 +338,7 @@ export default function GithubRepoManager({ userId }) {
       {/* Search and Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-medium text-gray-900">GitHub Repositories</h2>
+          <h2 className="text-lg font-medium text-gray-900">Public Repositories</h2>
           <p className="text-sm text-gray-500">
             {filteredRepos.length} {filteredRepos.length === 1 ? 'repository' : 'repositories'} found
           </p>
