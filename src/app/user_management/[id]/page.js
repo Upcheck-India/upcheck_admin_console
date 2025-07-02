@@ -1,32 +1,40 @@
 'use client';
 
+'use client';
+
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { toast } from 'react-hot-toast';
+import { format, formatDistanceToNow } from 'date-fns';
 import { 
   User, 
   Mail, 
   Phone, 
+  Briefcase, 
   MapPin, 
+  Calendar, 
+  Globe, 
+  Edit2, 
+  Trash2, 
+  ChevronLeft, 
+  ChevronRight,
+  Lock, 
+  Check, 
+  X, 
+  ExternalLink, 
   Link as LinkIcon,
-  ChevronLeft,
-  Briefcase,
-  Calendar,
-  Clock,
-  Lock,
-  Shield,
-  AlertCircle,
-  RefreshCw,
-  UserX,
-  CheckCircle2,
-  XCircle,
-  AlertCircle as AlertIcon,
   Github,
+  Linkedin,
   Google,
-  Link2,
-  Unlink,
-  Link
+  Plus,
+  ArrowUpRight,
+  Star,
+  GitFork,
+  Search,
+  Loader2
 } from 'lucide-react';
 import { FaLinkedin } from 'react-icons/fa';
+import GithubReposDialog from '@/components/GithubReposDialog';
 
 // Simple loading spinner component
 const LoadingSpinner = () => (
@@ -57,18 +65,24 @@ const oauthProviders = [
 ];
 
 export default function UserProfilePage() {
+  const [isLoading, setIsLoading] = useState(true);
   const [userData, setUserData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [editedData, setEditedData] = useState({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showConnectGithub, setShowConnectGithub] = useState(false);
+  const [showConnectGoogle, setShowConnectGoogle] = useState(false);
+  const [showGithubRepos, setShowGithubRepos] = useState(false);
+  const [githubRepos, setGithubRepos] = useState([]);
+  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+
   const router = useRouter();
   const { id } = useParams();
 
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
-        setLoading(true);
+        setIsLoading(true);
         setError(null);
         
         const response = await fetch(`/api/users/${id}`, {
@@ -90,7 +104,7 @@ export default function UserProfilePage() {
         console.error('Error fetching user data:', error);
         setError(error.message || 'Failed to load user profile');
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
@@ -98,11 +112,11 @@ export default function UserProfilePage() {
       fetchUserProfile();
     } else {
       setError('No user ID provided');
-      setLoading(false);
+      setIsLoading(false);
     }
   }, [id]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <LoadingSpinner />
@@ -169,7 +183,7 @@ export default function UserProfilePage() {
     }
   };
 
-    // Get status display text
+  // Get status display text
   const getStatusDisplay = (status) => {
     if (!status) return 'Active'; // Default to Active if not set
     return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
@@ -282,25 +296,45 @@ export default function UserProfilePage() {
                     <div className="space-y-3">
                       {/* GitHub Profile - Show if connected via OAuth or has githubUsername */}
                       {(userData.oauth?.github?.login || userData.githubUsername) && (
-                        <a 
-                          href={`https://github.com/${userData.oauth?.github?.login || userData.githubUsername}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                        >
-                          <div className="p-2 rounded-lg bg-gray-100 bg-opacity-30">
-                            <Github className="h-5 w-5 text-gray-800" />
-                          </div>
-                          <div className="ml-3 flex-1">
-                            <p className="text-sm font-medium text-gray-700">GitHub</p>
-                            <p className="text-xs text-gray-500">
-                              @{userData.oauth?.github?.login || userData.githubUsername}
-                            </p>
-                          </div>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Connected
-                          </span>
-                        </a>
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowGithubRepos(true)}
+                            className="w-full text-left flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                          >
+                            <div className="p-2 rounded-lg bg-gray-100 bg-opacity-30">
+                              <Github className="h-5 w-5 text-gray-900" />
+                            </div>
+                            <div className="ml-3 flex-1">
+                              <p className="text-sm font-medium text-gray-700">GitHub</p>
+                              <p className="text-xs text-gray-500">
+                                @{userData.oauth?.github?.login || userData.githubUsername}
+                                {userData.githubProfile?.currentRepo && (
+                                  <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                                    {userData.githubProfile.currentRepo}
+                                  </span>
+                                )}
+                              </p>
+                              {userData.githubProfile?.notes && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-1">
+                                  {userData.githubProfile.notes}
+                                </p>
+                              )}
+                            </div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Connected
+                            </span>
+                            <ChevronRight className="ml-2 h-4 w-4 text-gray-400" />
+                          </button>
+                          
+                          <a 
+                            href={`https://github.com/${userData.oauth.github.login}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute inset-0 opacity-0"
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Open ${userData.oauth.github.login}'s GitHub profile`}
+                          />
+                        </div>
                       )}
 
                       {/* Google Profile - Show if connected via OAuth */}
@@ -496,28 +530,6 @@ export default function UserProfilePage() {
               
               {/* Additional Sections */}
               <div className="lg:col-span-2 space-y-6">
-                {/* LinkedIn Profile */}
-                {userData.linkedinProfile && (
-                  <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Social Profiles</h3>
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                        <LinkIcon className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-500">LinkedIn</p>
-                        <a
-                          href={userData.linkedinProfile}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline text-sm"
-                        >
-                          View Profile
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Additional Information */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">

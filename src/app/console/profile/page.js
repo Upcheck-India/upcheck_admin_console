@@ -35,8 +35,18 @@ import {
   Plus,
   Loader2,
   Users,
-  Code
+  Code,
+  ChevronDown,
+  ChevronUp,
+  CheckCircle
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
+
+// Dynamically import the GithubRepoManager component with no SSR
+const GithubRepoManager = dynamic(
+  () => import('@/components/GithubRepoManager'),
+  { ssr: false }
+);
 import SecureLoading from "../../components/SecureLoading";
 import { FaGoogle } from "react-icons/fa";
 
@@ -58,6 +68,12 @@ export default function ProfilePage() {
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [repoSearchTerm, setRepoSearchTerm] = useState('');
   const [showAllRepos, setShowAllRepos] = useState(false);
+  const [showGithubConnect, setShowGithubConnect] = useState(false);
+  const [showGoogleConnect, setShowGoogleConnect] = useState(false);
+  const [isLoadingGithub, setIsLoadingGithub] = useState(false);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [activeTab, setActiveTab] = useState('repositories');
+  const [currentRepo, setCurrentRepo] = useState(null);
   const router = useRouter();
 
   // OAuth provider configuration
@@ -182,130 +198,38 @@ export default function ProfilePage() {
     }
   };
   
-  const fetchGithubRepos = async (searchTerm = '') => {
-    console.log('fetchGithubRepos called with searchTerm:', searchTerm);
+  const fetchGithubRepos = useCallback(async () => {
+    if (!userData?.oauth?.github?.accessToken) return;
     
+    setIsLoadingRepos(true);
     try {
-      // First, verify we have a valid session and user data
-      const [sessionRes, userRes] = await Promise.all([
-        fetch('/api/auth/session', {
-          credentials: 'include',
-          cache: 'no-store'
-        }),
-        fetch('/api/users/profile/get', {
-          credentials: 'include',
-          cache: 'no-store'
-        })
-      ]);
+      const response = await fetch('/api/github/repos');
+      if (!response.ok) throw new Error('Failed to fetch repositories');
       
-      if (!sessionRes.ok) {
-        console.error('Failed to verify session');
-        throw new Error('Session verification failed');
-      }
-      
-      const sessionData = await sessionRes.json();
-      console.log('Session data:', sessionData);
-      
-      let userData = {};
-      if (userRes.ok) {
-        userData = await userRes.json();
-        console.log('User data in fetchGithubRepos:', userData);
-      }
-      
-      // Check if GitHub is connected in the user data
-      const isGithubConnected = userData?.user?.oauth?.github || 
-                              userData?.user?.connectedAccounts?.includes('github');
-      
-      if (!isGithubConnected) {
-        console.log('GitHub not connected in user data, skipping fetch');
-        setGithubRepos([]);
-        return;
-      }
-      
-      setIsLoadingRepos(true);
-      
-      // Get the GitHub username from OAuth data or user data
-      const githubUsername = userData?.user?.oauth?.github?.login || 
-                           userData?.user?.githubUsername;
-      
-      if (!githubUsername) {
-        console.error('No GitHub username found in user data');
-        throw new Error('GitHub username not found');
-      }
-      
-      console.log('Fetching GitHub repos for user:', githubUsername);
-      
-      // Build the API URL
-      let apiUrl = '/api/github/repos';
-      const params = new URLSearchParams();
-      
-      if (searchTerm) {
-        params.append('q', searchTerm);
-      }
-      
-      if (params.toString()) {
-        apiUrl += `?${params.toString()}`;
-      }
-      
-      console.log('Making request to:', apiUrl);
-      
-      // Fetch the repositories
-      const res = await fetch(apiUrl, {
-        credentials: 'include',
-        cache: 'no-store',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      });
-      
-      console.log('GitHub API response status:', res.status);
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        console.error('GitHub API error:', errorData);
-        
-        if (res.status === 401) {
-          // Token might be expired or invalid
-          toast.error('GitHub session expired. Please reconnect your GitHub account.');
-          // Update connected accounts to reflect the disconnection
-          setConnectedAccounts(prev => prev.filter(acc => acc !== 'github'));
-        }
-        
-        throw new Error(errorData.error || 'Failed to fetch repositories');
-      }
-      
-      const data = await res.json();
-      console.log('GitHub repos received:', data.repositories?.length || 0, 'repositories');
-      
-      // Update the repositories state
-      setGithubRepos(data.repositories || []);
-      
-      if (!data.repositories || data.repositories.length === 0) {
-        console.log('No repositories found for user:', githubUsername);
-        
-        // If we have a search term and no results, show a message
-        if (searchTerm) {
-          toast('No repositories found matching your search');
-        } else {
-          toast('No repositories found for your GitHub account');
-        }
-      }
-      
+      const data = await response.json();
+      setGithubRepos(data);
     } catch (error) {
-      console.error('Error in fetchGithubRepos:', error);
-      
-      // Only show error toast if it's not a 404 (no repos)
-      if (!error.message.includes('404')) {
-        toast.error(`Failed to load repositories: ${error.message}`);
-      }
-      
-      setGithubRepos([]);
+      console.error('Error fetching GitHub repos:', error);
+      toast.error('Failed to load repositories');
     } finally {
       setIsLoadingRepos(false);
     }
-  };
-  
+  }, [userData?.oauth?.github?.accessToken]);
+
+  const fetchGithubProfile = useCallback(async () => {
+    if (!userData?._id) return;
+    
+    try {
+      const response = await fetch(`/api/users/${userData._id}/github-profile`);
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentRepo(data.currentRepo || null);
+      }
+    } catch (error) {
+      console.error('Error fetching GitHub profile:', error);
+    }
+  }, [userData?._id]);
+
   // Debounced search for repositories
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSearch = useCallback(
@@ -423,6 +347,13 @@ export default function ProfilePage() {
 
     fetchUserProfile();
   }, [router]);
+
+  useEffect(() => {
+    if (userData?.oauth?.github?.accessToken) {
+      fetchGithubRepos();
+      fetchGithubProfile();
+    }
+  }, [userData?.oauth?.github?.accessToken, fetchGithubRepos, fetchGithubProfile]);
 
   const handleSaveProfile = async () => {
     try {
@@ -925,120 +856,102 @@ export default function ProfilePage() {
         </div>
 
         {/* GitHub Repositories Section */}
-        {connectedAccounts.includes('github') && (
-          <div className="mt-6">
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold flex items-center text-gray-900">
-                  <Code className="w-5 h-5 mr-2 text-gray-700" />
-                  GitHub Repositories
-                </h2>
+        {userData?.oauth?.github?.login && (
+          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-medium text-gray-900">GitHub Repositories</h3>
+              <div className="flex space-x-2">
                 <a
-                  href={`https://github.com/${userData?.oauth?.github?.login || ''}`}
+                  href={`https://github.com/${userData.oauth.github.login}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
-                  onClick={(e) => {
-                    if (!userData?.oauth?.github?.login) {
-                      e.preventDefault();
-                      toast.error('GitHub username not available');
-                    }
-                  }}
+                  className="inline-flex items-center px-3 py-1.5 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <ExternalLink className="w-4 h-4 mr-1" />
-                  View GitHub Profile
+                  <Github className="h-4 w-4 mr-2" />
+                  View on GitHub
                 </a>
               </div>
-              
-              {/* Search Bar */}
-              <div className="relative mb-4">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search repositories..."
-                  value={repoSearchTerm}
-                  onChange={handleRepoSearch}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              
-              {/* Repositories Grid */}
-              {isLoadingRepos ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                  <span className="ml-2 text-gray-500">Loading repositories...</span>
-                </div>
-              ) : displayedRepos.length > 0 ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {displayedRepos.map((repo) => (
-                      <div key={repo.id} className="group">
-                        <a
-                          href={repo.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="block border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow hover:border-blue-200 h-full"
-                        >
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex-1">
-                              <h3 className="font-medium text-gray-900 group-hover:text-blue-600 flex items-center">
-                                {repo.name}
-                                <ExternalLink className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
-                              </h3>
-                              {repo.description && (
-                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                                  {repo.description}
-                                </p>
-                              )}
-                            </div>
-                            {repo.private && (
-                              <Lock className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
-                            )}
-                          </div>
-                          
-                          <div className="flex items-center justify-between text-sm text-gray-500 mt-3">
-                            <div className="flex items-center space-x-4">
-                              {repo.language && (
-                                <div className="flex items-center">
-                                  <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-                                  <span>{repo.language}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center">
-                                <Star className="w-3 h-3 mr-1" />
-                                <span>{repo.stars || 0}</span>
-                              </div>
-                              <div className="flex items-center">
-                                <GitFork className="w-3 h-3 mr-1" />
-                                <span>{repo.forks || 0}</span>
-                              </div>
-                            </div>
-                            <span 
-                              className="text-xs text-gray-400" 
-                              title={repo.updatedAt ? new Date(repo.updatedAt).toLocaleString() : 'No update date'}
-                            >
-                              {repo.updatedAt ? `Updated ${formatDistanceToNow(new Date(repo.updatedAt), { addSuffix: true })}` : ''}
-                            </span>
-                          </div>
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {filteredRepos.length > 6 && (
-                    <div className="mt-4 text-center">
-                      <button
-                        onClick={() => setShowAllRepos(!showAllRepos)}
-                        className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        {showAllRepos ? 'Show Less' : `Show All ${filteredRepos.length} Repositories`}
-                      </button>
-                    </div>
-                  )}
-                </>
+            </div>
+
+            {/* Tabs */}
+            <div className="border-b border-gray-200 mb-6">
+              <nav className="-mb-px flex space-x-8">
+                <button
+                  onClick={() => setActiveTab('repositories')}
+                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'repositories'
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  Repositories
+                </button>
+                {currentRepo && (
+                  <button
+                    onClick={() => setActiveTab('current')}
+                    className="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-blue-500 text-blue-600 flex items-center"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-1.5 text-green-500" />
+                    Current Project
+                  </button>
+                )}
+              </nav>
+            </div>
+
+            {/* Tab Content */}
+            <div className="mt-4">
+              {activeTab === 'repositories' ? (
+                <GithubRepoManager userId={userData._id} />
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  {repoSearchTerm ? 'No repositories found matching your search.' : 'No repositories found.'}
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-6">
+                  <div className="flex items-start">
+                    <div className="flex-shrink-0">
+                      <CheckCircle className="h-6 w-6 text-blue-500" />
+                    </div>
+                    <div className="ml-3">
+                      <h3 className="text-lg font-medium text-blue-800">Currently Working On</h3>
+                      <div className="mt-2 text-sm text-blue-700">
+                        <p>
+                          <a 
+                            href={currentRepo?.html_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-medium hover:underline flex items-center"
+                          >
+                            {currentRepo?.name}
+                            <ExternalLink className="w-3 h-3 ml-1" />
+                          </a>
+                        </p>
+                        {currentRepo?.description && (
+                          <p className="mt-1 text-gray-600">{currentRepo.description}</p>
+                        )}
+                        <div className="mt-2 flex items-center space-x-4 text-xs">
+                          {currentRepo?.language && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {currentRepo.language}
+                            </span>
+                          )}
+                          <span className="text-gray-500">
+                            Updated {formatDistanceToNow(new Date(currentRepo.updated_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-4">
+                        <div className="text-sm font-medium text-gray-700 mb-1">Notes</div>
+                        <p className="text-sm text-gray-600 bg-white p-3 rounded border border-gray-200">
+                          {currentRepo.notes || 'No notes added yet.'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6">
+                    <button
+                      onClick={() => setActiveTab('repositories')}
+                      className="text-sm font-medium text-blue-600 hover:text-blue-500"
+                    >
+                      &larr; Back to all repositories
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
