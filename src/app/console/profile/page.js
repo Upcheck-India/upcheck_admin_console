@@ -118,21 +118,29 @@ export default function ProfilePage() {
   const fetchConnectedAccounts = async () => {
     try {
       const res = await fetch('/api/auth/connected-accounts', {
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store' // Ensure we get fresh data
       });
+      
       if (res.ok) {
         const data = await res.json();
-        setConnectedAccounts(data.connectedAccounts || []);
+        const accounts = data.connectedAccounts || [];
+        setConnectedAccounts(accounts);
         
         // If GitHub is connected, fetch repositories
-        if (data.connectedAccounts?.includes('github')) {
-          fetchGithubRepos();
+        if (accounts.includes('github')) {
+          await fetchGithubRepos();
         } else {
           setGithubRepos([]);
         }
+      } else {
+        throw new Error('Failed to fetch connected accounts');
       }
+      return res;
     } catch (error) {
       console.error('Error fetching connected accounts:', error);
+      toast.error('Failed to load connected accounts');
+      throw error;
     }
   };
   
@@ -174,6 +182,27 @@ export default function ProfilePage() {
     debouncedSearch(searchTerm);
   };
 
+  // Check URL for success/error messages
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.has('success') && searchParams.get('success') === 'github_connected') {
+      toast.success('Successfully connected GitHub account');
+      // Remove the success parameter from URL
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.delete('success');
+      window.history.replaceState({}, '', newUrl);
+      // Refresh connected accounts
+      fetchConnectedAccounts();
+    } else if (searchParams.has('error')) {
+      const error = searchParams.get('error');
+      toast.error(`GitHub connection failed: ${error}`);
+      // Remove the error parameter from URL
+      const newUrl = new URL(window.location);
+      newUrl.searchParams.delete('error');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchUserProfile = async () => {
       try {
@@ -188,8 +217,8 @@ export default function ProfilePage() {
           return;
         }
 
-        // Then fetch complete profile data
-        const [profileRes] = await Promise.all([
+        // Then fetch complete profile data and connected accounts in parallel
+        const [profileRes, connectedAccountsRes] = await Promise.all([
           fetch('/api/users/profile/get', { credentials: 'include' }),
           fetchConnectedAccounts()
         ]);
@@ -269,11 +298,14 @@ export default function ProfilePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ redirect: window.location.href })
+        body: JSON.stringify({ 
+          redirect: `${window.location.origin}${window.location.pathname}`
+        })
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to ${action} ${provider.name}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to ${action} ${provider.name}`);
       }
 
       const data = await response.json();
