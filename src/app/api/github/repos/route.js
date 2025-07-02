@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import clientPromise from '@/lib/mongodb';
+import clientPromise from '../../../../lib/mongodb';
 
 export async function GET(request) {
   // Get the current user's session
