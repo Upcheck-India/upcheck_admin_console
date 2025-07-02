@@ -165,8 +165,19 @@ const userDropdownItems = [
               </span>
             </div>
             
-            {/* Profile Dropdown */}
-            <div className="flex items-center">
+            {/* Mail and Profile */}
+            <div className="flex items-center space-x-4">
+              {/* Mail Icon */}
+              <Link 
+                href="/mail" 
+                className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
+                title="Mail"
+              >
+                <Mail className="h-5 w-5" />
+                <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
+              </Link>
+              
+              {/* Profile Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
