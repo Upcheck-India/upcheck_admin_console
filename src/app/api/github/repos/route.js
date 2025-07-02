@@ -54,15 +54,25 @@ export async function GET(request) {
         : `https://api.github.com/user/repos?sort=updated&per_page=10`;
 
       console.log('Fetching from GitHub API:', apiUrl);
+      console.log('Making GitHub API request to:', apiUrl);
       const response = await fetch(apiUrl, {
         headers: {
           'Authorization': `token ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
-          'User-Agent': 'Upcheck-Admin-App', // GitHub API requires a user agent
+          'User-Agent': 'Upcheck-Admin-App',
         },
       });
       
       console.log('GitHub API response status:', response.status);
+      const rateLimitRemaining = response.headers.get('x-ratelimit-remaining');
+      console.log('GitHub API rate limit remaining:', rateLimitRemaining);
+      
+      if (response.status === 403 && rateLimitRemaining === '0') {
+        const resetTime = response.headers.get('x-ratelimit-reset');
+        const resetDate = new Date(resetTime * 1000);
+        console.error('GitHub API rate limit exceeded. Resets at:', resetDate);
+        throw new Error(`GitHub API rate limit exceeded. Try again after ${resetDate.toLocaleTimeString()}`);
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -72,10 +82,12 @@ export async function GET(request) {
 
       let repositories = [];
       if (searchTerm) {
-        const data = await response.json();
-        repositories = data.items || [];
+        const searchData = await response.json();
+        console.log('GitHub search results:', searchData);
+        repositories = searchData.items || [];
       } else {
         repositories = await response.json();
+        console.log('GitHub repositories fetched:', repositories);
       }
 
       // Format the repositories

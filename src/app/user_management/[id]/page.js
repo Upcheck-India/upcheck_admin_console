@@ -276,11 +276,52 @@ export default function UserProfilePage() {
                   </div>
                   
                   {/* Connected Accounts - Read Only */}
-                {userData.connectedAccounts?.length > 0 && (
+                {/* Connected Accounts - Social Profiles */}
+                {(userData.connectedAccounts?.length > 0 || userData.oauth) && (
                   <div className="mt-8">
-                    <h3 className="text-sm font-medium text-gray-500 mb-3">CONNECTED ACCOUNTS</h3>
+                    <h3 className="text-sm font-medium text-gray-500 mb-3">SOCIAL PROFILES</h3>
                     <div className="space-y-3">
-                      {userData.connectedAccounts.map(providerId => {
+                      {/* GitHub Profile */}
+                      {userData.connectedAccounts?.includes('github') && userData.oauth?.github?.login && (
+                        <a 
+                          href={`https://github.com/${userData.oauth.github.login}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                        >
+                          <div className="p-2 rounded-lg bg-gray-100 bg-opacity-30">
+                            <Github className="h-5 w-5 text-gray-800" />
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-gray-700">GitHub Profile</p>
+                            <p className="text-xs text-gray-500">View on GitHub</p>
+                          </div>
+                        </a>
+                      )}
+
+                      {/* Google Profile */}
+                      {userData.connectedAccounts?.includes('google') && userData.oauth?.google?.email && (
+                        <a 
+                          href={`https://myaccount.google.com/profile`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
+                        >
+                          <div className="p-2 rounded-lg bg-red-100 bg-opacity-30">
+                            <Google className="h-5 w-5 text-red-600" />
+                          </div>
+                          <div className="ml-3">
+                            <p className="text-sm font-medium text-gray-700">Google Account</p>
+                            <p className="text-xs text-gray-500">View Google Profile</p>
+                          </div>
+                        </a>
+                      )}
+
+                      {/* Other connected accounts without OAuth data */}
+                      {userData.connectedAccounts?.map(providerId => {
+                        // Skip already displayed providers
+                        if (['github', 'google'].includes(providerId)) return null;
+                        
                         const provider = oauthProviders.find(p => p.id === providerId);
                         if (!provider) return null;
                         
@@ -289,9 +330,10 @@ export default function UserProfilePage() {
                             <div className={`p-2 rounded-lg ${provider.color} bg-opacity-30`}>
                               <provider.icon className="h-5 w-5" />
                             </div>
-                            <span className="ml-3 text-sm font-medium text-gray-700">
-                              {provider.name} (Connected)
-                            </span>
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-gray-700">{provider.name}</p>
+                              <p className="text-xs text-gray-500">Connected</p>
+                            </div>
                           </div>
                         );
                       })}
