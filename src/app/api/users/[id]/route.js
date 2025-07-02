@@ -4,6 +4,43 @@ import clientPromise from '../../../../lib/mongodb';
 import crypto from 'crypto';
 import { ObjectId } from 'mongodb';
 
+// GET user by ID
+export async function GET(request, { params }) {
+  try {
+    const client = await clientPromise;
+    const db = client.db("resources");
+    const userId = params.id;
+
+    // Validate ObjectId
+    if (!ObjectId.isValid(userId)) {
+      return NextResponse.json(
+        { error: 'Invalid user ID' },
+        { status: 400 }
+      );
+    }
+
+    const user = await db.collection('admin_users').findOne(
+      { _id: new ObjectId(userId) },
+      { projection: { password: 0 } } // Exclude password from response
+    );
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(user);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
 const ROLES_HIERARCHY = {
   'Console admin': ['Admin', 'Member', 'Intern'],
   'Admin': ['Member', 'Intern'],

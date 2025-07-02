@@ -367,15 +367,21 @@ const UserManagement = () => {
 
   const UserTableRow = ({ user }) => (
     <tr className="hover:bg-gray-50">
-      <td className="px-6 py-4">
+      <td className="px-6 py-4 whitespace-nowrap">
         <div className="flex items-center">
-          <div className="h-10 w-10 rounded-full bg-blue-600 flex items-center justify-center">
-            <span className="text-white text-sm font-medium">
-              {user.username.charAt(0).toUpperCase()}
-            </span>
+          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <User className="h-5 w-5 text-gray-400" />
           </div>
           <div className="ml-4">
-            <div className="text-sm font-medium text-gray-900">{user.username}</div>
+            <div className="text-sm font-medium text-blue-600 hover:text-blue-800">
+              <button 
+                onClick={() => router.push(`/user_management/${user._id}`)}
+                className="hover:underline focus:outline-none"
+              >
+                {user.username}
+              </button>
+            </div>
+            <div className="text-sm text-gray-500">{user.email}</div>
           </div>
         </div>
       </td>
@@ -786,24 +792,42 @@ const UserManagement = () => {
           </div>
           
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">User</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Department</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Permissions</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {paginateUsers(sortUsers(filterUsers(users))).map(user => (
-                  <UserTableRow key={user._id} user={user} />
-                ))}
-              </tbody>
-            </table>
+            <div className="inline-block min-w-full align-middle">
+              <div className="overflow-hidden border-b border-gray-200 sm:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        User
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Role
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Department
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Email
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Last Login
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Permissions
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paginateUsers(sortUsers(filterUsers(users))).map(user => (
+                      <UserTableRow key={user._id} user={user} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
 
           <PaginationControls totalUsers={sortUsers(filterUsers(users)).length} />

@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
+import { debounce } from 'lodash';
 import {
   User,
   Shield,
@@ -16,24 +18,161 @@ import {
   Lock,
   CheckCircle2,
   MapPin,
-  Link,
+  Link as LinkIcon,
   Mail as AlternativeMail,
   FileText,
   Save,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Github,
+  Unlink,
+  Link,
+  ExternalLink,
+  Search,
+  Star,
+  GitFork,
+  Plus,
+  Loader2,
+  Users,
+  Code
 } from 'lucide-react';
 import SecureLoading from "../../components/SecureLoading";
+import { FaGoogle } from "react-icons/fa";
 
 export default function ProfilePage() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({});
+  const [editForm, setEditForm] = useState({
+    phone: '',
+    location: '',
+    alternateEmail: ''
+  });
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectedAccounts, setConnectedAccounts] = useState([]);
+  const [githubRepos, setGithubRepos] = useState([]);
+  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+  const [repoSearchTerm, setRepoSearchTerm] = useState('');
+  const [showAllRepos, setShowAllRepos] = useState(false);
   const router = useRouter();
+
+  // OAuth provider configuration
+  const oauthProviders = [
+    {
+      id: 'google',
+      name: 'Google',
+      icon: () => (
+        <div className="w-5 h-5 rounded flex items-center justify-center">
+          <FaGoogle />
+        </div>
+      ),
+      color: 'bg-yellow-100 text-yellow-600 hover:bg-yellow-200',
+      connectEndpoint: '/api/auth/google/connect',
+      disconnectEndpoint: '/api/auth/google/disconnect',
+      hasAdditionalInfo: false,
+      isRestricted: true
+    },
+    {
+      id: 'github',
+      name: 'GitHub',
+      icon: Github,
+      color: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
+      connectEndpoint: '/api/auth/github/connect',
+      disconnectEndpoint: '/api/auth/github/disconnect',
+      hasAdditionalInfo: true,
+      isRestricted: false
+    },
+    {
+      id: 'reddit',
+      name: 'Reddit',
+      icon: () => (
+        <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
+          <span className="text-white text-xs font-bold">r</span>
+        </div>
+      ),
+      color: 'bg-orange-100 text-orange-600 hover:bg-orange-200',
+      connectEndpoint: '/api/auth/reddit/connect',
+      disconnectEndpoint: '/api/auth/reddit/disconnect',
+      hasAdditionalInfo: false,
+      isRestricted: true
+    },
+    {
+      id: 'vercel',
+      name: 'Vercel',
+      icon: () => (
+        <div className="w-5 h-5 bg-black rounded flex items-center justify-center">
+          <span className="text-white text-xs font-bold">▲</span>
+        </div>
+      ),
+      color: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
+      connectEndpoint: '/api/auth/vercel/connect',
+      disconnectEndpoint: '/api/auth/vercel/disconnect',
+      hasAdditionalInfo: false,
+      isRestricted: true
+    }
+  ];
+
+  const fetchConnectedAccounts = async () => {
+    try {
+      const res = await fetch('/api/auth/connected-accounts', {
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setConnectedAccounts(data.connectedAccounts || []);
+        
+        // If GitHub is connected, fetch repositories
+        if (data.connectedAccounts?.includes('github')) {
+          fetchGithubRepos();
+        } else {
+          setGithubRepos([]);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching connected accounts:', error);
+    }
+  };
+  
+  const fetchGithubRepos = async (searchTerm = '') => {
+    if (!connectedAccounts.includes('github')) return;
+    
+    try {
+      setIsLoadingRepos(true);
+      const res = await fetch(`/api/github/repos?q=${encodeURIComponent(searchTerm)}`, {
+        credentials: 'include'
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setGithubRepos(data.repositories || []);
+      } else {
+        throw new Error('Failed to fetch GitHub repositories');
+      }
+    } catch (error) {
+      console.error('Error fetching GitHub repositories:', error);
+      toast.error('Failed to load GitHub repositories');
+    } finally {
+      setIsLoadingRepos(false);
+    }
+  };
+  
+  // Debounced search for repositories
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedSearch = useCallback(
+    debounce((searchTerm) => {
+      fetchGithubRepos(searchTerm);
+    }, 500),
+    []
+  );
+  
+  const handleRepoSearch = (e) => {
+    const searchTerm = e.target.value;
+    setRepoSearchTerm(searchTerm);
+    debouncedSearch(searchTerm);
+  };
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -50,9 +189,10 @@ export default function ProfilePage() {
         }
 
         // Then fetch complete profile data
-        const profileRes = await fetch('/api/users/profile/get', {
-          credentials: 'include'
-        });
+        const [profileRes] = await Promise.all([
+          fetch('/api/users/profile/get', { credentials: 'include' }),
+          fetchConnectedAccounts()
+        ]);
 
         if (!profileRes.ok) {
           throw new Error('Failed to fetch profile data');
@@ -61,9 +201,14 @@ export default function ProfilePage() {
         const profileData = await profileRes.json();
         setUserData(profileData.user);
         setEditForm({
+          username: profileData.user.username || '',
+          email: profileData.user.email || '',
+          firstName: profileData.user.firstName || '',
+          lastName: profileData.user.lastName || '',
           bio: profileData.user.bio || '',
+          phone: profileData.user.phone || '',
           location: profileData.user.location || '',
-          alternativeEmail: profileData.user.alternativeEmail || '',
+          alternateEmail: profileData.user.alternateEmail || '',
           linkedinProfile: profileData.user.linkedinProfile || ''
         });
       } catch (error) {
@@ -103,6 +248,49 @@ export default function ProfilePage() {
       console.error('Error updating profile:', error);
       setError('Failed to update profile');
       setTimeout(() => setError(null), 3000);
+    }
+  };
+
+  const handleOAuthConnection = async (provider, action = 'connect') => {
+    if (provider.isRestricted && action === 'connect') {
+      toast.error(`${provider.name} integration is currently restricted`);
+      return;
+    }
+
+    try {
+      setIsConnecting(true);
+      const endpoint = action === 'connect' 
+        ? provider.connectEndpoint 
+        : provider.disconnectEndpoint;
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ redirect: window.location.href })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to ${action} ${provider.name}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.redirect) {
+        // For OAuth flow, redirect to provider
+        window.location.href = data.redirect;
+      } else {
+        // For disconnect, refresh the connected accounts
+        await fetchConnectedAccounts();
+        toast.success(`${provider.name} account ${action === 'connect' ? 'connected' : 'disconnected'} successfully`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing ${provider.name}:`, error);
+      toast.error(`Failed to ${action} ${provider.name}`);
+    } finally {
+      setIsConnecting(false);
     }
   };
 
@@ -157,6 +345,40 @@ export default function ProfilePage() {
       setTimeout(() => setError(null), 3000);
     }
   };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handlePhoneChange = (e) => {
+    // Format phone number as user types
+    const value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+    let formattedValue = '';
+    
+    if (value.length > 3 && value.length <= 6) {
+      formattedValue = `(${value.slice(0, 3)}) ${value.slice(3)}`;
+    } else if (value.length > 6) {
+      formattedValue = `(${value.slice(0, 3)}) ${value.slice(3, 6)}-${value.slice(6, 10)}`;
+    } else {
+      formattedValue = value;
+    }
+    
+    setEditForm(prev => ({
+      ...prev,
+      phone: formattedValue
+    }));
+  };
+
+  const filteredRepos = githubRepos.filter(repo =>
+    repo.name.toLowerCase().includes(repoSearchTerm.toLowerCase()) ||
+    (repo.description && repo.description.toLowerCase().includes(repoSearchTerm.toLowerCase()))
+  );
+
+  const displayedRepos = showAllRepos ? filteredRepos : filteredRepos.slice(0, 6);
 
   if (loading) {
     return <SecureLoading />;
@@ -222,160 +444,196 @@ export default function ProfilePage() {
                 {isEditing ? 'Cancel' : 'Edit'}
               </button>
             </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Email</span>
-                <span className="text-gray-900 flex items-center">
-                  <Mail className="w-4 h-4 mr-2 text-blue-500" />
-                  {userData?.email || 'No email added'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Department</span>
-                <span className="text-gray-900 flex items-center">
-                  <Building2 className="w-4 h-4 mr-2 text-blue-500" />
-                  {userData?.department || 'Unassigned'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Role</span>
-                <span className="text-gray-900 flex items-center">
-                  <Briefcase className="w-4 h-4 mr-2 text-blue-500" />
-                  {userData?.role}
-                </span>
-              </div>
-              {isEditing ? (
-                <div className="space-y-4 pt-4 border-t">
+            
+            {isEditing ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
-                    <textarea
-                      value={editForm.bio || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value || null }))}
-                      rows="3"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Tell us about yourself..."
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <label className="block text-sm font-medium text-gray-700">First Name</label>
                     <input
                       type="text"
-                      value={editForm.location || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, location: e.target.value || null }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Your location"
+                      name="firstName"
+                      value={editForm.firstName}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Alternative Email</label>
+                    <label className="block text-sm font-medium text-gray-700">Last Name</label>
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={editForm.lastName}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Email</label>
                     <input
                       type="email"
-                      value={editForm.alternativeEmail || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, alternativeEmail: e.target.value || null }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Backup email address"
+                      name="email"
+                      value={editForm.email}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn Profile</label>
+                    <label className="block text-sm font-medium text-gray-700">Alternate Email</label>
                     <input
-                      type="url"
-                      value={editForm.linkedinProfile || ''}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, linkedinProfile: e.target.value || null }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="https://linkedin.com/in/..."
+                      type="email"
+                      name="alternateEmail"
+                      value={editForm.alternateEmail}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                    <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span className="text-gray-500 sm:text-sm">+1</span>
+                      </div>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={editForm.phone}
+                        onChange={handlePhoneChange}
+                        className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-12 sm:text-sm border-gray-300 rounded-md"
+                        placeholder="(123) 456-7890"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Location</label>
+                    <input
+                      type="text"
+                      name="location"
+                      value={editForm.location}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      placeholder="City, Country"
+                    />
+                  </div>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+                  <textarea
+                    value={editForm.bio || ''}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Tell us about yourself..."
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">LinkedIn Profile</label>
+                  <input
+                    type="url"
+                    name="linkedinProfile"
+                    value={editForm.linkedinProfile || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="https://linkedin.com/in/..."
+                  />
+                </div>
+                
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-6">
                   <button
-                    onClick={handleSaveProfile}
-                    className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center"
+                    type="button"
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
-                    <Save className="w-4 h-4 mr-2" />
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    className="inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
                     Save Changes
                   </button>
                 </div>
-              ) : (
-                <>
-                  {userData?.bio && (
-                    <div className="pt-4 border-t">
-                      <span className="text-gray-600 flex items-center mb-2">
-                        <FileText className="w-4 h-4 mr-2 text-blue-500" />
-                        Bio
-                      </span>
-                      <p className="text-gray-900">{userData.bio}</p>
-                    </div>
-                  )}
-                  {userData?.location && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Location</span>
-                      <span className="text-gray-900 flex items-center">
-                        <MapPin className="w-4 h-4 mr-2 text-blue-500" />
-                        {userData.location}
-                      </span>
-                    </div>
-                  )}
-                  {userData?.alternativeEmail && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Alternative Email</span>
-                      <span className="text-gray-900 flex items-center">
-                        <AlternativeMail className="w-4 h-4 mr-2 text-blue-500" />
-                        {userData.alternativeEmail}
-                      </span>
-                    </div>
-                  )}
-                  {userData?.linkedinProfile && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-600">LinkedIn</span>
-                      <a
-                        href={userData.linkedinProfile}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:text-blue-700 flex items-center"
-                      >
-                        <Link className="w-4 h-4 mr-2" />
-                        View Profile
-                      </a>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Email</span>
+                  <span className="text-gray-900 flex items-center">
+                    <Mail className="w-4 h-4 mr-2 text-blue-500" />
+                    {userData?.email || 'No email added'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Department</span>
+                  <span className="text-gray-900 flex items-center">
+                    <Building2 className="w-4 h-4 mr-2 text-blue-500" />
+                    {userData?.department || 'Unassigned'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Role</span>
+                  <span className="text-gray-900 flex items-center">
+                    <Briefcase className="w-4 h-4 mr-2 text-blue-500" />
+                    {userData?.role}
+                  </span>
+                </div>
+                {userData?.phone && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Phone</span>
+                    <span className="text-gray-900">{userData.phone}</span>
+                  </div>
+                )}
+                {userData?.location && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Location</span>
+                    <span className="text-gray-900 flex items-center">
+                      <MapPin className="w-4 h-4 mr-2 text-blue-500" />
+                      {userData.location}
+                    </span>
+                  </div>
+                )}
+                {userData?.bio && (
+                  <div className="pt-2">
+                    <span className="text-gray-600 block mb-1">Bio</span>
+                    <p className="text-gray-900">{userData.bio}</p>
+                  </div>
+                )}
+                {userData?.linkedinProfile && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">LinkedIn</span>
+                    <a
+                      href={userData.linkedinProfile}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline flex items-center"
+                    >
+                      <LinkIcon className="w-4 h-4 mr-1" />
+                      View Profile
+                    </a>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-
-          {/* Permissions */}
+          
+          {/* Notifications */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
-              <Shield className="w-5 h-5 mr-2 text-purple-500" />
-              Permissions
-            </h2>
-            <div className="grid grid-cols-2 gap-2">
-              {userData?.perms?.map((perm, index) => (
-                <span
-                  key={index}
-                  className="px-3 py-2 bg-purple-50 text-purple-700 rounded-lg text-sm flex items-center"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  {perm}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Activity */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
-              <Clock className="w-5 h-5 mr-2 text-teal-500" />
-              Activity
+              <Bell className="w-5 h-5 mr-2 text-blue-500" />
+              Notifications
             </h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Last Login</span>
-                <span className="text-gray-900">
-                  {userData?.lastLogin ? new Date(userData.lastLogin).toLocaleString() : 'Never'}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Notifications</span>
+                <span className="text-gray-600">Email Notifications</span>
                 <span className="flex items-center">
                   <Bell className="w-4 h-4 mr-2 text-teal-500" />
                   <span className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full text-sm">
@@ -385,8 +643,199 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Security */}
+        {/* Connected Accounts Section */}
+        <div className="mt-6">
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
+              <Users className="w-5 h-5 mr-2 text-purple-500" />
+              Connected Accounts
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {oauthProviders.map((provider) => {
+                const isConnected = connectedAccounts.includes(provider.id);
+                const IconComponent = provider.icon;
+                
+                return (
+                  <div
+                    key={provider.id}
+                    className={`relative p-4 rounded-lg border-2 transition-all ${
+                      isConnected 
+                        ? 'border-green-200 bg-green-50' 
+                        : provider.isRestricted 
+                          ? 'border-gray-200 bg-gray-50 opacity-60' 
+                          : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className={`p-2 rounded-lg ${provider.color}`}>
+                          <IconComponent />
+                        </div>
+                        <div>
+                          <h3 className="font-medium text-gray-900">{provider.name}</h3>
+                          <p className="text-sm text-gray-500">
+                            {isConnected ? 'Connected' : 
+                             provider.isRestricted ? 'Currently restricted' : 'Not connected'}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center space-x-2">
+                        {isConnected && (
+                          <CheckCircle2 className="w-5 h-5 text-green-500" />
+                        )}
+                        {provider.isRestricted && !isConnected && (
+                          <Lock className="w-4 h-4 text-gray-400" />
+                        )}
+                        <button
+                          onClick={() => handleOAuthConnection(provider, isConnected ? 'disconnect' : 'connect')}
+                          disabled={isConnecting || (provider.isRestricted && !isConnected)}
+                          className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
+                            isConnected
+                              ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                              : provider.isRestricted
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                          }`}
+                        >
+                          {isConnecting ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : isConnected ? (
+                            'Disconnect'
+                          ) : provider.isRestricted ? (
+                            'Unavailable'
+                          ) : (
+                            'Connect'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* GitHub Repositories Section */}
+        {connectedAccounts.includes('github') && (
+          <div className="mt-6">
+            <div className="bg-white rounded-xl shadow-sm p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold flex items-center text-gray-900">
+                  <Code className="w-5 h-5 mr-2 text-gray-700" />
+                  GitHub Repositories
+                </h2>
+                <a
+                  href={`https://github.com/${userData?.githubUsername || ''}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
+                >
+                  <ExternalLink className="w-4 h-4 mr-1" />
+                  View GitHub Profile
+                </a>
+              </div>
+              
+              {/* Search Bar */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search repositories..."
+                  value={repoSearchTerm}
+                  onChange={handleRepoSearch}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              
+              {/* Repositories Grid */}
+              {isLoadingRepos ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-500">Loading repositories...</span>
+                </div>
+              ) : displayedRepos.length > 0 ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {displayedRepos.map((repo) => (
+                      <div
+                        key={repo.id}
+                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900 hover:text-blue-600">
+                              <a
+                                href={repo.html_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center"
+                              >
+                                {repo.name}
+                                <ExternalLink className="w-3 h-3 ml-1" />
+                              </a>
+                            </h3>
+                            {repo.description && (
+                              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                {repo.description}
+                              </p>
+                            )}
+                          </div>
+                          {repo.private && (
+                            <Lock className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center justify-between text-sm text-gray-500">
+                          <div className="flex items-center space-x-4">
+                            {repo.language && (
+                              <div className="flex items-center">
+                                <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
+                                {repo.language}
+                              </div>
+                            )}
+                            <div className="flex items-center">
+                              <Star className="w-3 h-3 mr-1" />
+                              {repo.stargazers_count}
+                            </div>
+                            <div className="flex items-center">
+                              <GitFork className="w-3 h-3 mr-1" />
+                              {repo.forks_count}
+                            </div>
+                          </div>
+                          <span className="text-xs">
+                            Updated {new Date(repo.updated_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {filteredRepos.length > 6 && (
+                    <div className="mt-4 text-center">
+                      <button
+                        onClick={() => setShowAllRepos(!showAllRepos)}
+                        className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        {showAllRepos ? 'Show Less' : `Show All ${filteredRepos.length} Repositories`}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  {repoSearchTerm ? 'No repositories found matching your search.' : 'No repositories found.'}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Security Section */}
+        <div className="mt-6">
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
               <Lock className="w-5 h-5 mr-2 text-red-500" />
@@ -405,8 +854,8 @@ export default function ProfilePage() {
               </button>
               
               <button
-                disabled
-                className="w-full px-4 py-2 bg-gray-100 text-gray-400 rounded-lg cursor-not-allowed flex items-center justify-center"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-full px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center"
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Delete Account
@@ -422,7 +871,7 @@ export default function ProfilePage() {
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Account</h3>
             <p className="text-gray-600 mb-4">
-              {userData.perms?.includes('users.manage')
+              {userData?.perms?.includes('users.manage')
                 ? 'Are you sure you want to delete your account? This action cannot be undone.'
                 : 'Please contact an administrator to delete your account.'}
             </p>
@@ -433,7 +882,7 @@ export default function ProfilePage() {
               >
                 Cancel
               </button>
-              {userData.perms?.includes('users.manage') && (
+              {userData?.perms?.includes('users.manage') && (
                 <button
                   onClick={handleDeleteAccount}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
