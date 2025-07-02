@@ -26,6 +26,7 @@ import {
   Unlink,
   Link
 } from 'lucide-react';
+import { FaLinkedin } from 'react-icons/fa';
 
 // Simple loading spinner component
 const LoadingSpinner = () => (

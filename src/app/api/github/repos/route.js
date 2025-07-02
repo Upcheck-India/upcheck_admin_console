@@ -68,8 +68,8 @@ export async function GET(request) {
 
       // Fetch user's GitHub repositories
       const apiUrl = searchTerm 
-        ? `https://api.github.com/search/repositories?q=${encodeURIComponent(searchTerm)}+user:${githubUser.login}&sort=updated&per_page=10`
-        : `https://api.github.com/user/repos?sort=updated&per_page=10&affiliation=owner`;
+        ? `https://api.github.com/search/repositories?q=${encodeURIComponent(searchTerm)}+user:${githubUser.login}+is:public&sort=updated&per_page=30`
+        : `https://api.github.com/user/repos?visibility=public&sort=updated&per_page=30`;
 
       console.log('Fetching from GitHub API:', apiUrl);
       const response = await fetch(apiUrl, {
@@ -108,33 +108,34 @@ export async function GET(request) {
       }
 
       // Format the repositories
-      const formattedRepos = repositories.map(repo => {
-        console.log('Processing repo:', repo.full_name);
-        return {
-          id: repo.id,
-          name: repo.name,
-          fullName: repo.full_name,
-          description: repo.description,
-          url: repo.html_url,
-          stars: repo.stargazers_count || 0,
-          forks: repo.forks_count || 0,
-          language: repo.language || null,
-          updatedAt: repo.updated_at || repo.pushed_at || new Date().toISOString(),
-          private: repo.private || false,
-          fork: repo.fork || false,
-          defaultBranch: repo.default_branch || 'main',
-          size: repo.size || 0,
-          openIssues: repo.open_issues_count || 0,
-          watchers: repo.watchers_count || 0,
-          createdAt: repo.created_at || new Date().toISOString(),
-          pushedAt: repo.pushed_at || new Date().toISOString(),
-          archived: repo.archived || false,
-          disabled: repo.disabled || false,
-          visibility: repo.visibility || 'private',
-          allowForking: repo.allow_forking || false,
-          permissions: repo.permissions || {}
-        };
-      });
+      const formattedRepos = repositories
+        .filter(repo => !repo.private) // Ensure only public repositories
+        .map(repo => {
+          console.log('Processing repo:', repo.full_name);
+          return {
+            id: repo.id,
+            name: repo.name,
+            fullName: repo.full_name,
+            description: repo.description,
+            url: repo.html_url,
+            stars: repo.stargazers_count || 0,
+            private: repo.private || false,
+            fork: repo.fork || false,
+            updatedAt: repo.updated_at ? new Date(repo.updated_at).toISOString() : new Date().toISOString(),
+            language: repo.language || null,
+            defaultBranch: repo.default_branch || 'main',
+            size: repo.size || 0,
+            openIssues: repo.open_issues_count || 0,
+            watchers: repo.watchers_count || 0,
+            createdAt: repo.created_at ? new Date(repo.created_at).toISOString() : new Date().toISOString(),
+            pushedAt: repo.pushed_at ? new Date(repo.pushed_at).toISOString() : new Date().toISOString(),
+            archived: repo.archived || false,
+            disabled: repo.disabled || false,
+            visibility: repo.visibility || 'public',
+            allowForking: repo.allow_forking || false,
+            permissions: repo.permissions || {}
+          };
+        });
 
       return new Response(JSON.stringify({ 
         repositories: formattedRepos 

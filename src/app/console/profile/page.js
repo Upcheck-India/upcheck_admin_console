@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
+import { formatDistanceToNow } from 'date-fns';
 import { debounce } from 'lodash';
 import {
   User,
@@ -971,55 +972,55 @@ export default function ProfilePage() {
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {displayedRepos.map((repo) => (
-                      <div
-                        key={repo.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex-1">
-                            <h3 className="font-medium text-gray-900 hover:text-blue-600">
-                              <a
-                                href={repo.html_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center"
-                              >
+                      <div key={repo.id} className="group">
+                        <a
+                          href={repo.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow hover:border-blue-200 h-full"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h3 className="font-medium text-gray-900 group-hover:text-blue-600 flex items-center">
                                 {repo.name}
-                                <ExternalLink className="w-3 h-3 ml-1" />
-                              </a>
-                            </h3>
-                            {repo.description && (
-                              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                                {repo.description}
-                              </p>
+                                <ExternalLink className="w-3 h-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              </h3>
+                              {repo.description && (
+                                <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                  {repo.description}
+                                </p>
+                              )}
+                            </div>
+                            {repo.private && (
+                              <Lock className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
                             )}
                           </div>
-                          {repo.private && (
-                            <Lock className="w-4 h-4 text-gray-400 ml-2 flex-shrink-0" />
-                          )}
-                        </div>
-                        
-                        <div className="flex items-center justify-between text-sm text-gray-500">
-                          <div className="flex items-center space-x-4">
-                            {repo.language && (
+                          
+                          <div className="flex items-center justify-between text-sm text-gray-500 mt-3">
+                            <div className="flex items-center space-x-4">
+                              {repo.language && (
+                                <div className="flex items-center">
+                                  <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
+                                  <span>{repo.language}</span>
+                                </div>
+                              )}
                               <div className="flex items-center">
-                                <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-                                {repo.language}
+                                <Star className="w-3 h-3 mr-1" />
+                                <span>{repo.stars || 0}</span>
                               </div>
-                            )}
-                            <div className="flex items-center">
-                              <Star className="w-3 h-3 mr-1" />
-                              {repo.stargazers_count}
+                              <div className="flex items-center">
+                                <GitFork className="w-3 h-3 mr-1" />
+                                <span>{repo.forks || 0}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center">
-                              <GitFork className="w-3 h-3 mr-1" />
-                              {repo.forks_count}
-                            </div>
+                            <span 
+                              className="text-xs text-gray-400" 
+                              title={repo.updatedAt ? new Date(repo.updatedAt).toLocaleString() : 'No update date'}
+                            >
+                              {repo.updatedAt ? `Updated ${formatDistanceToNow(new Date(repo.updatedAt), { addSuffix: true })}` : ''}
+                            </span>
                           </div>
-                          <span className="text-xs">
-                            Updated {new Date(repo.updated_at).toLocaleDateString()}
-                          </span>
-                        </div>
+                        </a>
                       </div>
                     ))}
                   </div>
