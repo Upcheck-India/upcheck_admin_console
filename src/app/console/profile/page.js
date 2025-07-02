@@ -44,7 +44,7 @@ import dynamic from 'next/dynamic';
 
 // Dynamically import the GithubRepoManager component with no SSR
 const GithubRepoManager = dynamic(
-  () => import('@/components/GithubRepoManager'),
+  () => import('../../../components/GithubRepoManager'),
   { ssr: false }
 );
 import SecureLoading from "../../components/SecureLoading";

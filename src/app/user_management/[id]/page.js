@@ -34,7 +34,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { FaLinkedin } from 'react-icons/fa';
-import GithubReposDialog from '@/components/GithubReposDialog';
+import GithubReposDialog from '../../../components/GithubReposDialog';
 
 // Simple loading spinner component
 const LoadingSpinner = () => (
