@@ -145,17 +145,45 @@ export default function ProfilePage() {
   };
   
   const fetchGithubRepos = async (searchTerm = '') => {
-    if (!connectedAccounts.includes('github')) return;
+    if (!connectedAccounts.includes('github')) {
+      console.log('GitHub not in connected accounts, skipping fetch');
+      return;
+    }
     
     try {
       setIsLoadingRepos(true);
       console.log('Fetching GitHub repos with search:', searchTerm);
-      const res = await fetch(`/api/github/repos?q=${encodeURIComponent(searchTerm)}`, {
+      
+      // First, verify we have a valid session
+      const sessionRes = await fetch('/api/auth/session', {
         credentials: 'include',
-        cache: 'no-store' // Ensure fresh data
+        cache: 'no-store'
       });
       
+      if (!sessionRes.ok) {
+        console.error('Failed to verify session');
+        throw new Error('Session verification failed');
+      }
+      
+      const sessionData = await sessionRes.json();
+      console.log('Session data:', sessionData);
+      
+      // Then fetch the repositories
+      const apiUrl = `/api/github/repos?q=${encodeURIComponent(searchTerm)}`;
+      console.log('Fetching from:', apiUrl);
+      
+      const res = await fetch(apiUrl, {
+        credentials: 'include',
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      console.log('Response status:', res.status);
       const data = await res.json();
+      console.log('Response data:', data);
       
       if (!res.ok) {
         console.error('GitHub API error:', data);
@@ -167,7 +195,13 @@ export default function ProfilePage() {
       
       if (data.repositories && data.repositories.length === 0) {
         console.log('No repositories found - checking if this is expected');
-        // This is just for debugging - we'll let the UI show "No repositories found"
+        // Check if we have a valid GitHub username
+        if (userData?.oauth?.github?.login) {
+          console.log(`User has GitHub username: ${userData.oauth.github.login}`);
+          console.log('This might be because the token has no repository access or the user has no repositories');
+        } else {
+          console.log('No GitHub username found in user data');
+        }
       }
     } catch (error) {
       console.error('Error fetching GitHub repositories:', error);

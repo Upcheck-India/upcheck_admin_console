@@ -282,9 +282,9 @@ export default function UserProfilePage() {
                     <h3 className="text-sm font-medium text-gray-500 mb-3">SOCIAL PROFILES</h3>
                     <div className="space-y-3">
                       {/* GitHub Profile */}
-                      {userData.connectedAccounts?.includes('github') && userData.oauth?.github?.login && (
+                      {userData.connectedAccounts?.includes('github') && (userData.oauth?.github?.login || userData.githubUsername) && (
                         <a 
-                          href={`https://github.com/${userData.oauth.github.login}`}
+                          href={`https://github.com/${userData.oauth?.github?.login || userData.githubUsername}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
@@ -300,9 +300,16 @@ export default function UserProfilePage() {
                       )}
 
                       {/* Google Profile */}
-                      {userData.connectedAccounts?.includes('google') && userData.oauth?.google?.email && (
+                      {/* Google Profile */}
+                      {userData.connectedAccounts?.includes('google') && (userData.oauth?.google?.email || userData.email) && (
                         <a 
                           href={`https://myaccount.google.com/profile`}
+                          onClick={(e) => {
+                            if (!userData.oauth?.google?.email && !userData.email) {
+                              e.preventDefault();
+                              toast.error('No Google email found');
+                            }
+                          }}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
