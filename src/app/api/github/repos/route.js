@@ -2,9 +2,11 @@ import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 
 export async function GET(request) {
+  console.log('GitHub Repos API called');
   // Get the current user's session
   const sessionToken = cookies().get('admin_token')?.value;
   if (!sessionToken) {
+    console.error('No session token found');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -21,20 +23,26 @@ export async function GET(request) {
     });
 
     if (!user) {
+      console.error('User not found for session token');
       return new Response(JSON.stringify({ error: 'User not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('Found user:', user.email);
 
     // Check if GitHub is connected
     const githubToken = user.oauth?.github?.accessToken;
     if (!githubToken) {
+      console.error('GitHub not connected for user:', user.email);
       return new Response(JSON.stringify({ error: 'GitHub not connected' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('GitHub token found, fetching repositories...');
 
     const { searchParams } = new URL(request.url);
     const searchTerm = searchParams.get('q') || '';
@@ -45,15 +53,21 @@ export async function GET(request) {
         ? `https://api.github.com/search/repositories?q=${encodeURIComponent(searchTerm)}+user:${user.oauth.github.login}&sort=updated&per_page=10`
         : `https://api.github.com/user/repos?sort=updated&per_page=10`;
 
+      console.log('Fetching from GitHub API:', apiUrl);
       const response = await fetch(apiUrl, {
         headers: {
           'Authorization': `token ${githubToken}`,
           'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'Upcheck-Admin-App', // GitHub API requires a user agent
         },
       });
+      
+      console.log('GitHub API response status:', response.status);
 
       if (!response.ok) {
-        throw new Error(`GitHub API responded with status ${response.status}`);
+        const errorText = await response.text();
+        console.error('GitHub API error:', errorText);
+        throw new Error(`GitHub API error: ${response.status} - ${errorText}`);
       }
 
       let repositories = [];
@@ -93,9 +107,10 @@ export async function GET(request) {
       console.error('GitHub API Error:', error);
       return new Response(JSON.stringify({ 
         error: 'Failed to fetch GitHub repositories',
-        details: error.message 
+        details: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }), {
-        status: 500,
+        status: error.status || 500,
         headers: { 'Content-Type': 'application/json' },
       });
     }

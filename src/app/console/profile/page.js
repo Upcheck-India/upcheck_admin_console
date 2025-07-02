@@ -149,19 +149,30 @@ export default function ProfilePage() {
     
     try {
       setIsLoadingRepos(true);
+      console.log('Fetching GitHub repos with search:', searchTerm);
       const res = await fetch(`/api/github/repos?q=${encodeURIComponent(searchTerm)}`, {
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store' // Ensure fresh data
       });
       
-      if (res.ok) {
-        const data = await res.json();
-        setGithubRepos(data.repositories || []);
-      } else {
-        throw new Error('Failed to fetch GitHub repositories');
+      const data = await res.json();
+      
+      if (!res.ok) {
+        console.error('GitHub API error:', data);
+        throw new Error(data.error || 'Failed to fetch repositories');
+      }
+      
+      console.log('GitHub repos received:', data.repositories?.length || 0);
+      setGithubRepos(data.repositories || []);
+      
+      if (data.repositories && data.repositories.length === 0) {
+        console.log('No repositories found - checking if this is expected');
+        // This is just for debugging - we'll let the UI show "No repositories found"
       }
     } catch (error) {
       console.error('Error fetching GitHub repositories:', error);
-      toast.error('Failed to load GitHub repositories');
+      toast.error(`Failed to load repositories: ${error.message}`);
+      setGithubRepos([]); // Clear any previous repos on error
     } finally {
       setIsLoadingRepos(false);
     }
@@ -761,10 +772,16 @@ export default function ProfilePage() {
                   GitHub Repositories
                 </h2>
                 <a
-                  href={`https://github.com/${userData?.githubUsername || ''}`}
+                  href={`https://github.com/${userData?.oauth?.github?.login || ''}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
+                  onClick={(e) => {
+                    if (!userData?.oauth?.github?.login) {
+                      e.preventDefault();
+                      toast.error('GitHub username not available');
+                    }
+                  }}
                 >
                   <ExternalLink className="w-4 h-4 mr-1" />
                   View GitHub Profile
