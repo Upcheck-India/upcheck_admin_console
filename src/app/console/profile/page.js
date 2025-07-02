@@ -107,7 +107,7 @@ export default function ProfilePage() {
       name: 'Reddit',
       icon: () => (
         <div className="w-5 h-5 bg-orange-500 rounded-full flex items-center justify-center">
-          <span className="text-white text-xs font-bold">r</span>
+          <span className="text-white text-xs font-bold">R</span>
         </div>
       ),
       color: 'bg-orange-100 text-orange-600 hover:bg-orange-200',
@@ -509,10 +509,18 @@ export default function ProfilePage() {
     }));
   };
 
-  const filteredRepos = githubRepos.filter(repo =>
-    repo.name.toLowerCase().includes(repoSearchTerm.toLowerCase()) ||
-    (repo.description && repo.description.toLowerCase().includes(repoSearchTerm.toLowerCase()))
-  );
+  // Ensure githubRepos is an array before filtering
+  const filteredRepos = (Array.isArray(githubRepos) ? githubRepos : []).filter(repo => {
+    try {
+      const searchTerm = repoSearchTerm.toLowerCase();
+      const name = repo?.name?.toLowerCase() || '';
+      const description = repo?.description?.toLowerCase() || '';
+      return name.includes(searchTerm) || description.includes(searchTerm);
+    } catch (error) {
+      console.error('Error filtering repositories:', error);
+      return false;
+    }
+  });
 
   const displayedRepos = showAllRepos ? filteredRepos : filteredRepos.slice(0, 6);
 

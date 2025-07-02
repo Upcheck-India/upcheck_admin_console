@@ -18,6 +18,7 @@ import {
   Trash2, 
   ChevronLeft, 
   ChevronRight,
+  CheckCircle as CheckCircle2,
   Lock, 
   Check, 
   X, 
@@ -31,7 +32,8 @@ import {
   Star,
   GitFork,
   Search,
-  Loader2
+  Loader2,
+  CircleAlert as AlertIcon
 } from 'lucide-react';
 import { FaLinkedin } from 'react-icons/fa';
 import GithubReposDialog from '../../../components/GithubReposDialog';
@@ -75,6 +77,7 @@ export default function UserProfilePage() {
   const [showGithubRepos, setShowGithubRepos] = useState(false);
   const [githubRepos, setGithubRepos] = useState([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
+  const [error, setError] = useState(null);
 
   const router = useRouter();
   const { id } = useParams();
@@ -130,7 +133,7 @@ export default function UserProfilePage() {
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-lg shadow p-6">
             <div className="text-center py-12">
-              <UserX className="mx-auto h-12 w-12 text-gray-400" />
+              <User className="mx-auto h-12 w-12 text-gray-400" />
               <h2 className="mt-4 text-xl font-medium text-gray-900">User Not Found</h2>
               <p className="mt-2 text-gray-600">The requested user could not be found.</p>
               <div className="mt-6">

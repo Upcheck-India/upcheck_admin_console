@@ -23,11 +23,18 @@ export default function GithubReposDialog({
   }, [isOpen, githubUsername]);
 
   useEffect(() => {
+    if (!Array.isArray(repos)) {
+      setFilteredRepos([]);
+      return;
+    }
+
     if (searchTerm) {
-      const filtered = repos.filter(repo => 
-        repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (repo.description && repo.description.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+      const searchTermLower = searchTerm.toLowerCase();
+      const filtered = repos.filter(repo => {
+        const nameMatch = repo?.name?.toLowerCase().includes(searchTermLower) || false;
+        const descMatch = repo?.description?.toLowerCase().includes(searchTermLower) || false;
+        return nameMatch || descMatch;
+      });
       setFilteredRepos(filtered);
     } else {
       setFilteredRepos(repos);
@@ -35,19 +42,41 @@ export default function GithubReposDialog({
   }, [searchTerm, repos]);
 
   const fetchRepos = async () => {
+    if (!githubUsername) {
+      setError('GitHub username is required');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
+    
     try {
-      const response = await fetch(`/api/github/repos?username=${githubUsername}`);
+      const response = await fetch(`/api/github/repos?username=${encodeURIComponent(githubUsername)}`);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch repositories');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to fetch repositories');
       }
-      const data = await response.json();
-      setRepos(data);
-      setFilteredRepos(data);
+      
+      const result = await response.json();
+      
+      // Handle the response format where repositories are in a 'repositories' property
+      const repositories = Array.isArray(result) ? result : (result.repositories || []);
+      
+      if (Array.isArray(repositories)) {
+        setRepos(repositories);
+        setFilteredRepos(repositories);
+      } else {
+        console.error('Unexpected response format:', result);
+        setError('Received invalid data from server');
+        setRepos([]);
+        setFilteredRepos([]);
+      }
     } catch (err) {
       console.error('Error fetching GitHub repos:', err);
-      setError('Failed to load repositories. Please try again.');
+      setError(err.message || 'Failed to load repositories. Please try again.');
+      setRepos([]);
+      setFilteredRepos([]);
     } finally {
       setIsLoading(false);
     }
