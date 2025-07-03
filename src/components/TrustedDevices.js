@@ -906,10 +906,11 @@ export default function TrustedDevices() {
             {isBiometricAvailable && !isAdding && (
               <div className="mt-4">
                 <button
-                  onClick={() => setIsAdding(true)}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  onClick={() => alert('Biometric device registration is currently unavailable. Please check back later.')}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 opacity-50 cursor-not-allowed"
+                  disabled
                 >
-                  <Plus className="w-3 h-3 mr-1" /> Add Biometric Device
+                  <Plus className="w-3 h-3 mr-1" /> Add Biometric Device (Temporarily Unavailable)
                 </button>
               </div>
             )}
