@@ -43,7 +43,9 @@ import {
   Smartphone,
   Laptop,
   Tablet,
-  Monitor
+  Monitor,
+  Fingerprint,
+  Download
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -85,6 +87,7 @@ export default function ProfilePage() {
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
   const [activeTab, setActiveTab] = useState('repositories');
   const [currentRepo, setCurrentRepo] = useState(null);
+  const [repositoriesLoaded, setRepositoriesLoaded] = useState(false);
   const router = useRouter();
 
   // OAuth provider configuration
@@ -939,7 +942,22 @@ export default function ProfilePage() {
             {/* Tab Content */}
             <div className="mt-4">
               {activeTab === 'repositories' ? (
-                <GithubRepoManager userId={userData._id} />
+                activeTab === 'repositories' && !repositoriesLoaded ? (
+                  <div className="text-center py-8">
+                    <button
+                      onClick={() => setRepositoriesLoaded(true)}
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      <Github className="w-4 h-4 mr-2" />
+                      Load Repositories
+                    </button>
+                    <p className="mt-2 text-sm text-gray-500">
+                      Load your GitHub repositories to manage them
+                    </p>
+                  </div>
+                ) : (
+                  <GithubRepoManager userId={userData._id} />
+                )
               ) : (
                 <div className="bg-blue-50 border border-blue-100 rounded-lg p-6">
                   <div className="flex items-start">
@@ -1001,8 +1019,8 @@ export default function ProfilePage() {
           {/* Trusted Devices Section */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
-              <ShieldCheck className="w-5 h-5 mr-2 text-green-600" />
-              Device Security
+              <Fingerprint className="w-5 h-5 mr-2 text-green-600" />
+              Secure Auth
             </h2>
             <TrustedDevices />
           </div>
