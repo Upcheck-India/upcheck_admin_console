@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fingerprintjs/fingerprintjs": "^4.6.2",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.2",
     "date-fns": "^4.1.0",

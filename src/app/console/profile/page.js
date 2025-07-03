@@ -8,6 +8,7 @@ import { debounce } from 'lodash';
 import {
   User,
   Shield,
+  ShieldCheck,
   Building2,
   Calendar,
   Mail,
@@ -38,7 +39,11 @@ import {
   Code,
   ChevronDown,
   ChevronUp,
-  CheckCircle
+  CheckCircle,
+  Smartphone,
+  Laptop,
+  Tablet,
+  Monitor
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 
@@ -49,6 +54,12 @@ const GithubRepoManager = dynamic(
 );
 import SecureLoading from "../../components/SecureLoading";
 import { FaGoogle } from "react-icons/fa";
+
+// Dynamically import the TrustedDevices component with no SSR
+const TrustedDevices = dynamic(
+  () => import('../../../components/TrustedDevices'),
+  { ssr: false, loading: () => <div className="p-4">Loading device security settings...</div> }
+);
 
 export default function ProfilePage() {
   const [userData, setUserData] = useState(null);
@@ -986,15 +997,25 @@ export default function ProfilePage() {
         )}
 
         {/* Security Section */}
-        <div className="mt-6">
+        <div className="mt-6 space-y-6">
+          {/* Trusted Devices Section */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
+              <ShieldCheck className="w-5 h-5 mr-2 text-green-600" />
+              Device Security
+            </h2>
+            <TrustedDevices />
+          </div>
+
+          {/* Account Security Section */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
               <Lock className="w-5 h-5 mr-2 text-red-500" />
-              Security
+              Account Security
             </h2>
             <div className="space-y-4">
-              <div className="text-gray-500 italic text-sm mb-4">
-                Security features are currently unavailable. Please contact an administrator for any security-related changes.
+              <div className="text-gray-500 text-sm mb-4">
+                Manage your account security settings
               </div>
               <button
                 disabled
