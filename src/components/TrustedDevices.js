@@ -21,7 +21,10 @@ import {
   Shield,
   Eye,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  MonitorSmartphone
 } from 'lucide-react';
 
 const deviceIcons = {
@@ -48,6 +51,10 @@ export default function TrustedDevices() {
   const [showInfo, setShowInfo] = useState(false);
   const [deviceName, setDeviceName] = useState('');
   const [currentDeviceId, setCurrentDeviceId] = useState(null);
+  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
+  const [isRegisteringBiometric, setIsRegisteringBiometric] = useState(false);
+  const [biometricError, setBiometricError] = useState(null);
+  const [biometricDevices, setBiometricDevices] = useState([]);
   const [currentDeviceInfo, setCurrentDeviceInfo] = useState(null);
   const [isCurrentDeviceTrusted, setIsCurrentDeviceTrusted] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -260,6 +267,264 @@ export default function TrustedDevices() {
       return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
     }
   }, []);
+
+  // Check if WebAuthn is available
+  useEffect(() => {
+    const checkBiometricSupport = async () => {
+      try {
+        const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        setIsBiometricAvailable(isAvailable);
+      } catch (error) {
+        console.error('Error checking WebAuthn support:', error);
+        setIsBiometricAvailable(false);
+      }
+    };
+    
+    checkBiometricSupport();
+  }, []);
+
+  // Fetch biometric devices
+  const fetchBiometricDevices = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/webauthn/devices', {
+        credentials: 'include', // Include credentials for auth
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        console.log('Fetched biometric devices:', data.devices);
+        setBiometricDevices(data.devices || []);
+      } else {
+        console.error('Failed to fetch biometric devices:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: data.error || 'Unknown error'
+        });
+        setBiometricDevices([]);
+        toast.error('Failed to load biometric devices');
+      }
+    } catch (error) {
+      console.error('Error fetching biometric devices:', error);
+      setBiometricDevices([]);
+      toast.error('Error loading biometric devices');
+    }
+  }, []);
+
+  // Register a new biometric device
+  const registerBiometricDevice = async () => {
+    if (!deviceName.trim()) {
+      toast.error('Please enter a device name');
+      return;
+    }
+
+    try {
+      setIsRegisteringBiometric(true);
+      setBiometricError(null);
+
+      // Get registration options from server
+      console.log('Fetching WebAuthn registration options...');
+      const optionsResponse = await fetch('/api/auth/webauthn/register/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+
+      if (!optionsResponse.ok) {
+        let errorDetails = 'Unknown error';
+        try {
+          const errorData = await optionsResponse.json();
+          errorDetails = errorData.message || JSON.stringify(errorData);
+        } catch (e) {
+          errorDetails = optionsResponse.statusText;
+        }
+        console.error('Failed to get registration options:', {
+          status: optionsResponse.status,
+          statusText: optionsResponse.statusText,
+          details: errorDetails
+        });
+        throw new Error(`Failed to get registration options: ${errorDetails}`);
+      }
+
+      const options = await optionsResponse.json();
+      console.log('Received registration options:', {
+        rp: options.rp,
+        user: {
+          ...options.user,
+          id: options.user?.id ? `${options.user.id.substring(0, 10)}...` : 'undefined'
+        },
+        challenge: options.challenge ? `${options.challenge.substring(0, 10)}...` : 'undefined',
+        pubKeyCredParams: options.pubKeyCredParams?.length
+      });
+      
+      // Convert base64url to Uint8Array
+      const base64URLToUint8Array = (base64URL) => {
+        const padding = '='.repeat((4 - base64URL.length % 4) % 4);
+        const base64 = base64URL.replace(/\-/g, '+').replace(/_/g, '/') + padding;
+        const rawData = atob(base64);
+        const output = new Uint8Array(rawData.length);
+        
+        for (let i = 0; i < rawData.length; ++i) {
+          output[i] = rawData.charCodeAt(i);
+        }
+        return output;
+      };
+      
+      options.challenge = base64URLToUint8Array(options.challenge);
+      options.user.id = base64URLToUint8Array(options.user.id);
+      
+      // Ensure proper types for WebAuthn API
+      if (options.excludeCredentials) {
+        options.excludeCredentials = options.excludeCredentials.map(cred => ({
+          ...cred,
+          id: base64URLToUint8Array(cred.id)
+        }));
+      }
+
+      // Create credential
+      const credential = await navigator.credentials.create({
+        publicKey: options
+      });
+
+      // Helper function to convert ArrayBuffer to Base64URL
+      const bufferToBase64URL = (buffer) => {
+        const bytes = new Uint8Array(buffer);
+        return btoa(String.fromCharCode(...bytes))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/, '');
+      };
+
+      // Prepare credential data for the server
+      const credentialData = {
+        id: credential.id,
+        rawId: bufferToBase64URL(credential.rawId),
+        type: credential.type,
+        response: {
+          attestationObject: bufferToBase64URL(credential.response.attestationObject),
+          clientDataJSON: bufferToBase64URL(credential.response.clientDataJSON),
+          // Include transports if available
+          transports: credential.response.getTransports ? credential.response.getTransports() : []
+        },
+        deviceName: deviceName,
+        deviceType: 'biometric'
+      };
+      
+      console.log('Sending credential data to server:', {
+        ...credentialData,
+        response: {
+          ...credentialData.response,
+          // Don't log the full attestation object
+          attestationObject: credentialData.response.attestationObject ? 
+            credentialData.response.attestationObject.substring(0, 30) + '...' : null
+        }
+      });
+
+      // Verify the credential with the server
+      const verifyResponse = await fetch('/api/auth/webauthn/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ credential: credentialData })
+      });
+
+      if (!verifyResponse.ok) {
+        const errorData = await verifyResponse.json().catch(() => ({}));
+        const error = new Error(errorData.message || 'Failed to verify registration');
+        error.type = errorData.type || 'verification_failed';
+        error.details = errorData.details || {};
+        throw error;
+      }
+
+      toast.success('Biometric authentication registered successfully');
+      setDeviceName('');
+      setIsAdding(false);
+      fetchDevices();
+      fetchBiometricDevices();
+    } catch (error) {
+      console.error('Error in biometric device registration:', {
+        name: error.name,
+        message: error.message,
+        type: error.type,
+        details: error.details,
+        stack: error.stack
+      });
+      
+      // Set user-friendly error message based on error type
+      let errorMessage = 'Failed to register biometric authentication';
+      let showOriginalError = false;
+      
+      if (error.message.includes('Failed to get registration options')) {
+        errorMessage = 'Failed to start registration process. Please try again.';
+      } else if (error.message.includes('challenge') || error.type === 'challenge_mismatch') {
+        errorMessage = 'Session expired. Please try the registration again.';
+      } else if (error.message.includes('NotAllowedError') || error.type === 'invalid_data') {
+        errorMessage = 'Registration was cancelled or timed out. Please try again.';
+      } else if (error.type === 'verification_failed') {
+        errorMessage = 'Verification failed. The security challenge did not match.';
+      } else {
+        // For other errors, show the original message in development
+        errorMessage = process.env.NODE_ENV === 'development' 
+          ? error.message 
+          : 'An error occurred during registration. Please try again.';
+        showOriginalError = true;
+      }
+      
+      setBiometricError(errorMessage);
+      toast.error(showOriginalError ? error.message : errorMessage);
+    } finally {
+      setIsRegisteringBiometric(false);
+    }
+  };
+
+  // Remove a biometric device
+  const removeBiometricDevice = async (credentialId) => {
+    if (!credentialId) {
+      console.error('No credential ID provided for removal');
+      toast.error('Cannot remove device: Missing device identifier');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to remove this biometric device? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      console.log('Removing biometric device with ID:', credentialId);
+      const response = await fetch(`/api/auth/webauthn/devices/${encodeURIComponent(credentialId)}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to remove device');
+      }
+
+      console.log('Successfully removed device:', result);
+      toast.success('Biometric device removed successfully');
+      
+      // Refresh the list of devices
+      await fetchBiometricDevices();
+    } catch (error) {
+      console.error('Error removing biometric device:', {
+        error,
+        credentialId,
+        message: error.message,
+        stack: error.stack
+      });
+      toast.error(`Failed to remove device: ${error.message || 'Unknown error'}`);
+    }
+  };
 
   // Fetch trusted devices with enhanced error handling
   const fetchDevices = useCallback(async (showLoading = true) => {
@@ -508,6 +773,149 @@ export default function TrustedDevices() {
           </div>
         </div>
       )}
+
+      {/* Biometric Authentication Section */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium flex items-center text-gray-900">
+            <Fingerprint className="w-5 h-5 mr-2 text-blue-600" />
+            Biometric Authentication
+          </h3>
+          {isBiometricAvailable ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Available
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+              <XCircle className="w-3 h-3 mr-1" />
+              Not Available
+            </span>
+          )}
+        </div>
+        
+        <p className="text-sm text-gray-600 mb-4">
+          Secure your account with biometric authentication using your device's fingerprint sensor.
+          This allows you to log in without entering your password.
+        </p>
+        
+        {biometricError && (
+          <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 rounded-md">
+            {biometricError}
+          </div>
+        )}
+
+        {isAdding ? (
+          <div className="mt-4 space-y-4">
+            <div>
+              <label htmlFor="deviceName" className="block text-sm font-medium text-gray-700 mb-1">
+                Device Name
+              </label>
+              <input
+                type="text"
+                id="deviceName"
+                value={deviceName}
+                onChange={(e) => setDeviceName(e.target.value)}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                placeholder="e.g., John's iPhone"
+              />
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={registerBiometricDevice}
+                disabled={isRegisteringBiometric || !deviceName.trim()}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              >
+                {isRegisteringBiometric ? (
+                  <>
+                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    Registering...
+                  </>
+                ) : (
+                  <>
+                    <Fingerprint className="-ml-1 mr-2 h-4 w-4" />
+                    Register Biometric
+                  </>
+                )}
+              </button>
+              
+              <button
+                onClick={() => {
+                  setIsAdding(false);
+                  setBiometricError(null);
+                }}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Registered Biometric Devices</h4>
+            
+            {biometricDevices.length > 0 ? (
+              <ul className="divide-y divide-gray-200">
+                {biometricDevices.map((device) => {
+                  const addedDate = new Date(device.addedAt);
+                  const lastUsedDate = device.lastUsed ? new Date(device.lastUsed) : null;
+                  
+                  return (
+                    <li key={device.id || device.credentialID} className="py-3 flex justify-between items-center">
+                      <div className="flex items-center">
+                        <MonitorSmartphone className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {device.deviceName || 'Biometric Device'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Added {formatDistanceToNow(addedDate, { addSuffix: true })}
+                            {lastUsedDate && (
+                              <span className="ml-2">
+                                • Last used {formatDistanceToNow(lastUsedDate, { addSuffix: true })}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        {device.transports && device.transports.length > 0 && (
+                          <span className="text-xs text-gray-500">
+                            {device.transports.join(', ')}
+                          </span>
+                        )}
+                        <button
+                          onClick={() => removeBiometricDevice(device.credentialID || device.id)}
+                          className="text-red-600 hover:text-red-800 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                          title="Remove device"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <div className="text-center py-4 text-sm text-gray-500">
+                No biometric devices registered yet.
+              </div>
+            )}
+            
+            {isBiometricAvailable && !isAdding && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setIsAdding(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Plus className="w-3 h-3 mr-1" /> Add Biometric Device
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Devices List */}
       <div className="bg-white shadow-sm border border-gray-200 rounded-xl">

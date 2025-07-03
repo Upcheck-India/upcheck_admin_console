@@ -1019,7 +1019,7 @@ export default function ProfilePage() {
           {/* Trusted Devices Section */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
-              <Fingerprint className="w-5 h-5 mr-2 text-green-600" />
+              <Lock className="w-5 h-5 mr-2 text-green-600" />
               Secure Auth
             </h2>
             <TrustedDevices />
