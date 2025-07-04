@@ -38,12 +38,13 @@ export const sendEmail = async (to, subject, options) => {
         <p style="text-align: center;">
           <a href="${options.event.zoomMeetingUrl}" style="background-color: #22C55E; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-size: 16px; display: inline-block;">Join Meeting</a>
         </p>
+        <p>You can find more information about this event at <a href="https://erp.upcheck.in/events">Upcheck Console</a>.</p>
         <p>If you have any questions, please contact the host at <a href="mailto:${options.host}">${options.host}</a>.</p>
       </div>
       <div style="background-color: #f3f4f6; color: #6b7280; padding: 15px; text-align: center; font-size: 12px;">
         <p>This is an automated notification from Upcheck Admin. You do not need to reply to this email.</p>
         <div style="margin-top: 10px; display: inline-block; vertical-align: middle;">
-            <span style="vertical-align: middle;">Powered by Zoom Meetings</span>
+            <span style="vertical-align: middle;">Powered by Upcheck + Zoom Meetings</span>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 22.5" style="height: 16px; width: auto; margin-left: 6px; vertical-align: middle;">
               <path d="M22.1,0H2.9C1.3,0,0,1.3,0,2.9v16.7C0,21.2,1.3,22.5,2.9,22.5h19.2c1.6,0,2.9-1.3,2.9-2.9V2.9C25,1.3,23.7,0,22.1,0z M10.2,16.2c-1.4,0-2.6-1.1-2.6-2.6s1.1-2.6,2.6-2.6s2.6,1.1,2.6,2.6S11.6,16.2,10.2,16.2z M10.2,8.8c-1.4,0-2.6-1.1-2.6-2.6s1.1-2.6,2.6-2.6s2.6,1.1,2.6,2.6S11.6,8.8,10.2,8.8z M18,16.2c-1.4,0-2.6-1.1-2.6-2.6s1.1-2.6,2.6-2.6s2.6,1.1,2.6,2.6S19.4,16.2,18,16.2z M18,8.8c-1.4,0-2.6-1.1-2.6-2.6s1.1-2.6,2.6-2.6s2.6,1.1,2.6,2.6S19.4,8.8,18,8.8z" fill="#2D8CFF"/>
               <path d="M62.3,10.9c0-3.3-2.2-5.7-6-5.7c-4.1,0-6.4,2.6-6.4,5.9c0,3.1,2.5,5.8,6.5,5.8C60.6,16.9,62.3,14.3,62.3,10.9z M56.3,14.7c-2.1,0-3.5-1.5-3.5-3.7c0-2.3,1.3-3.8,3.4-3.8c2.1,0,3.3,1.5,3.3,3.7C59.5,13.3,58.3,14.7,56.3,14.7z" fill="#2D8CFF"/>
