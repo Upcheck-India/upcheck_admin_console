@@ -28,7 +28,8 @@ import {
   X,
   Sparkles,
   Brain,
-  MessageSquare
+  MessageSquare,
+  PartyPopper
 } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '../../hooks/useAuth';
@@ -95,10 +96,10 @@ const AdminLandingPage = () => {
             bgLight: "bg-green-50"
           },
           {
-            title: "Analytics & Reports",
-            description: "Business insights and performance metrics",
-            icon: <BarChart3 className="w-6 h-6 text-white" />,
-            link: "/coming-soon",
+            title: "Events",
+            description: "Create events and manage event participants",
+            icon: <PartyPopper className="w-6 h-6 text-white" />,
+            link: "/events",
             gradient: "from-teal-400 via-blue-500 to-green-400",
             bgLight: "bg-teal-50"
           },
