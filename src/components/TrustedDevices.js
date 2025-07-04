@@ -675,7 +675,8 @@ export default function TrustedDevices() {
 
   useEffect(() => {
     fetchDevices();
-  }, [fetchDevices]);
+    fetchBiometricDevices(); // Add this line to load biometric devices on component mount
+  }, [fetchDevices, fetchBiometricDevices]);
 
   // Auto-suggest device name based on current device
   useEffect(() => {

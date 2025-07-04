@@ -4,6 +4,215 @@ import { useRouter } from 'next/navigation';
 import { Send, Inbox, Trash2, FileText, Plus, X, Search, Paperclip, Users, Check } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 
+const EmailSelectionDialog = ({ type, isOpen, onClose, groupEmails = [], customEmails = [], selectedEmails = [], onSelect, onRemoveCustomEmail, onAddCustomEmail }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selected, setSelected] = useState(new Set(selectedEmails));
+  const modalRef = useRef(null);
+
+  // Close dialog when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      // Initialize selected emails when dialog opens
+      setSelected(new Set(selectedEmails));
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose, selectedEmails]);
+
+  if (!isOpen) return null;
+
+  const filteredGroupEmails = groupEmails.filter(group => 
+    group.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    group.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredCustomEmails = customEmails.filter(email => 
+    email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const toggleEmail = (email) => {
+    const newSelected = new Set(selected);
+    if (newSelected.has(email)) {
+      newSelected.delete(email);
+    } else {
+      newSelected.add(email);
+    }
+    setSelected(newSelected);
+  };
+
+  const handleRemoveCustomEmail = (email, e) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to remove ${email}?`)) {
+      onRemoveCustomEmail(email);
+      // Also remove from selected if it's there
+      const newSelected = new Set(selected);
+      newSelected.delete(email);
+      setSelected(newSelected);
+    }
+  };
+
+  const handleApply = () => {
+    onSelect(Array.from(selected));
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div 
+        ref={modalRef}
+        className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[80vh] flex flex-col"
+      >
+        <div className="p-4 border-b">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-medium">Select Emails</h3>
+            <button 
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <div className="mt-2 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Search emails..."
+              className="w-full pl-10 pr-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-2">
+          {/* Group Emails Section */}
+          {type === 'group' && (
+            <div className="mb-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Group Emails</h4>
+              {filteredGroupEmails.length === 0 ? (
+                <p className="text-sm text-gray-500 px-2">No group emails found</p>
+              ) : (
+                <ul className="space-y-1">
+                  {filteredGroupEmails.map((group) => (
+                    <li key={group.email}>
+                      <button
+                        type="button"
+                        className={`w-full text-left px-3 py-2 rounded-md flex items-center justify-between ${
+                          selected.has(group.email) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                        }`}
+                        onClick={() => toggleEmail(group.email)}
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{group.label}</p>
+                          <p className="text-xs text-gray-500">{group.email}</p>
+                        </div>
+                        {selected.has(group.email) && (
+                          <Check className="h-5 w-5 text-blue-500" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Custom Emails Section */}
+          {type === 'custom' && (
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-sm font-medium text-gray-700">Custom Emails</h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newEmail = prompt('Enter a new email address:');
+                    if (newEmail && validateEmail(newEmail)) {
+                      if (onAddCustomEmail(newEmail)) {
+                        toggleEmail(newEmail);
+                      }
+                    } else if (newEmail) {
+                      alert('Please enter a valid email address');
+                    }
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add Email
+                </button>
+              </div>
+              {filteredCustomEmails.length === 0 ? (
+                <p className="text-sm text-gray-500 px-2">No custom emails saved</p>
+              ) : (
+                <ul className="space-y-1">
+                  {filteredCustomEmails.map((email) => (
+                    <li key={email}>
+                      <div className="group flex items-center justify-between">
+                        <button
+                          type="button"
+                          className={`w-full text-left px-3 py-2 rounded-md flex items-center justify-between ${
+                            selected.has(email) ? 'bg-blue-50' : 'hover:bg-gray-50'
+                          }`}
+                          onClick={() => toggleEmail(email)}
+                        >
+                          <span className="text-sm">{email}</span>
+                          <div className="flex items-center">
+                            {selected.has(email) && (
+                              <Check className="h-5 w-5 text-blue-500 mr-2" />
+                            )}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRemoveCustomEmail(email, e)}
+                          className="p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remove email"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+        
+        <div className="p-4 border-t flex justify-between items-center">
+          <span className="text-sm text-gray-600">
+            {selected.size} {selected.size === 1 ? 'email' : 'emails'} selected
+          </span>
+          <div className="space-x-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Add {selected.size} {selected.size === 1 ? 'email' : 'emails'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const MemberSelectionDialog = ({ isOpen, onClose, members, selectedEmails = [], onSelect }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selected, setSelected] = useState(new Set(selectedEmails));
@@ -191,43 +400,127 @@ const EmailList = ({ emails, onSelectEmail }) => (
   </div>
 );
 
-const ComposeEmail = ({ onSend, onClose }) => {
+const ComposeEmail = ({ onClose, onSend }) => {
+  // Load custom emails from localStorage
+  const loadCustomEmails = () => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('customEmails');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  };
+
+  // New: Track selected emails by type
   const [formData, setFormData] = useState({
-    to: '',
     subject: '',
     body: '',
-    attachments: []
+    attachments: [],
+    memberEmails: [], // user/member emails
+    groupEmails: [],  // group emails
+    customEmails: []  // custom emails
   });
   const [isSending, setIsSending] = useState(false);
+
+  const renderEmailChips = (emails, type, onRemove) => {
+    const getChipStyle = (emailType) => {
+      switch (emailType) {
+        case 'member':
+          return 'bg-blue-100 text-blue-800';
+        case 'group':
+          return 'bg-purple-100 text-purple-800';
+        case 'custom':
+          return 'bg-green-100 text-green-800';
+        default:
+          return 'bg-gray-100 text-gray-800';
+      }
+    };
+
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {emails.map((email) => (
+          <div
+            key={`${type}-${email}`}
+            className={`flex items-center px-2 py-1 rounded-full text-xs font-medium ${getChipStyle(type)}`}
+          >
+            <span>{email}</span>
+            <button
+              type="button"
+              onClick={() => onRemove(email)}
+              className="ml-1.5 -mr-0.5 flex-shrink-0 h-4 w-4 rounded-full inline-flex items-center justify-center text-indigo-400 hover:bg-indigo-200 hover:text-indigo-500 focus:outline-none focus:bg-indigo-500 focus:text-white"
+            >
+              <span className="sr-only">Remove {email}</span>
+              <svg className="h-2 w-2" stroke="currentColor" fill="none" viewBox="0 0 8 8">
+                <path strokeLinecap="round" strokeWidth="1.5" d="M1 1l6 6m0-6L1 7" />
+              </svg>
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
   const [isLoadingMembers, setIsLoadingMembers] = useState(false);
   const [members, setMembers] = useState([]);
+  const [customEmails, setCustomEmails] = useState(loadCustomEmails());
   const [errors, setErrors] = useState({});
   const [isMemberDialogOpen, setIsMemberDialogOpen] = useState(false);
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
+  const [isCustomDialogOpen, setIsCustomDialogOpen] = useState(false);
   const [status, setStatus] = useState({ status: 'idle', message: '' });
-  
-  // Update local sending state when status changes
+  const dropdownRef = useRef(null);
+
+  // Predefined group emails
+  const groupEmails = [
+    { email: 'dev@upcheck.in', label: 'Development Team' },
+    { email: 'founder@upcheck.in', label: 'Founders' },
+    { email: 'support@upcheck.in', label: 'Support Team' },
+    { email: 'sales@upcheck.in', label: 'Sales Team' },
+    { email: 'marketing@upcheck.in', label: 'Marketing Team' }
+  ];
+
+
+
+  const [newCustomEmail, setNewCustomEmail] = useState('');
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+
+  // Save custom emails to localStorage when they change
   useEffect(() => {
-    setIsSending(status.status === 'sending');
-    
-    if (status.status === 'error') {
-      setErrors(prev => ({
-        ...prev,
-        form: status.message
-      }));
-    } else if (status.status === 'success') {
-      setErrors({});
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('customEmails', JSON.stringify(customEmails));
     }
-  }, [status]);
-  
-  // Auto-hide success message after delay
-  useEffect(() => {
-    if (status.status === 'success') {
-      const timer = setTimeout(() => {
-        setErrors({});
-      }, 3000);
-      return () => clearTimeout(timer);
+  }, [customEmails]);
+
+  // Handle member email selection
+  const handleMemberEmailSelect = (selected) => {
+    setFormData(prev => ({ ...prev, memberEmails: selected }));
+  };
+
+  // Handle group email selection
+  const handleGroupEmailSelect = (selected) => {
+    setFormData(prev => ({ ...prev, groupEmails: selected }));
+  };
+
+  // Handle custom email selection
+  const handleCustomEmailSelect = (selected) => {
+    setFormData(prev => ({ ...prev, customEmails: selected }));
+  };
+
+  // Handle removing a custom email
+  const handleRemoveCustomEmail = (email) => {
+    const newEmails = customEmails.filter(e => e !== email);
+    setCustomEmails(newEmails);
+    setFormData(prev => ({ ...prev, customEmails: newEmails }));
+  };
+
+  // Handle adding a new custom email
+  const handleAddCustomEmail = (email) => {
+    if (validateEmail(email) && !customEmails.includes(email)) {
+      const newCustomEmails = [...customEmails, email];
+      setCustomEmails(newCustomEmails);
+      setFormData(prev => ({ ...prev, customEmails: newCustomEmails }));
+      return true;
     }
-  }, [status.status]);
+    return false;
+  };
 
   // Fetch members for recipient selection
   useEffect(() => {
@@ -261,12 +554,42 @@ const ComposeEmail = ({ onSend, onClose }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSending) return;
+
+    setErrors({}); // Reset errors
+
+    const newErrors = {};
+    if (!formData.subject.trim()) {
+      newErrors.subject = 'Subject is required.';
+    }
+    if (!formData.body.trim()) {
+      newErrors.body = 'Message body is required.';
+    }
+
+    const allRecipients = [
+      ...formData.memberEmails,
+      ...formData.groupEmails,
+      ...formData.customEmails,
+    ];
+
+    if (allRecipients.length === 0) {
+      newErrors.recipients = 'Please add at least one recipient.';
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
     
     try {
       setStatus({ status: 'sending', message: 'Sending email...' });
       setIsSending(true);
       
-      await onSend(formData);
+      const emailData = {
+        ...formData,
+        to: allRecipients.join(', '),
+      };
+
+      await onSend(emailData);
       
       setStatus({ 
         status: 'success', 
@@ -275,7 +598,14 @@ const ComposeEmail = ({ onSend, onClose }) => {
       
       // Clear form and close after a delay
       setTimeout(() => {
-        setFormData({ to: '', subject: '', body: '', attachments: [] });
+        setFormData({ 
+          subject: '', 
+          body: '', 
+          attachments: [],
+          memberEmails: [],
+          groupEmails: [],
+          customEmails: []
+        });
         onClose();
       }, 1500);
       
@@ -410,132 +740,91 @@ const ComposeEmail = ({ onSend, onClose }) => {
           {/* Form Fields */}
           <div className="p-4 space-y-4 flex-1 overflow-y-auto">
             {/* Recipient */}
-            <div className="space-y-1">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label htmlFor="to" className="block text-sm font-medium text-gray-700">
-                  To <span className="text-red-500">*</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsMemberDialogOpen(true)}
-                  className="text-xs flex items-center text-blue-600 hover:text-blue-800"
-                  disabled={isLoadingMembers || isSending}
-                >
-                  <Users className="h-3.5 w-3.5 mr-1" />
-                  Select from members
-                </button>
-              </div>
-              
-              <div className="relative">
-                <div className="flex flex-wrap gap-1 items-center min-h-[42px] p-1 border border-gray-300 rounded-md focus-within:ring-1 focus-within:ring-blue-500 focus-within:border-blue-500">
-                  {/* Email chips */}
-                  {formData.to.split(',').filter(Boolean).map((email, index) => (
-                    <div key={index} className="flex items-center bg-blue-100 text-blue-800 text-sm px-2 py-1 rounded-full">
-                    <span className="text-sm">{email.trim()}</span>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">To</label>
+                  <div className="flex gap-2 mb-2">
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        const emails = formData.to.split(',').filter(Boolean);
-                        emails.splice(index, 1);
-                        setFormData({...formData, to: emails.join(', ')});
-                      }}
-                      className="ml-1 text-blue-500 hover:text-blue-700 focus:outline-none"
-                      disabled={isSending}
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center border px-2 py-1 rounded"
+                      onClick={() => setIsMemberDialogOpen(true)}
                     >
-                      <X size={14} />
+                      <Users className="h-4 w-4 mr-1" />
+                      Add Members
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center border px-2 py-1 rounded"
+                      onClick={() => setIsGroupDialogOpen(true)}
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      Add Groups
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-blue-600 hover:text-blue-800 flex items-center border px-2 py-1 rounded"
+                      onClick={() => setIsCustomDialogOpen(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Custom
                     </button>
                   </div>
-                  ))}
-                  <input
-                    id="to"
-                    type="email"
-                    value={formData.to.includes(',') ? '' : formData.to}
-                    onChange={(e) => {
-                      setFormData({...formData, to: e.target.value});
-                      if (errors.to) {
-                        setErrors(prev => ({ ...prev, to: '' }));
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if ((e.key === 'Enter' || e.key === ',') && formData.to.trim()) {
-                        e.preventDefault();
-                        const currentEmails = formData.to.split(',').map(e => e.trim()).filter(Boolean);
-                        const emails = new Set(currentEmails);
-                        const inputValue = e.target.value.trim();
-                        
-                        // Only process if there's actually text in the input
-                        if (inputValue) {
-                          if (validateEmail(inputValue)) {
-                            emails.add(inputValue);
-                            setFormData(prev => ({
-                              ...prev,
-                              to: Array.from(emails).join(', ')
-                            }));
-                            // Clear the input field after adding
-                            e.target.value = '';
-                          } else {
-                            setErrors(prev => ({ ...prev, to: 'Please enter a valid email address' }));
-                          }
-                        }
-                      }
-                    }}
-                    onBlur={(e) => {
-                      if (formData.to.trim()) {
-                        const emails = new Set(formData.to.split(',').map(e => e.trim()).filter(Boolean));
-                        const newEmail = formData.to.trim().replace(/,$/, '');
-                        if (validateEmail(newEmail)) {
-                          emails.add(newEmail);
-                          setFormData(prev => ({
-                            ...prev,
-                            to: Array.from(emails).join(', ')
-                          }));
-                        } else if (newEmail) {
-                          setErrors(prev => ({ ...prev, to: 'Please enter a valid email address' }));
-                        }
-                      }
-                    }}
-                    className={`flex-1 min-w-[150px] px-2 py-1 border-0 focus:ring-0 focus:outline-none sm:text-sm`}
-                    placeholder={formData.to ? '' : "Enter email addresses"}
-                    required={!formData.to}
-                    disabled={isSending || isLoadingMembers}
-                  />
+                  {/* Show selected emails as chips by type */}
+                  {formData.memberEmails.length > 0 && (
+                    <div>
+                      <span className="text-xs text-gray-500">Members:</span>
+                      {renderEmailChips(formData.memberEmails, 'member', email => handleMemberEmailSelect(formData.memberEmails.filter(e => e !== email)))}
+                    </div>
+                  )}
+                  {formData.groupEmails.length > 0 && (
+                    <div className="mt-1">
+                      <span className="text-xs text-gray-500">Groups:</span>
+                      {renderEmailChips(formData.groupEmails, 'group', email => handleGroupEmailSelect(formData.groupEmails.filter(e => e !== email)))}
+                    </div>
+                  )}
+                  {formData.customEmails.length > 0 && (
+                    <div className="mt-1">
+                      <span className="text-xs text-gray-500">Custom:</span>
+                      {renderEmailChips(formData.customEmails, 'custom', email => handleCustomEmailSelect(formData.customEmails.filter(e => e !== email)))}
+                    </div>
+                  )}
+                  {errors.recipients && <p className="mt-2 text-sm text-red-600">{errors.recipients}</p>}
                 </div>
               </div>
               
-              {isLoadingMembers ? (
-                <p className="mt-1 text-xs text-gray-500">
-                  <span className="inline-flex items-center">
-                    <svg className="animate-spin -ml-1 mr-1 h-3 w-3 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Loading members...
-                  </span>
-                </p>
-              ) : errors.to ? (
-                <p className="mt-1 text-sm text-red-600">{errors.to}</p>
-              ) : (
-                <p className="mt-1 text-xs text-gray-500">
-                  Type email and press Enter or comma to add multiple recipients
-                </p>
-              )}
+
               
-              {/* Member Selection Dialog */}
+              {/* Dialogs for selecting emails */}
               <MemberSelectionDialog
                 isOpen={isMemberDialogOpen}
                 onClose={() => setIsMemberDialogOpen(false)}
                 members={members}
-                selectedEmails={formData.to.split(',').map(e => e.trim()).filter(Boolean)}
-                onSelect={(selectedEmails) => {
-                  setFormData(prev => ({
-                    ...prev,
-                    to: selectedEmails.join(', ')
-                  }));
-                }}
+                selectedEmails={formData.memberEmails}
+                onSelect={handleMemberEmailSelect}
+              />
+              <EmailSelectionDialog
+                type="group"
+                isOpen={isGroupDialogOpen}
+                onClose={() => setIsGroupDialogOpen(false)}
+                groupEmails={groupEmails}
+                customEmails={[]}
+                selectedEmails={formData.groupEmails}
+                onSelect={handleGroupEmailSelect}
+                onRemoveCustomEmail={() => {}}
+              />
+              <EmailSelectionDialog
+                type="custom"
+                isOpen={isCustomDialogOpen}
+                onClose={() => setIsCustomDialogOpen(false)}
+                groupEmails={[]}
+                customEmails={customEmails}
+                selectedEmails={formData.customEmails}
+                onSelect={handleCustomEmailSelect}
+                onRemoveCustomEmail={handleRemoveCustomEmail}
+                onAddCustomEmail={handleAddCustomEmail}
               />
             </div>
-            
             {/* Subject */}
             <div>
               <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-1">
@@ -788,8 +1077,6 @@ const ConsoleAdminPage = () => {
     return matchesFolder && matchesSearch;
   });
 
-  const [sendingStatus, setSendingStatus] = useState({ status: 'idle', message: '' });
-
   const validateEmail = (email) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (email.includes(',')) {
@@ -807,92 +1094,27 @@ const ConsoleAdminPage = () => {
 
   const handleSendEmail = async (emailData) => {
     // Validate email fields
-    if (!emailData.to || !emailData.subject || !emailData.body) {
-      setSendingStatus({ status: 'error', message: 'Please fill in all required fields' });
-      return false;
+    if (!emailData.subject || !emailData.body) {
+      throw new Error('Please fill in all required fields');
     }
 
     // Split and validate all email addresses
-    const recipientEmails = emailData.to.split(',')
-      .map(e => e.trim())
-      .filter(Boolean);
+    const allRecipients = [
+      ...emailData.memberEmails,
+      ...emailData.groupEmails,
+      ...emailData.customEmails,
+    ];
 
-    if (recipientEmails.length === 0) {
-      setSendingStatus({ status: 'error', message: 'Please enter at least one email address' });
-      return false;
+    if (allRecipients.length === 0) {
+      throw new Error('Please enter at least one email address');
     }
 
     // Validate each email
-    const invalidEmails = recipientEmails.filter(email => !validateEmail(email));
+    const invalidEmails = allRecipients.filter(email => !validateEmail(email));
     if (invalidEmails.length > 0) {
-      setSendingStatus({ 
-        status: 'error', 
-        message: `Invalid email address(es): ${invalidEmails.join(', ')}` 
-      });
-      return false;
+      throw new Error(`Invalid email address(es): ${invalidEmails.join(', ')}`);
     }
-    
-    setSendingStatus({ status: 'sending', message: 'Sending email...' });
-    
     try {
-      const formData = new FormData();
-      formData.append('to', emailData.to);
-      formData.append('subject', emailData.subject);
-      formData.append('body', emailData.body);
-      
-      // Add attachments if any
-      if (emailData.attachments && emailData.attachments.length > 0) {
-        emailData.attachments.forEach((file, index) => {
-          formData.append(`attachments`, file);
-        });
-      }
-      
-      const response = await fetch('/api/send-email', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to send email');
-      }
-      
-      // Add to sent folder
-      const newEmail = {
-        id: Date.now().toString(),
-        to: emailData.to,
-        subject: emailData.subject,
-        body: emailData.body,
-        date: new Date().toISOString(),
-        read: true,
-        folder: 'sent'
-      };
-      
-      setEmails(prev => [newEmail, ...prev]);
-      
-      // Save to localStorage
-      const storedEmails = JSON.parse(localStorage.getItem('emails') || '[]');
-      localStorage.setItem('emails', JSON.stringify([newEmail, ...storedEmails]));
-      
-      setSendingStatus({ 
-        status: 'success', 
-        message: 'Email sent successfully!' 
-      });
-      
-      return true;
-      
-    } catch (error) {
-      console.error('Error sending email:', error);
-      setSendingStatus({ 
-        status: 'error', 
-        message: error.message || 'Failed to send email. Please try again.'
-      });
-      return false;
-    }
-
-    try {
-      setSendingStatus({ status: 'sending', message: 'Sending email...' });
-      
       // Create a new FormData instance
       const formData = new FormData();
       formData.append('to', emailData.to);
@@ -947,17 +1169,10 @@ const ConsoleAdminPage = () => {
 
       // Add to emails list and update state
       setEmails(prevEmails => {
-        const updatedEmails = [...prevEmails, newEmail];
+        const updatedEmails = [newEmail, ...prevEmails];
         // Save to localStorage for persistence
         localStorage.setItem('emails', JSON.stringify(updatedEmails));
         return updatedEmails;
-      });
-      
-      // Show success message
-      setSendingStatus({ 
-        status: 'success', 
-        message: 'Email sent successfully!',
-        data: result
       });
       
       // Close composer after a short delay
@@ -967,17 +1182,13 @@ const ConsoleAdminPage = () => {
         setSendingStatus({ status: 'idle', message: '' });
       }, 2000);
       
+      return true;
+      
     } catch (error) {
       console.error('Error sending email:', error);
       const errorMessage = error.response?.data?.message || 
                          error.message || 
                          'Failed to send email. Please try again.';
-      
-      setSendingStatus({ 
-        status: 'error', 
-        message: errorMessage,
-        error: error
-      });
       
       // Log detailed error for debugging
       if (process.env.NODE_ENV === 'development') {
@@ -987,11 +1198,12 @@ const ConsoleAdminPage = () => {
           status: error.response?.status,
         });
       }
+      
+      throw new Error(errorMessage);
     }
   };
 
   const handleSelectEmail = (email) => {
-    // Mark as read when selected
     if (!email.read) {
       setEmails(prev => 
         prev.map(e => 
