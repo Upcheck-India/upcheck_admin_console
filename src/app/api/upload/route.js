@@ -1,106 +1,45 @@
+import { writeFile, mkdir } from 'fs/promises';
 import { NextResponse } from 'next/server';
-import clientPromise from "../../../lib/mongodb";
-import { GridFSBucket } from 'mongodb';
-import { ObjectId } from 'mongodb';
+import path from 'path';
 
-export async function POST(req) {
+export async function POST(request) {
   try {
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const bucket = new GridFSBucket(db);
-    
-    const formData = await req.formData();
-    const file = formData.get('file');
-    const name = formData.get('name');
-    const category = formData.get('category') || 'documents';
-    const description = formData.get('description') || '';
-    const isDocumentationResource = formData.get('isDocumentationResource') === 'true';
-    const projectId = formData.get('projectId');
-    const isPasswordProtected = formData.get('isPasswordProtected') === 'true';
-    const password = formData.get('password') || '';
-    const storageOptions = JSON.parse(formData.get('storageOptions') || '[]');
-    const alternativeLinks = JSON.parse(formData.get('alternativeLinks') || '{}');
-    const uploadedBy = formData.get('uploadedBy') ? JSON.parse(formData.get('uploadedBy')) : null;
-    
-    // Validate required fields
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    const data = await request.formData();
+    const file = data.get('file');
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file uploaded.' }, { status: 400 });
     }
 
-    let fileId = null;
-    let fileUrl = null;
-    let fileSize = 0;
-    let mimeType = '';
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
 
-    // Handle file upload if server storage is selected
-    if (storageOptions.includes('server') && file) {
-      // 50MB limit for document files
-      if (file.size > 50 * 1024 * 1024) {
-        return NextResponse.json({ error: "File size exceeds 50MB limit" }, { status: 400 });
+    // Ensure the uploads directory exists in the 'public' folder
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    
+    try {
+      await mkdir(uploadDir, { recursive: true });
+    } catch (e) {
+      // The directory already exists, which is fine.
+      if (e.code !== 'EEXIST') {
+        console.error('Failed to create upload directory:', e);
+        throw new Error('Could not create upload directory.');
       }
-
-      const buffer = Buffer.from(await file.arrayBuffer());
-      fileSize = file.size;
-      mimeType = file.type;
-      
-      const uploadStream = bucket.openUploadStream(file.name, {
-        contentType: file.type,
-        metadata: {
-          uploadedAt: new Date(),
-          originalName: file.name,
-          isDocumentationResource: isDocumentationResource,
-          name: name,
-          description: description,
-          category: category,
-          fileSize: file.size
-        }
-      });
-      
-      await new Promise((resolve, reject) => {
-        uploadStream.end(buffer, (error) => {
-          if (error) reject(error);
-          resolve();
-        });
-      });
-      
-      fileId = uploadStream.id;
-      fileUrl = `/api/media/${fileId}`;
     }
 
-    // Create resource document
-    const resourceData = {
-      name,
-      category,
-      description,
-      storageOptions,
-      alternativeLinks,
-      downloads: 0,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      isDocumentationResource,
-      ...(uploadedBy && { uploadedBy }), // Add uploadedBy information
-      isPasswordProtected: isPasswordProtected && password.length > 0,
-      ...(password && { passwordHash: password }), // In production, hash the password properly
-      ...(fileId && { fileId }),
-      ...(projectId && { projectId: new ObjectId(projectId) }),
-      ...(mimeType && { mimeType }),
-      ...(fileSize > 0 && { fileSize })
-    };
+    // Create a unique filename to prevent overwriting existing files
+    const filename = `${Date.now()}-${file.name.replace(/\s+/g, '_')}`;
+    const filePath = path.join(uploadDir, filename);
 
-    // Save to resources collection
-    const result = await db.collection('resources').insertOne(resourceData);
-    
-    return NextResponse.json({
-      success: true,
-      fileUrl,
-      resourceId: result.insertedId
-    });
-    
+    // Write the file to the server
+    await writeFile(filePath, buffer);
+
+    // Return the public path so it can be accessed from the browser
+    const publicPath = `/uploads/${filename}`;
+    return NextResponse.json({ success: true, filePath: publicPath });
+
   } catch (error) {
-    console.error('Upload error:', error);
-    return NextResponse.json({ 
-      error: error.message || 'Failed to upload file',
-      success: false 
-    }, { status: 500 });
+    console.error('Error uploading file:', error);
+    return NextResponse.json({ error: 'Error uploading file.' }, { status: 500 });
   }
 }
