@@ -2,6 +2,66 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
+// PUT - Update a project by ID
+export async function PUT(req, { params }) {
+  try {
+    const token = req.cookies.get('admin_token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db("resources");
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = params;
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
+
+    const projectsCollection = db.collection('projects');
+    const project = await projectsCollection.findOne({ _id: new ObjectId(id) });
+
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Security check: Only the superManager or a Project Manager can update the project.
+    const isSuperManager = project.superManager === user.username;
+    const isProjectManager = project.members?.some(member => member.user === user.username && member.role === 'Project Manager');
+
+    if (!isSuperManager && !isProjectManager) {
+      return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can edit this project.' }, { status: 403 });
+    }
+
+    const { name, description, logo, members } = await req.json();
+
+    const updateData = {
+      $set: {
+        name: name.trim(),
+        description: description?.trim() || '',
+        logo: logo || '',
+        members: members,
+        updatedAt: new Date(),
+      },
+    };
+
+    await projectsCollection.updateOne({ _id: new ObjectId(id) }, updateData);
+
+    const updatedProject = await projectsCollection.findOne({ _id: new ObjectId(id) });
+
+    return NextResponse.json(updatedProject, { status: 200 });
+  } catch (error) {
+    console.error(`Error updating project ${params.id}:`, error);
+    return NextResponse.json({ error: 'Failed to update project' }, { status: 500 });
+  }
+}
+
+
 // DELETE - Deletes a project by ID
 export async function DELETE(req, { params }) {
   try {

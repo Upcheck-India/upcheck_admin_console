@@ -3,13 +3,14 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertTriangle, UploadCloud } from 'lucide-react';
-import AddMemberForm from './AddMemberForm'; // Import the new component
+import AddMemberForm from './AddMemberForm';
+import { uploadFile } from '../../../lib/upload'; // Import the upload helper
 
 const CreateProjectPage = () => {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [logo, setLogo] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   const [logoFile, setLogoFile] = useState(null);
   const [members, setMembers] = useState([]); // State for project members
   const [loading, setLoading] = useState(false);
@@ -17,31 +18,50 @@ const CreateProjectPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name) {
+    setError(null);
+    setLoading(true);
+
+    if (!name.trim()) {
       setError('Project name is required.');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    let uploadedLogoUrl = logoUrl;
 
     try {
+      // If a file is selected, upload it first
+      if (logoFile) {
+        const uploadResult = await uploadFile(logoFile);
+        if (uploadResult && uploadResult.filePath) {
+          uploadedLogoUrl = uploadResult.filePath;
+        } else {
+          throw new Error('Logo upload failed.');
+        }
+      }
+
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ name, description, logo, members }), // Add members to the payload
+        body: JSON.stringify({ 
+          name, 
+          description, 
+          logo: uploadedLogoUrl, 
+          members 
+        }),
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create project');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create project');
       }
 
       router.push('/project_management');
     } catch (err) {
       setError(err.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -100,16 +120,31 @@ const CreateProjectPage = () => {
             </div>
 
             <div>
-              <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-1">
-                Logo URL (Optional)
-              </label>
+              <label htmlFor="logoFile" className="block text-sm font-medium text-gray-700">Project Logo (Optional)</label>
+              <div className="mt-1 flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                <div className="space-y-1 text-center">
+                  <UploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                  <div className="flex text-sm text-gray-600">
+                    <label htmlFor="logoFile" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                      <span>Upload a file</span>
+                      <input id="logoFile" name="logoFile" type="file" className="sr-only" onChange={(e) => setLogoFile(e.target.files[0])} accept="image/*" />
+                    </label>
+                    <p className="pl-1">or paste a URL below</p>
+                  </div>
+                  {logoFile ? (
+                    <p className="text-xs text-gray-500">{logoFile.name}</p>
+                  ) : (
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                  )}
+                </div>
+              </div>
               <input
                 type="text"
-                id="logo"
-                value={logo}
-                onChange={(e) => setLogo(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                placeholder="https://example.com/logo.png"
+                id="logoUrl"
+                value={logoUrl}
+                onChange={(e) => setLogoUrl(e.target.value)}
+                className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                placeholder="Or paste an image URL here"
               />
             </div>
 

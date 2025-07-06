@@ -1,0 +1,199 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Save, Loader2 } from 'lucide-react';
+import Select from 'react-select';
+
+const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId }) => {
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    assignees: [],
+    reporter: '',
+    dueDate: '',
+    status: 'Backlog',
+    type: 'Feature',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const userOptions = useMemo(() => 
+    assignableUsers.map(user => ({
+      value: user._id,
+      label: `${user.username} (${user.role})`,
+    })),
+    [assignableUsers]
+  );
+
+  useEffect(() => {
+    if (task) {
+      setFormData({
+        title: task.title || '',
+        description: task.description || '',
+        assignees: task.assignees || [],
+        reporter: task.reporter || '',
+        dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : '',
+        status: task.status || 'Backlog',
+        type: task.type || 'Feature',
+      });
+    } else {
+      setFormData({ title: '', description: '', assignees: [], reporter: '', dueDate: '', status: 'Backlog', type: 'Feature' });
+    }
+  }, [task]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name, selectedOption) => {
+    if (Array.isArray(selectedOption)) {
+      setFormData(prev => ({ ...prev, [name]: selectedOption.map(opt => opt.value) }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: selectedOption ? selectedOption.value : '' }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const url = task ? `/api/projects/${projectId}/tasks/${task._id}` : `/api/projects/${projectId}/tasks`;
+      const method = task ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to save task');
+      }
+
+      const savedTask = await response.json();
+      onSave(savedTask);
+      onClose();
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const customStyles = {
+    control: (provided) => ({
+      ...provided,
+      borderColor: '#d1d5db',
+      '&:hover': {
+        borderColor: '#a5b4fc',
+      },
+      boxShadow: 'none',
+    }),
+    menu: (provided) => ({
+        ...provided,
+        zIndex: 9999, // Ensure dropdown is on top
+    }),
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl relative flex flex-col" style={{ maxHeight: '90vh' }}>
+        {/* Modal Header */}
+        <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg z-10">
+          <h2 className="text-xl font-bold">{task ? 'Edit Task' : 'Add New Task'}</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
+            <X className="h-6 w-6" />
+          </button>
+        </div>
+
+        {/* Modal Body */}
+        <form id="task-form" onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto flex-grow">
+          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+          <div>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700">Title</label>
+            <input type="text" name="title" id="title" value={formData.title} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+          </div>
+
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
+            <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows="3" className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"></textarea>
+          </div>
+
+          <div>
+            <label htmlFor="assignees" className="block text-sm font-medium text-gray-700">Assignees</label>
+            <Select
+              isMulti
+              name="assignees"
+              options={userOptions}
+              value={userOptions.filter(o => formData.assignees.includes(o.value))}
+              onChange={options => handleSelectChange('assignees', options)}
+              className="mt-1"
+              styles={customStyles}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="reporter" className="block text-sm font-medium text-gray-700">Reporter</label>
+            <Select
+              isClearable
+              name="reporter"
+              options={userOptions}
+              value={userOptions.find(o => o.value === formData.reporter)}
+              onChange={option => handleSelectChange('reporter', option)}
+              className="mt-1"
+              styles={customStyles}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
+              <Select
+                name="status"
+                value={{ value: formData.status, label: formData.status }}
+                onChange={option => handleSelectChange('status', option)}
+                options={['Backlog', 'To Do', 'In Progress', 'Done'].map(s => ({ value: s, label: s }))}
+                styles={customStyles}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label htmlFor="type" className="block text-sm font-medium text-gray-700">Type</label>
+              <Select
+                name="type"
+                value={{ value: formData.type, label: formData.type }}
+                onChange={option => handleSelectChange('type', option)}
+                options={['Feature', 'Bug', 'Chore', 'Epic'].map(t => ({ value: t, label: t }))}
+                styles={customStyles}
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">Due Date</label>
+            <input type="date" name="dueDate" id="dueDate" value={formData.dueDate} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" />
+          </div>
+        </form>
+
+        {/* Modal Footer */}
+        <div className="flex justify-end space-x-3 p-4 border-t sticky bottom-0 bg-white rounded-b-lg z-10">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50">
+              Cancel
+            </button>
+            <button type="submit" form="task-form" disabled={isSubmitting} className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300">
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+              {task ? 'Save Changes' : 'Create Task'}
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TaskModal;

@@ -2,42 +2,62 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings } from 'lucide-react';
+import { useAuth } from '../../../hooks/useAuth';
+import SettingsTab from './SettingsTab';
+import MembersTab from './MembersTab';
+import TasksTab from './TasksTab';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
   const params = useParams();
   const { id } = params;
+  const { user, loading: authLoading } = useAuth();
 
   const [project, setProject] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('tasks'); // tasks, members, settings
 
-  useEffect(() => {
-    if (!id) return;
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [projectRes, usersRes] = await Promise.all([
+        fetch(`/api/projects/${id}`),
+        fetch('/api/users')
+      ]);
 
-    const fetchProject = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`/api/projects/${id}`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to fetch project details');
-        }
-        const data = await response.json();
-        setProject(data);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      if (!projectRes.ok) {
+        const errorData = await projectRes.json();
+        throw new Error(errorData.error || 'Failed to fetch project details');
       }
-    };
+      const projectData = await projectRes.json();
+      setProject(projectData);
 
-    fetchProject();
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        setAllUsers(usersData);
+      } else {
+        console.error('Failed to fetch users');
+        // Continue without all users if it fails, the UI will handle it
+      }
+
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (id) {
+        fetchData();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
@@ -71,11 +91,11 @@ const ProjectDetailPage = () => {
   const TabContent = () => {
     switch (activeTab) {
       case 'tasks':
-        return <div className="p-6"><h3 className="text-lg font-semibold">Tasks</h3><p className="text-gray-500 mt-2">Task management will be implemented here.</p></div>;
+        return <TasksTab projectId={project._id} project={project} allUsers={allUsers} />;
       case 'members':
-        return <div className="p-6"><h3 className="text-lg font-semibold">Members</h3><p className="text-gray-500 mt-2">Member management will be implemented here.</p></div>;
+        return <MembersTab members={project.members} superManager={project.superManager} />;
       case 'settings':
-        return <div className="p-6"><h3 className="text-lg font-semibold">Settings</h3><p className="text-gray-500 mt-2">Project settings will be implemented here.</p></div>;
+        return <SettingsTab project={project} user={user} allUsers={allUsers} onProjectUpdate={fetchData} />;
       default:
         return null;
     }
