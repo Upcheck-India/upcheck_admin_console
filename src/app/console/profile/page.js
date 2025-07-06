@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { debounce } from 'lodash';
-import { Unlock, ShieldCheck,
+import {
   User,
+  Shield,
+  ShieldCheck,
   Building2,
   Calendar,
   Mail,
@@ -75,21 +77,6 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectedAccounts, setConnectedAccounts] = useState([]);
-  // Initialize 2FA state with API values
-  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
-  const [TwoFAMode, setTwoFAMode] = useState('untrusted');
-
-  useEffect(() => {
-    if (userData?.twoFactorAuth) {
-      setIs2FAEnabled(userData.twoFactorAuth.enabled);
-      setTwoFAMode(userData.twoFactorAuth.mode || 'untrusted');
-    }
-  }, [userData]);
-  const [is2FAEditing, setIs2FAEditing] = useState(false);
-  const [TwoFAPassword, setTwoFAPassword] = useState('');
-  const [TwoFAError, setTwoFAError] = useState('');
-  const [loading2FA, setLoading2FA] = useState(false);
-  const [isPasswordValid, setIsPasswordValid] = useState(false);
   const [githubRepos, setGithubRepos] = useState([]);
   const [isLoadingRepos, setIsLoadingRepos] = useState(false);
   const [repoSearchTerm, setRepoSearchTerm] = useState('');
@@ -342,10 +329,9 @@ export default function ProfilePage() {
         }
 
         // Then fetch complete profile data and connected accounts in parallel
-        const [profileRes, connectedAccountsRes, twoFAStatusRes] = await Promise.all([
+        const [profileRes, connectedAccountsRes] = await Promise.all([
           fetch('/api/users/profile/get', { credentials: 'include' }),
-          fetchConnectedAccounts(),
-          fetch('/api/profile/2fa', { credentials: 'include' })
+          fetchConnectedAccounts()
         ]);
 
         if (!profileRes.ok) {
@@ -353,8 +339,6 @@ export default function ProfilePage() {
         }
 
         const profileData = await profileRes.json();
-        const twoFAStatus = await twoFAStatusRes.json();
-
         setUserData(profileData.user);
         setEditForm({
           username: profileData.user.username || '',
@@ -367,8 +351,6 @@ export default function ProfilePage() {
           alternateEmail: profileData.user.alternateEmail || '',
           linkedinProfile: profileData.user.linkedinProfile || ''
         });
-        setIs2FAEnabled(twoFAStatus.enabled);
-        setTwoFAMode(twoFAStatus.mode);
       } catch (error) {
         console.error('Error fetching user data:', error);
         setError('Failed to load profile data');
@@ -413,69 +395,6 @@ export default function ProfilePage() {
       console.error('Error updating profile:', error);
       setError('Failed to update profile');
       setTimeout(() => setError(null), 3000);
-    }
-  };
-
-  const validatePassword = async (password) => {
-    try {
-      const response = await fetch('/api/profile/validate-password', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Invalid password');
-      }
-
-      setIsPasswordValid(true);
-      return true;
-    } catch (error) {
-      setIsPasswordValid(false);
-      throw error;
-    }
-  };
-
-  const handleTwoFAChange = async () => {
-    try {
-      setLoading2FA(true);
-      
-      // First validate password
-      await validatePassword(TwoFAPassword);
-
-      const response = await fetch('/api/profile/2fa', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          enable: is2FAEnabled,
-          mode: TwoFAMode,
-        })
-      });
-
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update 2FA settings');
-      }
-
-      toast.success(is2FAEnabled ? '2FA disabled successfully' : '2FA enabled successfully');
-      setIs2FAEditing(false);
-      setTwoFAPassword('');
-      setTwoFAError('');
-      
-    } catch (error) {
-      toast.error(error.message);
-      setTwoFAError(error.message);
-
-
-    } finally {
-      setLoading2FA(false);
     }
   };
 
@@ -1104,118 +1023,6 @@ export default function ProfilePage() {
               Secure Auth
             </h2>
             <TrustedDevices />
-          </div>
-
-          {/* Two-Factor Authentication Section */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
-              <ShieldCheck className="w-5 h-5 mr-2 text-blue-500" />
-              Two-Factor Authentication
-            </h2>
-            <div className="space-y-4">
-              <div className="text-gray-500 text-sm mb-4">
-                Add an extra layer of security to your account
-              </div>
-              {is2FAEditing ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                        checked={is2FAEnabled}
-                        onChange={(e) => setIs2FAEnabled(e.target.checked)}
-                      />
-                      <span className="text-sm">Enable Two-Factor Authentication</span>
-                    </label>
-                  </div>
-                  {is2FAEnabled && (
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        2FA Mode
-                      </label>
-                      <div className="space-y-2">
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            name="2fa-mode"
-                            value="all"
-                            checked={TwoFAMode === 'all'}
-                            onChange={(e) => setTwoFAMode('all')}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                          />
-                          <span>Require 2FA for all logins</span>
-                        </label>
-                        <label className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            name="2fa-mode"
-                            value="untrusted"
-                            checked={TwoFAMode === 'untrusted'}
-                            onChange={(e) => setTwoFAMode('untrusted')}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                          />
-                          <span>Require 2FA only for untrusted devices</span>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Enter Password to {is2FAEnabled ? 'disable' : 'enable'} 2FA
-                    </label>
-                    <input
-                      type="password"
-                      value={TwoFAPassword}
-                      onChange={(e) => setTwoFAPassword(e.target.value)}
-                      className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      placeholder="Enter your password"
-                    />
-                    {TwoFAError && (
-                      <p className="text-sm text-red-600">{TwoFAError}</p>
-                    )}
-                  </div>
-                  <div className="flex justify-end space-x-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIs2FAEditing(false);
-                        setTwoFAPassword('');
-                        setTwoFAError('');
-                      }}
-                      className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleTwoFAChange}
-                      disabled={loading2FA || !TwoFAPassword}
-                      className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      {loading2FA ? 'Processing...' : 'Save'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    {is2FAEnabled ? (
-                      <ShieldCheck className="w-5 h-5 text-green-500" />
-                    ) : (
-                      <Lock className="w-5 h-5 text-gray-400" />
-                    )}
-                    <span className="text-sm">{is2FAEnabled ? '2FA Enabled' : '2FA Disabled'}</span>
-                  </div>
-                  <button
-                    onClick={() => setIs2FAEditing(true)}
-                    className="text-sm text-indigo-600 hover:text-indigo-700"
-                  >
-                    Edit
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Account Security Section */}
