@@ -2,7 +2,7 @@
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import clientPromise from "../../../lib/mongodb";
+import clientPromise from "../../../../lib/mongodb";
 import { ObjectId } from 'mongodb';
 
 export async function POST(req) {
