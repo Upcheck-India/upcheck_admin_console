@@ -31,6 +31,7 @@ import {
   MessageSquare,
   PartyPopper
 } from 'lucide-react';
+import OnlineUsers from '../components/OnlineUsers';
 import Image from 'next/image';
 import { useAuth } from '../../hooks/useAuth';
 import SecureLoading from "../components/SecureLoading";
@@ -197,6 +198,8 @@ const AdminLandingPage = () => {
                 <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white"></span>
               </Link>
               
+              {/* Online Users */}
+              <OnlineUsers />
               {/* Profile Dropdown */}
               <div className="relative">
                 <button
