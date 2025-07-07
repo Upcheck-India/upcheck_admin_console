@@ -74,18 +74,16 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
       const url = task ? `/api/projects/${projectId}/tasks/${task._id}` : `/api/projects/${projectId}/tasks`;
       const method = task ? 'PUT' : 'POST';
 
-      // Get token from localStorage with error handling
+      // Retrieve optional token from localStorage (older auth flow)
       const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Authentication token not found');
-      }
 
       const response = await fetch(url, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
+        credentials: 'include', // always send cookies for admin_token auth
         body: JSON.stringify(formData),
       });
 
