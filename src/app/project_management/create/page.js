@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Loader2, AlertTriangle, UploadCloud } from 'lucide-react';
 import AddMemberForm from './AddMemberForm';
@@ -8,6 +8,9 @@ import { uploadFile } from '../../../lib/upload'; // Import the upload helper
 
 const CreateProjectPage = () => {
   const router = useRouter();
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // moved above
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
@@ -15,6 +18,28 @@ const CreateProjectPage = () => {
   const [members, setMembers] = useState([]); // State for project members
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Fetch current user on mount to enforce role-based access
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        if (!res.ok) {
+          router.push('/login');
+          return;
+        }
+        const user = await res.json();
+        setCurrentUser(user);
+        if (user.role === 'Intern') {
+          router.push('/project_management');
+        }
+      } catch (err) {
+        console.error('Failed to fetch user', err);
+        router.push('/login');
+      }
+    };
+    fetchUser();
+  }, [router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -153,13 +178,13 @@ const CreateProjectPage = () => {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (currentUser && currentUser.role === 'Intern')}
                 className="flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-200 disabled:bg-blue-300"
               >
                 {loading ? (
                   <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Creating...</>
                 ) : (
-                  'Create Project'
+                  currentUser && currentUser.role === 'Intern' ? 'Not Allowed' : 'Create Project'
                 )}
               </button>
             </div>

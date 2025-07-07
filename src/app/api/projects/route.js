@@ -56,6 +56,11 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Restrict interns from creating projects
+    if (user.role === 'Intern') {
+      return NextResponse.json({ error: 'Forbidden: Interns cannot create projects' }, { status: 403 });
+    }
+
     const { name, description, logo, members: newMembers = [] } = await req.json();
 
     if (!name || typeof name !== 'string' || name.trim() === '') {

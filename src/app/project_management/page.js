@@ -196,12 +196,14 @@ const ProjectManagementPage = () => {
             <h1 className="text-3xl font-bold text-gray-900">Project Management</h1>
             <p className="text-gray-600 mt-1">Oversee all your ongoing projects.</p>
           </div>
-          <Link href="/project_management/create">
-            <button className="flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-200">
-              <Plus className="h-5 w-5 mr-2" />
-              Create New Project
-            </button>
-          </Link>
+          {currentUser && currentUser.role !== 'Intern' && (
+            <Link href="/project_management/create">
+              <button className="flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-200">
+                <Plus className="h-5 w-5 mr-2" />
+                Create New Project
+              </button>
+            </Link>
+          )}
         </div>
 
         <div className="mb-6">
