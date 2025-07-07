@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FolderKanban, Plus, User, Search, Briefcase, Loader2, AlertTriangle, X, ShieldCheck, Trash2 } from 'lucide-react';
+import { FolderKanban, Plus, User, Search, Briefcase, Loader2, AlertTriangle, X, ShieldCheck, Trash2, HelpCircle } from 'lucide-react';
+import HelpModal from './HelpModal';
 
 const ProjectManagementPage = () => {
   const router = useRouter();
@@ -15,6 +16,7 @@ const ProjectManagementPage = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -50,7 +52,6 @@ const ProjectManagementPage = () => {
 
     fetchInitialData();
   }, [activeTab]);
-
 
   const filteredProjects = projects.filter(project => 
     project.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -151,7 +152,8 @@ const ProjectManagementPage = () => {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
+      {/* Delete Modal */}
       {showDeleteModal && projectToDelete && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white p-8 rounded-lg shadow-2xl max-w-md w-full">
@@ -188,82 +190,94 @@ const ProjectManagementPage = () => {
         </div>
       )}
 
-      <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Project Management</h1>
-              <p className="text-gray-600 mt-1">Oversee all your ongoing projects.</p>
-            </div>
-            <Link href="/project_management/create">
-              <button className="flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-200">
-                <Plus className="h-5 w-5 mr-2" />
-                Create New Project
-              </button>
-            </Link>
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Project Management</h1>
+            <p className="text-gray-600 mt-1">Oversee all your ongoing projects.</p>
           </div>
-
-          <div className="mb-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <div className="border-b border-gray-200">
-                <nav className="-mb-px flex space-x-6" aria-label="Tabs">
-                  <button
-                    onClick={() => setActiveTab('all')}
-                    className={`${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                  >
-                    All Projects
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('my')}
-                    className={`${activeTab === 'my' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                  >
-                    My Projects
-                  </button>
-                </nav>
-              </div>
-              <div className="relative w-full md:w-auto">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input 
-                  type="text"
-                  placeholder="Search projects..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full md:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="flex justify-center items-center p-10">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-            </div>
-          ) : error ? (
-            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md">
-              <div className="flex">
-                <AlertTriangle className="h-5 w-5 mr-3" />
-                <div>
-                  <p className="font-bold">Error</p>
-                  <p>{error}</p>
-                </div>
-              </div>
-            </div>
-          ) : filteredProjects.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map(project => (
-                <ProjectCard key={project._id} project={project} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16 px-6 bg-white rounded-lg shadow-sm">
-              <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No projects found</h3>
-              <p className="mt-1 text-sm text-gray-500">Get started by creating a new project.</p>
-            </div>
-          )}
+          <Link href="/project_management/create">
+            <button className="flex items-center justify-center bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg shadow-sm hover:bg-blue-700 transition-colors duration-200">
+              <Plus className="h-5 w-5 mr-2" />
+              Create New Project
+            </button>
+          </Link>
         </div>
+
+        <div className="mb-6">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="border-b border-gray-200">
+              <nav className="-mb-px flex space-x-6" aria-label="Tabs">
+                <button
+                  onClick={() => setActiveTab('all')}
+                  className={`${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  All Projects
+                </button>
+                <button
+                  onClick={() => setActiveTab('my')}
+                  className={`${activeTab === 'my' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                >
+                  My Projects
+                </button>
+              </nav>
+            </div>
+            <div className="relative w-full md:w-auto">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input 
+                type="text"
+                placeholder="Search projects..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full md:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center items-center p-10">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+          </div>
+        ) : error ? (
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md">
+            <div className="flex">
+              <AlertTriangle className="h-5 w-5 mr-3" />
+              <div>
+                <p className="font-bold">Error</p>
+                <p>{error}</p>
+              </div>
+            </div>
+          </div>
+        ) : filteredProjects.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredProjects.map(project => (
+              <ProjectCard key={project._id} project={project} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16 px-6 bg-white rounded-lg shadow-sm">
+            <Briefcase className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-lg font-medium text-gray-900">No projects found</h3>
+            <p className="mt-1 text-sm text-gray-500">Get started by creating a new project.</p>
+          </div>
+        )}
       </div>
-    </>
+
+      {/* Global Help Modal */}
+      <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
+      
+      {/* Floating Help Button */}
+      {!showHelp && (
+        <button 
+          onClick={() => setShowHelp(true)} 
+          aria-label="Help" 
+          className="fixed bottom-6 right-6 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 focus:outline-none"
+        >
+          <HelpCircle className="h-5 w-5" />
+        </button>
+      )}
+    </div>
   );
 };
 

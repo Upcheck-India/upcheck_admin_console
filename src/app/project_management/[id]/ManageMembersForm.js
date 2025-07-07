@@ -346,9 +346,9 @@ const ManageMembersForm = ({ initialMembers, onMembersChange, superManager, proj
           </div>
         ) : (
           <div className="space-y-2">
-            {members.map(member => (
+            {members.map((member, idx) => (
               <div 
-                key={member._id} 
+                key={member._id || member.user || idx} 
                 className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
                   isSuperManager(member) 
                     ? 'bg-blue-50 border-blue-200' 

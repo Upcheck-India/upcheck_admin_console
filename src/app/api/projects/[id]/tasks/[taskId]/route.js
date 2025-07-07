@@ -37,7 +37,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { title, description, assignees, reporter, dueDate, status, type } = body;
+    const { title, description, assignees, reporter, dueDate, status, type, sprintId } = body;
 
     const updateData = {
       $set: {
@@ -50,6 +50,13 @@ export async function PUT(request, { params }) {
     if (description !== undefined) updateData.$set.description = description;
     if (status !== undefined) updateData.$set.status = status;
     if (type !== undefined) updateData.$set.type = type;
+    if (sprintId !== undefined) {
+      if (sprintId && ObjectId.isValid(sprintId)) {
+        updateData.$set.sprintId = new ObjectId(sprintId);
+      } else if (!sprintId) {
+        updateData.$unset = { ...(updateData.$unset || {}), sprintId: "" };
+      }
+    }
     if (dueDate !== undefined) updateData.$set.dueDate = dueDate ? new Date(dueDate) : null;
     if (reporter !== undefined) updateData.$set.reporter = reporter ? new ObjectId(reporter) : null;
     if (Array.isArray(assignees)) {

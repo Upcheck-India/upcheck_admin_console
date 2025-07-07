@@ -32,7 +32,20 @@ export async function GET(request, { params }) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const tasks = await db.collection('project_tasks').find({ projectId: new ObjectId(params.id) }).toArray();
+    // Support optional sprintId filtering via ?sprintId=<id>
+    const { searchParams } = new URL(request.url);
+    const sprintIdParam = searchParams.get('sprintId');
+
+    let taskQuery = { projectId: new ObjectId(params.id) };
+    if (sprintIdParam) {
+      if (ObjectId.isValid(sprintIdParam)) {
+        taskQuery.sprintId = new ObjectId(sprintIdParam);
+      } else if (sprintIdParam === 'null' || sprintIdParam === 'none') {
+        taskQuery.sprintId = { $exists: false };
+      }
+    }
+
+    const tasks = await db.collection('project_tasks').find(taskQuery).toArray();
 
     return NextResponse.json(tasks);
   } catch (error) {
@@ -76,7 +89,7 @@ export async function POST(request, { params }) {
     }
 
     const body = await request.json();
-    const { title, description, status, assignees, reporter, dueDate, type } = body;
+    const { title, description, status, assignees, reporter, dueDate, type, sprintId } = body;
 
     if (!title) {
         return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -84,6 +97,7 @@ export async function POST(request, { params }) {
 
     const newTaskDocument = {
       projectId: new ObjectId(params.id),
+      ...(sprintId && ObjectId.isValid(sprintId) ? { sprintId: new ObjectId(sprintId) } : {}),
       title,
       description: description || '',
       assignees: Array.isArray(assignees) ? assignees.map(id => new ObjectId(id)) : [],

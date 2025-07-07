@@ -38,14 +38,15 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can edit this project.' }, { status: 403 });
     }
 
-    const { name, description, logo, members } = await req.json();
+    const { name, description, logo, members, githubRepoUrl } = await req.json();
 
     const updateData = {
       $set: {
         name: name.trim(),
         description: description?.trim() || '',
         logo: logo || '',
-        members: members,
+        members,
+        githubRepoUrl: githubRepoUrl || '',
         updatedAt: new Date(),
       },
     };

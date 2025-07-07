@@ -1,8 +1,8 @@
-'use client';
-
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit } from 'lucide-react';
+import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye } from 'lucide-react';
 import TaskModal from './TaskModal';
+import TaskDetailsModal from './TaskDetailsModal';
+import AddSprintModal from './AddSprintModal';
 import { useAuth } from '../../../hooks/useAuth';
 import { 
   DndContext, 
@@ -36,7 +36,7 @@ const typeColors = {
   Epic: 'bg-purple-100 text-purple-800',
 };
 
-const TaskCard = ({ task, userMap, isManager, onEdit, onDelete }) => {
+const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
   const { 
     attributes, 
     listeners, 
@@ -54,6 +54,11 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete }) => {
     transition,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 10 : 'auto',
+  };
+
+  const handleView = (e) => {
+    e.stopPropagation();
+    onView(task);
   };
 
   const handleEdit = (e) => {
@@ -74,24 +79,37 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete }) => {
       {...listeners} 
       className="bg-white p-3 rounded-lg shadow-sm border relative group touch-none"
     >
-      {isManager && (
-        <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white bg-opacity-75 rounded-md">
-          <button 
-            onClick={handleEdit} 
-            className="text-gray-500 hover:text-blue-600 p-1"
-            type="button"
-          >
-            <Edit className="h-4 w-4" />
-          </button>
-          <button 
-            onClick={handleDelete} 
-            className="text-gray-500 hover:text-red-600 p-1"
-            type="button"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
-      )}
+      <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white bg-opacity-75 rounded-md">
+        {/* View button for all users */}
+        <button 
+          onClick={handleView} 
+          className="text-gray-500 hover:text-blue-600 p-1"
+          type="button"
+          title="View task"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+        {isManager && (
+          <>
+            <button 
+              onClick={handleEdit} 
+              className="text-gray-500 hover:text-blue-600 p-1"
+              type="button"
+              title="Edit task"
+            >
+              <Edit className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={handleDelete} 
+              className="text-gray-500 hover:text-red-600 p-1"
+              type="button"
+              title="Delete task"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </>
+        )}
+      </div>
       
       <div className="flex items-start justify-between">
         <h4 className="font-semibold text-gray-800 pr-4 text-sm flex-1">
@@ -134,7 +152,7 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete }) => {
   );
 };
 
-const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete }) => {
+const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete, onView }) => {
   const { setNodeRef } = useDroppable({ id });
 
   return (
@@ -160,7 +178,8 @@ const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete }) => {
               userMap={userMap} 
               isManager={isManager} 
               onEdit={onEdit} 
-              onDelete={onDelete} 
+              onDelete={onDelete}
+              onView={onView} 
             />
           ))}
           {tasks.length === 0 && (
@@ -177,20 +196,22 @@ const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete }) => {
 const TasksTab = ({ projectId, project, allUsers = [] }) => {
   const { user: currentUser } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [sprints, setSprints] = useState([]);
+  const [currentSprintId, setCurrentSprintId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSprintModalOpen, setIsSprintModalOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState(null);
+  const [detailsTask, setDetailsTask] = useState(null);
 
+  // DnD sensors
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 250, tolerance: 5 },
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
+  // Permissions
   const isManager = useMemo(() => {
     if (!currentUser || !project) return false;
     if (project.superManager === currentUser.username) return true;
@@ -198,6 +219,7 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     return memberInfo?.role === 'Project Manager';
   }, [currentUser, project]);
 
+  // Map of userId -> user object
   const userMap = useMemo(() => {
     const map = new Map();
     if (!project || !allUsers.length) return map;
@@ -217,96 +239,161 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     return map;
   }, [project, allUsers]);
 
-  const assignableUsers = useMemo(() => 
-    Array.from(userMap.values()), 
-    [userMap]
-  );
+  const assignableUsers = useMemo(() => Array.from(userMap.values()), [userMap]);
 
-  const columns = useMemo(() => ({
-    'Backlog': tasks.filter(t => t.status === 'Backlog'),
-    'To Do': tasks.filter(t => t.status === 'To Do'),
-    'In Progress': tasks.filter(t => t.status === 'In Progress'),
-    'Done': tasks.filter(t => t.status === 'Done'),
-  }), [tasks]);
+  // Columns grouped by status
+  const columns = useMemo(() => {
+    // For Product Backlog board (no sprint selected), only show Backlog column
+    if (currentSprintId === null) {
+      return {
+        'Backlog': tasks.filter(t => t.status === 'Backlog'),
+      };
+    }
+    // For sprint boards, show full workflow columns
+    return {
+      'Backlog': tasks.filter(t => t.status === 'Backlog'),
+      'To Do': tasks.filter(t => t.status === 'To Do'),
+      'In Progress': tasks.filter(t => t.status === 'In Progress'),
+      'Done': tasks.filter(t => t.status === 'Done'),
+    };
+  }, [tasks, currentSprintId]);
 
+  // Fetch sprints
   useEffect(() => {
+    if (!projectId) return;
+    const fetchSprints = async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/sprints`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch sprints: ${res.status}`);
+        const data = await res.json();
+        setSprints(data);
+        // We no longer auto-select the first sprint to allow viewing the product backlog
+      } catch (e) {
+        console.error('Error fetching sprints:', e);
+        setError(e.message);
+      }
+    };
+    fetchSprints();
+  }, [projectId]);
+
+  // Fetch tasks when project or sprint changes
+  useEffect(() => {
+    if (!projectId) return;
     const fetchTasks = async () => {
-      if (!projectId) return;
-      
       setLoading(true);
       setError(null);
-      
       try {
-        const response = await fetch(`/api/projects/${projectId}/tasks`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch tasks: ${response.status}`);
+        let url = `/api/projects/${projectId}/tasks`; 
+        // Include sprintId param for accurate filtering. Null indicates backlog tasks (no sprint)
+        if (currentSprintId !== null) {
+          url += `?sprintId=${currentSprintId}`;
+        } else {
+          url += `?sprintId=null`;
         }
-        const data = await response.json();
+        const res = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (!res.ok) throw new Error(`Failed to fetch tasks: ${res.status}`);
+        const data = await res.json();
         setTasks(Array.isArray(data) ? data : []);
-      } catch (err) {
-        console.error('Error fetching tasks:', err);
-        setError(err.message);
+      } catch (e) {
+        console.error('Error fetching tasks:', e);
+        setError(e.message);
       } finally {
         setLoading(false);
       }
     };
-
     fetchTasks();
-  }, [projectId]);
+  }, [projectId, currentSprintId]);
 
-  const handleOpenModal = (task = null) => {
-    setCurrentTask(task);
-    setIsModalOpen(true);
+  // Modal helpers
+  const handleOpenModal = (task = null) => { 
+    setCurrentTask(task); 
+    setIsModalOpen(true); 
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setCurrentTask(null);
+  const handleOpenDetails = (task) => {
+    setDetailsTask(task);
+  };
+  const handleCloseDetails = () => setDetailsTask(null);
+
+  const handleCloseModal = () => { 
+    setCurrentTask(null); 
+    setIsModalOpen(false); 
   };
 
   const handleSaveTask = (savedTask) => {
     if (currentTask) {
-      setTasks(prevTasks => 
-        prevTasks.map(t => t._id === savedTask._id ? savedTask : t)
-      );
+      // Editing existing task
+      setTasks(prevTasks => {
+        // If task belongs to this sprint, update it; otherwise, remove it from list
+        if (currentSprintId && savedTask.sprintId && savedTask.sprintId !== currentSprintId) {
+          return prevTasks.filter(t => t._id !== savedTask._id);
+        }
+        if (!currentSprintId && savedTask.sprintId) {
+          // We are viewing backlog (no sprint), but task now has sprint -> remove
+          return prevTasks.filter(t => t._id !== savedTask._id);
+        }
+        return prevTasks.map(t => t._id === savedTask._id ? savedTask : t);
+      });
     } else {
-      setTasks(prevTasks => [...prevTasks, savedTask]);
+      // Creating new task
+      const shouldAdd = (
+        (currentSprintId && savedTask.sprintId === currentSprintId) ||
+        (!currentSprintId && !savedTask.sprintId)
+      );
+      if (shouldAdd) {
+        setTasks(prevTasks => [...prevTasks, savedTask]);
+      }
     }
     handleCloseModal();
   };
 
+  // Open add sprint modal
+  const openSprintModal = () => setIsSprintModalOpen(true);
+  const closeSprintModal = () => setIsSprintModalOpen(false);
+
+  const handleSaveSprint = (sprint) => {
+    setSprints((prev) => [...prev, sprint]);
+    setCurrentSprintId(sprint._id);
+    closeSprintModal();
+  };
+
+  // Delete task function
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Are you sure you want to delete this task?')) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, { 
-        method: 'DELETE' 
+      const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
       });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to delete task: ${response.status}`);
-      }
-      
+      if (!res.ok) throw new Error(`Failed to delete task: ${res.status}`);
       setTasks(prevTasks => prevTasks.filter(t => t._id !== taskId));
-    } catch (err) {
-      console.error('Error deleting task:', err);
-      alert(`Error deleting task: ${err.message}`);
+    } catch (e) {
+      console.error('Error deleting task:', e);
+      alert(`Error deleting task: ${e.message}`);
     }
   };
 
+  // Drag and drop handler
   const handleDragEnd = async (event) => {
     const { active, over } = event;
 
-    if (!over || !active) {
-      return;
-    }
+    if (!over || !active) return;
 
     const activeTask = tasks.find(t => t._id === active.id);
-    if (!activeTask) {
-      return;
-    }
+    if (!activeTask) return;
     
     let newStatus = over.id;
     const validStatuses = ['Backlog', 'To Do', 'In Progress', 'Done'];
@@ -323,9 +410,7 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
       }
     }
 
-    if (activeTask.status === newStatus) {
-      return;
-    }
+    if (activeTask.status === newStatus) return;
 
     const updatedTask = { ...activeTask, status: newStatus };
     const originalTasks = [...tasks];
@@ -338,7 +423,10 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     try {
       const response = await fetch(`/api/projects/${projectId}/tasks/${active.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
         body: JSON.stringify(updatedTask),
       });
 
@@ -354,6 +442,7 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     }
   };
 
+  // Loading state
   if (loading) {
     return (
       <div className="flex justify-center items-center p-8">
@@ -362,9 +451,10 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     );
   }
 
+  // Error state
   if (error) {
     return (
-      <div className="p-6 bg-red-50 border-red-200 rounded-lg flex items-center">
+      <div className="p-6 bg-red-50 border border-red-200 rounded-lg flex items-center">
         <AlertTriangle className="h-6 w-6 text-red-500 mr-3" />
         <div>
           <h3 className="font-semibold text-red-800">Error Loading Tasks</h3>
@@ -377,21 +467,62 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
   return (
     <>
       {isModalOpen && (
-        <TaskModal 
+        <TaskModal
           task={currentTask}
           assignableUsers={assignableUsers}
           onClose={handleCloseModal}
-          onSave={handleSaveTask} 
+          onSave={handleSaveTask}
           projectId={projectId}
+          sprints={sprints}
+          defaultSprintId={currentSprintId !== null ? currentSprintId : (sprints.length > 0 ? sprints[0]._id : null)}
         />
       )}
-      
-      <DndContext 
-        sensors={sensors} 
-        collisionDetection={closestCenter} 
-        onDragEnd={handleDragEnd}
-      >
+
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="p-4 sm:p-6 bg-gray-50 min-h-full">
+          <div className="flex flex-col mb-6">
+            {/* Sprint Tabs */}
+            <div className="flex items-center mb-3 space-x-2 overflow-x-auto sticky top-0 bg-gray-50 z-10 py-2">
+              <button
+                onClick={() => setCurrentSprintId(null)}
+                className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
+                  currentSprintId === null 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                }`}
+              >
+                Product Board
+              </button>
+              {sprints.map(s => (
+                <button
+                  key={s._id}
+                  onClick={() => setCurrentSprintId(s._id)}
+                  className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
+                    currentSprintId === s._id 
+                      ? 'bg-blue-600 text-white' 
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  {s.name}
+                </button>
+              ))}
+              {isManager && (
+                <button
+                  onClick={openSprintModal}
+                  className="flex items-center px-2 py-1.5 rounded-md bg-green-600 text-white text-sm hover:bg-green-700"
+                >
+                  <PlusCircle className="h-4 w-4 mr-1" /> Add Sprint
+                </button>
+              )}
+            </div>
+            {sprints.length === 0 && (
+              <div className="text-sm text-gray-500 ml-2">
+                {isManager ? 'No sprints yet. Click "Add Sprint" to create the first sprint.' : 'No sprints available yet.'}
+              </div>
+            )}
+          </div>
+
+          {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-xl font-bold text-gray-800">Project Tasks</h2>
             {isManager && (
@@ -406,22 +537,36 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
             )}
           </div>
 
+          {/* Board */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             {Object.entries(columns).map(([status, tasksInColumn]) => (
-              <Column 
-                key={status} 
-                id={status} 
-                title={status} 
-                tasks={tasksInColumn} 
-                userMap={userMap} 
+              <Column
+                key={status}
+                id={status}
+                title={status}
+                tasks={tasksInColumn}
+                userMap={userMap}
                 isManager={isManager}
                 onEdit={handleOpenModal}
                 onDelete={handleDeleteTask}
+                onView={handleOpenDetails}
               />
             ))}
           </div>
         </div>
       </DndContext>
+
+      {detailsTask && (
+        <TaskDetailsModal task={detailsTask} onClose={handleCloseDetails} userMap={userMap} sprints={sprints} />
+      )}
+
+      {isSprintModalOpen && (
+        <AddSprintModal
+          projectId={projectId}
+          onClose={closeSprintModal}
+          onSave={handleSaveSprint}
+        />
+      )}
     </>
   );
 };
