@@ -2,7 +2,7 @@
 // Sends a heartbeat every 10 seconds for authenticated users
 import { useEffect, useRef } from 'react';
 
-export default function useHeartbeat(enabled = true, intervalMs = 10000) {
+export default function useHeartbeat(enabled = true, intervalMs = 15000) {
   const timerRef = useRef(null);
 
   useEffect(() => {

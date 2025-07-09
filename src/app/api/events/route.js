@@ -53,10 +53,21 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    const { title, description, participants, startTime, duration, sendNotification, zoomSettings } = await request.json();
+    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '' } = await request.json();
 
     if (!title || !description || !startTime || !duration) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Validate duration range (1-300 minutes)
+    const durationInt = parseInt(duration, 10);
+    if (isNaN(durationInt) || durationInt < 1 || durationInt > 300) {
+        return NextResponse.json({ error: 'Duration must be between 1 and 300 minutes' }, { status: 400 });
+    }
+
+    // Ensure startTime is in the future
+    if (new Date(startTime) < new Date()) {
+        return NextResponse.json({ error: 'Start time must be in the future' }, { status: 400 });
     }
 
     const eventData = {
@@ -66,6 +77,7 @@ export async function POST(request) {
         hostId: user._id.toString(),
         duration: parseInt(duration, 10),
         participants: participants || [],
+        notes: includeNotes ? notes : '',
         startTime: new Date(startTime),
         endTime: new Date(new Date(startTime).getTime() + parseInt(duration, 10) * 60000),
         sendNotification: !!sendNotification,
@@ -86,10 +98,13 @@ export async function POST(request) {
         host: eventData.host,
         event: {
           title: eventData.title,
+          description: includeAgenda ? eventData.description : undefined,
           startTime: eventData.startTime,
           duration: eventData.duration,
           zoomMeetingUrl: eventData.zoomMeetingUrl,
         },
+        participants: includeParticipants ? eventData.participants : undefined,
+        notes: includeNotes ? notes : undefined,
       };
 
       for (const participantEmail of eventData.participants) {
