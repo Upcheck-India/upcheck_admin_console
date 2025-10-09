@@ -78,7 +78,7 @@ const AdminLandingPage = () => {
 
   const modules = [
     {
-      title: "User Management",
+      title: "Human Resource",
       description: "Manage users, roles, and permissions",
       icon: <Users className="w-6 h-6 text-white" />,
       link: "/user_management",

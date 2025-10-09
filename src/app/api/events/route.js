@@ -77,7 +77,6 @@ export async function POST(request) {
         hostId: user._id.toString(),
         duration: parseInt(duration, 10),
         participants: participants || [],
-        notes: includeNotes ? notes : '',
         startTime: new Date(startTime),
         endTime: new Date(new Date(startTime).getTime() + parseInt(duration, 10) * 60000),
         sendNotification: !!sendNotification,
