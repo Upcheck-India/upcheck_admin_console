@@ -22,7 +22,9 @@ import {
   X,
   Trash2,
   Gamepad2,
-  Settings
+  Settings,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
 import ToolSelector, { getToolBadge } from '../../../../components/ToolSelector';
 import CodeBlock from '../../../../components/CodeBlock';
@@ -47,8 +49,32 @@ export default function JovanChat() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchMode, setSearchMode] = useState(null);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState(false);
+  const [showDiscontinuationModal, setShowDiscontinuationModal] = useState(false);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
   const messagesEndRef = useRef(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const hasSeenNotice = localStorage.getItem('jovan-discontinuation-notice-seen');
+    if (!hasSeenNotice) {
+      setShowDiscontinuationModal(true);
+    }
+  }, []);
+
+  const handleCloseDiscontinuationModal = () => {
+    if (dontShowAgain) {
+      localStorage.setItem('jovan-discontinuation-notice-seen', 'true');
+    }
+    setShowDiscontinuationModal(false);
+  };
+
+  const handleVisitNewSite = () => {
+    if (dontShowAgain) {
+      localStorage.setItem('jovan-discontinuation-notice-seen', 'true');
+    }
+    window.open('https://jovan-ai.vercel.app', '_blank');
+    setShowDiscontinuationModal(false);
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -221,7 +247,6 @@ export default function JovanChat() {
     setSearchMode(toolId);
   };
 
-  // Move attemptRequest outside handleSubmit to make it reusable
   const attemptRequest = async (messageContent, originalInput, isRetry = false) => {
     let retryCount = 0;
     const MAX_RETRIES = 2;
@@ -349,7 +374,6 @@ export default function JovanChat() {
       badge: lastUserMessage.badge
     };
 
-    // Remove the last AI message and add the retry user message
     setMessages(prev => [
       ...prev.slice(0, -1),
       userMessage
@@ -436,6 +460,112 @@ export default function JovanChat() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
+      {/* Discontinuation Modal */}
+      {showDiscontinuationModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-slideIn">
+            {/* Header with gradient */}
+            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 p-6 text-white relative overflow-hidden">
+              <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+              <div className="relative z-10 flex items-start gap-4">
+                <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold mb-2">Important Notice</h2>
+                  <p className="text-blue-100 text-sm">Service Migration Announcement</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+                <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  Jovan AI Has Moved!
+                </h3>
+                <p className="text-gray-700 leading-relaxed">
+                  This page is being discontinued. Jovan AI chatbot has been permanently moved to a dedicated service for better performance and features.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-green-600 text-sm">✓</span>
+                  </div>
+                  <div>
+                    <p className="text-gray-700 font-medium">Enhanced Performance</p>
+                    <p className="text-gray-500 text-sm">Faster responses and improved reliability</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-green-600 text-sm">✓</span>
+                  </div>
+                  <div>
+                    <p className="text-gray-700 font-medium">Better Interface</p>
+                    <p className="text-gray-500 text-sm">Modern design with new features</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <span className="text-green-600 text-sm">✓</span>
+                  </div>
+                  <div>
+                    <p className="text-gray-700 font-medium">Dedicated Service</p>
+                    <p className="text-gray-500 text-sm">Optimized specifically for AI conversations</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <p className="text-sm text-blue-800 font-medium mb-2">New Location:</p>
+                <a 
+                  href="https://jovan-ai.vercel.app" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-700 font-mono text-sm break-all underline"
+                >
+                  https://jovan-ai.vercel.app
+                </a>
+              </div>
+
+              {/* Don't show again checkbox */}
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={dontShowAgain}
+                  onChange={(e) => setDontShowAgain(e.target.checked)}
+                  className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                />
+                <span className="text-gray-600 text-sm group-hover:text-gray-800">
+                  Don't show this message again
+                </span>
+              </label>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 pb-6 flex gap-3">
+              <button
+                onClick={handleCloseDiscontinuationModal}
+                className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+              >
+                Continue Here
+              </button>
+              <button
+                onClick={handleVisitNewSite}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30"
+              >
+                Visit New Site
+                <ExternalLink className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <nav className="bg-white border-b shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
           <div className="flex justify-between h-14 sm:h-16">
@@ -692,7 +822,6 @@ export default function JovanChat() {
                         )}
                       </div>
 
-                      {/* Show retry button or error retry message */}
                       {message.role === 'assistant' && index === messages.length - 1 && (
                         <div className="flex justify-end -mt-2 mb-4 mr-12 sm:mr-14">
                           <button
