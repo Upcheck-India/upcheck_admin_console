@@ -53,7 +53,7 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '' } = await request.json();
+    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '' } = await request.json();
 
     if (!title || !description || !startTime || !duration) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -82,12 +82,20 @@ export async function POST(request) {
         sendNotification: !!sendNotification,
         createdAt: new Date(),
         zoomSettings,
+        provider,
     };
 
-    const zoomMeeting = await createZoomMeeting(eventData);
-
-    eventData.zoomMeetingUrl = zoomMeeting.join_url;
-    eventData.zoomMeetingId = zoomMeeting.id;
+    if (provider === 'zoom') {
+      const zoomMeeting = await createZoomMeeting(eventData);
+      eventData.zoomMeetingUrl = zoomMeeting.join_url;
+      eventData.zoomMeetingId = zoomMeeting.id;
+      eventData.joinUrl = zoomMeeting.join_url;
+    } else {
+      if (!joinUrl || typeof joinUrl !== 'string') {
+        return NextResponse.json({ error: 'Google Meet link (joinUrl) is required for Google Meet provider' }, { status: 400 });
+      }
+      eventData.joinUrl = joinUrl;
+    }
 
     const result = await db.collection('events').insertOne(eventData);
 
@@ -101,6 +109,8 @@ export async function POST(request) {
           startTime: eventData.startTime,
           duration: eventData.duration,
           zoomMeetingUrl: eventData.zoomMeetingUrl,
+          joinUrl: eventData.joinUrl,
+          provider: eventData.provider,
         },
         participants: includeParticipants ? eventData.participants : undefined,
         notes: includeNotes ? notes : undefined,

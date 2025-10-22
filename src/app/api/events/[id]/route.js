@@ -5,7 +5,7 @@ import { ObjectId } from 'mongodb';
 // GET /api/events/[id]
 export async function GET(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });
@@ -30,7 +30,7 @@ export async function GET(request, { params }) {
 // DELETE /api/events/[id]
 export async function DELETE(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const token = request.cookies.get('admin_token')?.value;
 
     if (!token) {
@@ -44,12 +44,8 @@ export async function DELETE(request, { params }) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    // Verify token and get user
-    const session = await db.collection('admin_sessions').findOne({ sessionToken: token });
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
-    const user = await db.collection('admin_users').findOne({ _id: session.userId });
+    // Verify token and get user (aligned with /api/auth/check)
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 401 });
     }
@@ -83,7 +79,7 @@ export async function DELETE(request, { params }) {
 // PUT /api/events/[id]
 export async function PUT(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const token = request.cookies.get('admin_token')?.value;
     const body = await request.json();
 
@@ -98,12 +94,8 @@ export async function PUT(request, { params }) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    // Verify token and get user
-    const session = await db.collection('admin_sessions').findOne({ sessionToken: token });
-    if (!session) {
-      return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
-    }
-    const user = await db.collection('admin_users').findOne({ _id: session.userId });
+    // Verify token and get user (aligned with /api/auth/check)
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 401 });
     }
@@ -119,7 +111,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { title, description, startTime, duration, participants } = body;
+    const { title, description, startTime, duration, participants, provider, joinUrl } = body;
 
     const updatedEventData = {
       title,
@@ -129,6 +121,20 @@ export async function PUT(request, { params }) {
       participants,
       updatedAt: new Date(),
     };
+
+    // Optionally update provider and joinUrl. We don't recreate Zoom meetings on edit.
+    if (provider) {
+      updatedEventData.provider = provider;
+    }
+    if (provider === 'google_meet') {
+      if (!joinUrl || typeof joinUrl !== 'string') {
+        return NextResponse.json({ error: 'Google Meet link (joinUrl) is required when provider is google_meet' }, { status: 400 });
+      }
+      updatedEventData.joinUrl = joinUrl;
+    } else if (provider === 'zoom') {
+      // Keep existing Zoom joinUrl/zoomMeetingUrl as-is; do not modify here
+      // If joinUrl was previously set for google_meet, we leave it untouched unless provider switches.
+    }
 
     // For now, we are not updating the zoom meeting or sending emails on update.
     // This can be added later if needed.

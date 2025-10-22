@@ -155,7 +155,7 @@ const EventsPage = () => {
             <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
               <div className="flex items-center text-xs text-gray-500">
                 <Video className="w-4 h-4 mr-1" />
-                Zoom Meeting
+                {event.provider === 'google_meet' ? 'Google Meet' : 'Zoom Meeting'}
               </div>
               <div className="flex items-center text-sm font-semibold text-indigo-600 group-hover:text-indigo-700 transition-colors">
                 View Details

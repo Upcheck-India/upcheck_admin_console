@@ -6,7 +6,7 @@ import * as ics from 'ics';
 // GET /api/events/[id]/ics
 export async function GET(request, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Select from 'react-select';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check } from 'lucide-react';
+import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check, ExternalLink } from 'lucide-react';
 
 const InputField = memo(({ label, name, type = 'text', value, onChange, required = false, error, ...props }) => (
   <div className="space-y-2">
@@ -72,6 +72,8 @@ const CreateEventPage = () => {
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [provider, setProvider] = useState('zoom');
+  const [joinUrl, setJoinUrl] = useState('');
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -164,6 +166,13 @@ const CreateEventPage = () => {
       }
     });
 
+    if (provider === 'google_meet') {
+      const isValidMeet = typeof joinUrl === 'string' && /^https?:\/\//i.test(joinUrl) && joinUrl.includes('meet.google.com');
+      if (!isValidMeet) {
+        newErrors.joinUrl = 'Please provide a valid Google Meet link (https://meet.google.com/...)';
+      }
+    }
+
     if (selectedParticipants.length === 0) {
       newErrors.participants = 'Please select at least one participant.';
     }
@@ -180,15 +189,19 @@ const CreateEventPage = () => {
     setError(null);
 
     try {
+      const payload = {
+        ...formData,
+        zoomSettings,
+        participants: selectedParticipants.map(p => p.value),
+        provider,
+        ...(provider === 'google_meet' ? { joinUrl } : {}),
+      };
+
       const response = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({
-          ...formData,
-          zoomSettings,
-          participants: selectedParticipants.map(p => p.value),
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -282,7 +295,27 @@ const CreateEventPage = () => {
 
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Schedule a New Meeting</h1>
-          <p className="text-gray-600">Create and configure your Zoom meeting with advanced settings</p>
+          <p className="text-gray-600">Create and configure your meeting. Choose Zoom or Google Meet as provider.</p>
+        </div>
+
+        {/* Provider Selection */}
+        <div className="mb-8">
+          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setProvider('zoom')}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${provider === 'zoom' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              Zoom
+            </button>
+            <button
+              type="button"
+              onClick={() => setProvider('google_meet')}
+              className={`px-4 py-2 text-sm font-medium rounded-md ${provider === 'google_meet' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+            >
+              Google Meet
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -320,6 +353,51 @@ const CreateEventPage = () => {
                 <div className="text-xs text-gray-500 flex items-center">
                   <Check className="w-4 h-4 mr-1 text-green-500" />
                   Meeting details will be included in calendar invitations
+                </div>
+                {/* Meeting Link section inside Meeting Details */}
+                {/* Zoom: show disabled shaded field indicating auto-generation */}
+                <div className={`${provider === 'zoom' ? '' : 'hidden'}`}>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Meeting Link
+                  </label>
+                  <input
+                    type="text"
+                    value="Will be generated automatically after scheduling"
+                    disabled
+                    className="block w-full px-4 py-3 border rounded-lg shadow-sm bg-gray-100 text-gray-500 cursor-not-allowed border-gray-300"
+                  />
+                  <p className="mt-2 text-xs text-gray-500">Zoom meeting link will be auto-generated and emailed to participants.</p>
+                </div>
+                {/* Google Meet: ask for link with guidance */}
+                <div className={`${provider === 'google_meet' ? '' : 'hidden'}`}>
+                  <InputField
+                    label="Google Meet Link"
+                    name="joinUrl"
+                    type="url"
+                    value={joinUrl}
+                    onChange={(e) => setJoinUrl(e.target.value)}
+                    placeholder="https://meet.google.com/xyz-abcd-efg"
+                    required={provider === 'google_meet'}
+                    error={fieldErrors.joinUrl}
+                  />
+                  <div className="bg-green-50 border mt-4 border-green-200 rounded-lg p-4 text-sm text-green-800">
+                    <p className="font-medium">How to get a Google Meet link:</p>
+                    <ol className="list-decimal list-inside mt-2 space-y-1">
+                      <li>Click "Get Meet Link" to open Google Meet in a new tab.</li>
+                      <li>Sign in if not already signed in.</li>
+                      <li>Click "Create a meeting for later" and copy the link.</li>
+                      <li>Paste the link above.</li>
+                    </ol>
+                    <a
+                      href="https://meet.google.com/landing?hs=1&source=upcheck_admin&ref=events_create"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center mt-3 px-3 py-2 rounded-md bg-green-600 text-white hover:bg-green-700"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      Get Meet Link
+                    </a>
+                  </div>
                 </div>
               </div>
             </div>
@@ -414,8 +492,8 @@ const CreateEventPage = () => {
               </div>
             </div>
 
-            {/* Meeting Options */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            {/* Meeting Options - Zoom */}
+            <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${provider !== 'zoom' ? 'hidden' : ''}`}>
               <div className="flex items-center mb-6">
                 <div className="p-2 bg-indigo-100 rounded-lg mr-3">
                   <Settings className="w-6 h-6 text-indigo-600" />
@@ -533,6 +611,8 @@ const CreateEventPage = () => {
                 description="Send calendar invitations and reminders"
               />
             </div>
+
+            
           </div>
 
           {/* Bottom Section */}
@@ -548,8 +628,8 @@ const CreateEventPage = () => {
             
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-center text-sm text-gray-500 mb-6">
-                <span className="mr-2">Powered by</span>
-                <img src="/zoom.png" alt="Zoom logo" className="h-5 w-auto" />
+                <span className="mr-2">Provider:</span>
+                <span className="font-medium">{provider === 'zoom' ? 'Zoom' : 'Google Meet'}</span>
               </div>
               
               <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">

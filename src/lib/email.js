@@ -13,6 +13,8 @@ const transporter = nodemailer.createTransport({
  */
 export const sendEmail = async (to, subject, options) => {
   const { host, event, participants = [], notes } = options;
+  const joinLink = event.joinUrl || event.zoomMeetingUrl;
+  const providerLabel = event.provider === 'google_meet' ? 'Google Meet' : 'Zoom';
 
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
@@ -29,6 +31,7 @@ export const sendEmail = async (to, subject, options) => {
           <p><strong>Date:</strong> ${new Date(event.startTime).toLocaleDateString([], { dateStyle: 'full' })}</p>
           <p><strong>Time:</strong> ${new Date(event.startTime).toLocaleTimeString([], { timeStyle: 'short' })}</p>
           <p><strong>Duration:</strong> ${event.duration} minutes</p>
+          <p><strong>Provider:</strong> ${providerLabel}</p>
           ${event.description ? `<p style="margin-top: 12px;"><strong>Agenda:</strong><br>${event.description.replace(/\n/g, '<br>')}</p>` : ''}
         </div>
 
@@ -49,7 +52,7 @@ export const sendEmail = async (to, subject, options) => {
         ` : ''}
 
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${event.zoomMeetingUrl}" style="background-color: #22C55E; color: white; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 16px; display: inline-block;">
+          <a href="${joinLink}" style="background-color: #22C55E; color: white; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 16px; display: inline-block;">
             Join Meeting
           </a>
         </div>
@@ -61,8 +64,7 @@ export const sendEmail = async (to, subject, options) => {
       <div style="background-color: #f3f4f6; color: #6b7280; padding: 16px; text-align: center; font-size: 12px;">
         <p style="margin: 0;">This is an automated notification from Upcheck Admin. Please do not reply directly to this email.</p>
         <div style="margin-top: 10px; display: flex; align-items: center; justify-content: center;">
-          <span>Powered by Upcheck + Zoom Meetings</span>
-          <img src="https://upload.wikimedia.org/wikipedia/commons/2/2b/Zoom_Communications_Logo.svg" alt="Zoom Logo" style="height: 16px; margin-left: 8px;" />
+          <span>Powered by Upcheck + ${providerLabel}</span>
         </div>
       </div>
     </div>

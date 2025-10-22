@@ -44,7 +44,7 @@ const EventDetailPage = () => {
   const canJoinMeeting = user && event && (event.host === user.email || event.participants.includes(user.email));
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(event.zoomMeetingUrl);
+    navigator.clipboard.writeText(event.joinUrl || event.zoomMeetingUrl);
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 2000);
   };
@@ -141,7 +141,7 @@ const EventDetailPage = () => {
                   {canJoinMeeting ? (
                     <div className="mt-6 space-y-4">
                       <button
-                        onClick={() => window.open(event.zoomMeetingUrl, '_blank')}
+                        onClick={() => window.open(event.joinUrl || event.zoomMeetingUrl, '_blank')}
                         className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                       >
                         <Video className="w-5 h-5 mr-2" />
@@ -167,8 +167,8 @@ const EventDetailPage = () => {
             </div>
           </div>
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-end text-xs text-gray-500">
-            <span>Powered by</span>
-            <img src="/zoom.png" alt="Zoom logo" className="h-5 w-auto mx-1.5" />
+            <span>Provider:</span>
+            <span className="ml-1.5 font-medium">{event.provider === 'google_meet' ? 'Google Meet' : 'Zoom'}</span>
           </div>
         </div>
       </div>

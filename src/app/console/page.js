@@ -29,7 +29,8 @@ import {
   Sparkles,
   Brain,
   MessageSquare,
-  PartyPopper
+  PartyPopper,
+  Video
 } from 'lucide-react';
 import AvatarWithStatus from '../../components/AvatarWithStatus';
 import useHeartbeat from '../../hooks/useHeartbeat';
@@ -102,9 +103,9 @@ const AdminLandingPage = () => {
       bgLight: "bg-green-50"
     },
     {
-      title: "Events",
-      description: "Create events and manage event participants",
-      icon: <PartyPopper className="w-6 h-6 text-white" />,
+      title: "Meetings",
+      description: "Create and manage meetings",
+      icon: <Video className="w-6 h-6 text-white" />,
       link: "/events",
       gradient: "from-teal-400 via-blue-500 to-green-400",
       bgLight: "bg-teal-50"
