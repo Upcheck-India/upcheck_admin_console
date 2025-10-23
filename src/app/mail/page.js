@@ -33,73 +33,6 @@ const stripLegacyQuoteMarkers = (html) => {
     .trim();
 };
 
-const OAuthPromptModal = ({ show, onClose, status, onRecheck }) => {
-  if (!show) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Connect your Gmail</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3 text-sm text-gray-700">
-          <p>To send and receive via the Mail page, please connect your Google account using OAuth.</p>
-          <p className="text-gray-500">This applies only to the Mail page and does not affect other emailing features.</p>
-          {status?.connected ? (
-            <div className="text-green-700">Connected{status.email ? ` as ${status.email}` : ''}. You can close this and try sending again.</div>
-          ) : (
-            <div className="text-red-700">Not connected</div>
-          )}
-        </div>
-        <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
-          <a href="/api/mail/oauth/start" className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Connect Gmail</a>
-          <a href="/mail/settings" className="px-3 py-2 border border-gray-300 rounded hover:bg-gray-50">Open Settings</a>
-          <button onClick={onRecheck} className="px-3 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50">I have connected, recheck</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MailSettingsModal = ({ show, onClose, status, onDisconnect }) => {
-  if (!show) return null;
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Mail Settings</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600" aria-label="Close settings">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="text-sm text-gray-700">
-            <div className="font-medium mb-1">Gmail Sending</div>
-            {status?.connected ? (
-              <div className="space-y-2">
-                <div>Connected. Emails will be sent using your Gmail account.</div>
-                <div className="text-xs text-gray-500">This applies only to the Mail page.</div>
-                <button onClick={onDisconnect} className="px-3 py-2 text-red-600 border border-red-600 rounded hover:bg-red-50">Disconnect</button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div>Not connected.</div>
-                <a href="/api/mail/oauth/start" className="inline-block px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Connect Gmail</a>
-                <div className="text-xs text-gray-500">You’ll be asked once to authorize sending. We store only OAuth tokens.</div>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="p-4 border-t border-gray-200 flex justify-end">
-          <button onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-50">Close</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const buildReplyQuote = (email) => {
   const dateStr = email.date instanceof Date ? email.date.toLocaleString() : '';
   const cleaned = email.body || '';
@@ -218,7 +151,7 @@ const useUserOptions = () => {
 };
 
 // Sub-components
-const Sidebar = ({ activeFolder, setActiveFolder, onCompose, onSettings, counts }) => {
+const Sidebar = ({ activeFolder, setActiveFolder, onCompose, counts }) => {
   const getFolderCount = useCallback((folderId) => {
     if (folderId === 'starred') {
       return counts?.starred?.total || 0;
@@ -282,14 +215,13 @@ const Sidebar = ({ activeFolder, setActiveFolder, onCompose, onSettings, counts 
       </nav>
 
       <div className="p-4 border-t border-gray-200">
-        <a 
-          href="/mail/settings"
+        <button 
           className="flex items-center w-full px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-lg"
           aria-label="Settings"
         >
           <Settings className="w-5 h-5 mr-3" aria-hidden="true" />
           Settings
-        </a>
+        </button>
       </div>
     </div>
   );
@@ -313,6 +245,7 @@ const EmailListItem = ({ email, isSelected, onToggleSelect, onOpen, onToggleStar
         }}
         aria-label={`Select email from ${email.fromName}`}
       />
+      
       <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-sm font-medium text-blue-700 flex-shrink-0">
         {email.avatar}
       </div>
@@ -703,11 +636,6 @@ const MailPage = () => {
   const { emails, setEmails, loading, error, fetchEmails, hasMore } = useEmailFetch(activeFolder);
   const { usersOptions, setUsersOptions, loadingUsers } = useUserOptions();
   const [counts, setCounts] = useState(null);
-  const [showSettings, setShowSettings] = useState(false);
-  const [oauthStatus, setOauthStatus] = useState({ connected: false });
-  const [showOauthPrompt, setShowOauthPrompt] = useState(false);
-  const [notifications, setNotifications] = useState([]); // {id, type:'info'|'warn'|'error', text, action}
-  const [lastFetchAt, setLastFetchAt] = useState(null);
 
   const fetchCounts = useCallback(async () => {
     try {
@@ -726,71 +654,6 @@ const MailPage = () => {
     fetchEmails(undefined, 1, false);
     fetchCounts();
   }, [activeFolder, fetchEmails]);
-
-  // Watch email fetch to track last successful load and server failures
-  useEffect(() => {
-    // When error occurs, add a transient server error notification
-    if (error) {
-      setNotifications(prev => {
-        const exists = prev.some(n => n.id === 'server-error');
-        if (exists) return prev;
-        return [...prev, { id: 'server-error', type: 'error', text: 'Unable to load emails. Server may be unavailable.', action: null }];
-      });
-    } else if (!loading && emails.length >= 0) {
-      setLastFetchAt(Date.now());
-      // Clear server error if previously set
-      setNotifications(prev => prev.filter(n => n.id !== 'server-error'));
-    }
-  }, [loading, error, emails.length]);
-
-  // Stale data reminder if no fetch in 15 minutes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (lastFetchAt && Date.now() - lastFetchAt > 15 * 60 * 1000) {
-        setNotifications(prev => {
-          const exists = prev.some(n => n.id === 'stale');
-          if (exists) return prev;
-          return [...prev, { id: 'stale', type: 'warn', text: 'It’s been a while since the last refresh.', action: { label: 'Refresh now', onClick: () => fetchEmails(undefined, 1, false) } }];
-        });
-      }
-    }, 60 * 1000);
-    return () => clearInterval(interval);
-  }, [lastFetchAt, fetchEmails]);
-
-  useEffect(() => {
-    if (showSettings) {
-      fetch('/api/mail/oauth/status', { credentials: 'include' })
-        .then(r => r.json().catch(() => ({})))
-        .then(d => setOauthStatus(d))
-        .catch(() => {});
-    }
-  }, [showSettings]);
-
-  useEffect(() => {
-    if (showOauthPrompt) {
-      fetch('/api/mail/oauth/status', { credentials: 'include' })
-        .then(r => r.json().catch(() => ({})))
-        .then(d => setOauthStatus(d))
-        .catch(() => {});
-    }
-  }, [showOauthPrompt]);
-
-  // Prefetch OAuth status once to show a minimal banner if not connected
-  useEffect(() => {
-    fetch('/api/mail/oauth/status', { credentials: 'include' })
-      .then(r => r.json().catch(() => ({})))
-      .then(d => {
-        setOauthStatus(d);
-        if (!d?.connected) {
-          setNotifications(prev => {
-            const exists = prev.some(n => n.id === 'oauth');
-            if (exists) return prev;
-            return [...prev, { id: 'oauth', type: 'warn', text: 'Gmail is not connected. Connect to send from your account.', action: { label: 'Connect', href: '/mail/settings' } }];
-          });
-        }
-      })
-      .catch(() => {});
-  }, []);
 
   const onCreateAddress = useCallback((input, field) => {
     const trimmed = input.trim();
@@ -883,22 +746,18 @@ const MailPage = () => {
     try {
       setSending(true);
       const fd = new FormData();
-      if (composeData.to?.length) fd.append('to', composeData.to.map(o => o.value).join(', '));
+      fd.append('to', composeData.to.map(o => o.value).join(', '));
       if (composeData.cc?.length) fd.append('cc', composeData.cc.map(o => o.value).join(', '));
       if (composeData.bcc?.length) fd.append('bcc', composeData.bcc.map(o => o.value).join(', '));
       fd.append('subject', composeData.subject || '');
       fd.append('body', composeData.body || '');
       files.forEach(f => fd.append('attachments', f));
 
-      const res = await fetch('/api/mail/send', {
+      const res = await fetch('/api/send-email', {
         method: 'POST',
         body: fd,
         credentials: 'include',
       });
-      if (res.status === 412) {
-        setShowOauthPrompt(true);
-        return;
-      }
       
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -910,7 +769,7 @@ const MailPage = () => {
       setActiveFolder('sent');
       await fetchEmails('sent');
     } catch (e) {
-      alert(e.message || 'Failed to send email');
+      alert(e.message);
     } finally {
       setSending(false);
     }
@@ -922,7 +781,6 @@ const MailPage = () => {
         activeFolder={activeFolder}
         setActiveFolder={setActiveFolder}
         onCompose={handleCompose}
-        onSettings={() => setShowSettings(true)}
         counts={counts}
       />
       
@@ -993,13 +851,7 @@ const MailPage = () => {
               </div>
             </div>
           )}
-          {/* Inline OAuth banner (guaranteed visibility) */}
-          {oauthStatus && oauthStatus.connected === false && (
-            <div className="mt-3 flex items-center justify-between rounded-md px-3 py-2 text-sm border bg-yellow-50 border-yellow-200 text-yellow-700">
-              <span>Gmail is not connected. Connect to send emails from your account.</span>
-              <a href="/mail/settings" className="underline">Connect</a>
-            </div>
-          )}
+
           {selectedMails.length > 0 && (
             <div className="flex items-center gap-2 mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <span className="text-sm text-blue-700 font-medium">
@@ -1111,18 +963,6 @@ const MailPage = () => {
         onSend={handleSendEmail}
         sending={sending}
         userEmail={user?.email}
-      />
-
-      <OAuthPromptModal
-        show={showOauthPrompt}
-        onClose={() => setShowOauthPrompt(false)}
-        status={oauthStatus}
-        onRecheck={async () => {
-          const r = await fetch('/api/mail/oauth/status', { credentials: 'include' });
-          const d = await r.json().catch(() => ({}));
-          setOauthStatus(d);
-          if (d.connected) setShowOauthPrompt(false);
-        }}
       />
 
       <EmailDetailModal
