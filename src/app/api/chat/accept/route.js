@@ -20,8 +20,8 @@ export async function POST(request) {
     const currentUser = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Update connection status to accepted
-    const result = await db.collection('chat_connections').updateOne(
+    // Update both sides to accepted
+    const receiverUpdate = await db.collection('chat_connections').updateOne(
       {
         userId: currentUser._id.toString(),
         peerId: peerId,
@@ -35,7 +35,21 @@ export async function POST(request) {
       }
     );
 
-    if (result.matchedCount === 0) {
+    const senderUpdate = await db.collection('chat_connections').updateOne(
+      {
+        userId: peerId,
+        peerId: currentUser._id.toString(),
+        status: 'pending'
+      },
+      {
+        $set: {
+          status: 'accepted',
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    if (receiverUpdate.matchedCount === 0) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
 
