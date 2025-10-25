@@ -102,6 +102,7 @@ const EventDetailPage = () => {
   const tracking = Array.isArray(event.tracking) ? event.tracking : [];
   const openCount = tracking.filter(t => t.openedAt).length;
   const clickCount = tracking.filter(t => t.clickedAt).length;
+  const ackCount = tracking.filter(t => t.ackAt).length;
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
@@ -178,7 +179,7 @@ const EventDetailPage = () => {
                   )}
                 </div>
 
-                {(event.trackOpens || event.trackClicks) && (
+                {(event.trackOpens || event.trackClicks || event.trackAck) && (
                   <div>
                     <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
                       <MailCheck className="w-5 h-5 mr-2 text-indigo-600"/>
@@ -190,6 +191,9 @@ const EventDetailPage = () => {
                       )}
                       {event.trackClicks && (
                         <span className="inline-flex items-center gap-1"><MousePointer className="w-4 h-4"/> Clicks: {clickCount}/{participants.length}</span>
+                      )}
+                      {event.trackAck && (
+                        <span className="inline-flex items-center gap-1"><Check className="w-4 h-4"/> Acknowledged: {ackCount}/{participants.length}</span>
                       )}
                     </div>
                     <div className="overflow-x-auto rounded-md border border-gray-200">
@@ -203,6 +207,9 @@ const EventDetailPage = () => {
                             )}
                             {event.trackClicks && (
                               <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clicked</th>
+                            )}
+                            {event.trackAck && (
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acknowledged</th>
                             )}
                           </tr>
                         </thead>
@@ -219,13 +226,16 @@ const EventDetailPage = () => {
                                 {event.trackClicks && (
                                   <td className="px-4 py-2">{rec?.clickedAt ? <span className="text-blue-700">{new Date(rec.clickedAt).toLocaleString()}</span> : <span className="text-gray-400">—</span>}</td>
                                 )}
+                                {event.trackAck && (
+                                  <td className="px-4 py-2">{rec?.ackAt ? <span className="text-indigo-700">{new Date(rec.ackAt).toLocaleString()}</span> : <span className="text-gray-400">—</span>}</td>
+                                )}
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-                    <p className="mt-2 text-xs text-gray-500">Tracking is optional and respects recipients' email clients. Some clients block pixels by default.</p>
+                    <p className="mt-2 text-xs text-gray-500">Tracking is optional and respects recipients' email clients. Some clients block pixels by default. Refresh this page after recipients interact with the email to see updates.</p>
                   </div>
                 )}
               </div>

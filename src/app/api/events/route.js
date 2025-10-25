@@ -117,13 +117,12 @@ export async function POST(request) {
 
     if (eventData.sendNotification && eventData.participants.length > 0) {
       const subject = `You're invited to: ${eventData.title}`;
-
+      const absoluteBase = process.env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin;
       for (const participantEmail of eventData.participants) {
         const tokenEntry = (eventData.tracking || []).find(t => t.email === participantEmail);
-        const base = process.env.NEXT_PUBLIC_BASE_URL || '';
-        const openPixelUrl = trackOpens && tokenEntry ? `${base}/api/events/${eventData._id}/track/open?token=${tokenEntry.token}` : undefined;
-        const trackedJoinUrl = trackClicks && tokenEntry ? `${base}/api/events/${eventData._id}/track/click?token=${tokenEntry.token}` : undefined;
-        const ackUrl = trackAck && tokenEntry ? `${base}/api/events/${eventData._id}/track/ack?token=${tokenEntry.token}` : undefined;
+        const openPixelUrl = trackOpens && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/open?token=${tokenEntry.token}` : undefined;
+        const trackedJoinUrl = trackClicks && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/click?token=${tokenEntry.token}` : undefined;
+        const ackUrl = trackAck && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/ack?token=${tokenEntry.token}` : undefined;
 
         const emailOptions = {
           host: eventData.host,

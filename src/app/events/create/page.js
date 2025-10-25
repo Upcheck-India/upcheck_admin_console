@@ -273,7 +273,7 @@ const CreateEventPage = () => {
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${
             checked ? 'bg-indigo-600' : 'bg-gray-200'
           }`}
-          onClick={() => onChange({ target: { name, checked: !checked } })}
+          onClick={() => onChange({ target: { name, checked: !checked, type: 'checkbox' } })}
         >
           <span
             className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
