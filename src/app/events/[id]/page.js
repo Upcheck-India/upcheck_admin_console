@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../hooks/useAuth';
-import { Calendar, Clock, Users, Video, Info, ArrowLeft, Copy, Check, Trash2, AlertTriangle, Pencil, Download } from 'lucide-react';
+import { Calendar, Clock, Users, Video, Info, ArrowLeft, Copy, Check, Trash2, AlertTriangle, Pencil, Download, Eye, MousePointer, MailCheck } from 'lucide-react';
 
 const EventDetailPage = () => {
   const { id } = useParams();
@@ -99,6 +99,9 @@ const EventDetailPage = () => {
   const participants = Array.isArray(event.participants) ? event.participants : [];
   const internal = participants.filter(p => internalEmails.includes((p || '').toLowerCase()));
   const external = participants.filter(p => !internalEmails.includes((p || '').toLowerCase()));
+  const tracking = Array.isArray(event.tracking) ? event.tracking : [];
+  const openCount = tracking.filter(t => t.openedAt).length;
+  const clickCount = tracking.filter(t => t.clickedAt).length;
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
@@ -174,6 +177,57 @@ const EventDetailPage = () => {
                     </ul>
                   )}
                 </div>
+
+                {(event.trackOpens || event.trackClicks) && (
+                  <div>
+                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <MailCheck className="w-5 h-5 mr-2 text-indigo-600"/>
+                      Delivery & Engagement
+                    </h3>
+                    <div className="mb-3 text-sm text-gray-600 flex items-center gap-4">
+                      {event.trackOpens && (
+                        <span className="inline-flex items-center gap-1"><Eye className="w-4 h-4"/> Opens: {openCount}/{participants.length}</span>
+                      )}
+                      {event.trackClicks && (
+                        <span className="inline-flex items-center gap-1"><MousePointer className="w-4 h-4"/> Clicks: {clickCount}/{participants.length}</span>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto rounded-md border border-gray-200">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Participant</th>
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent</th>
+                            {event.trackOpens && (
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opened</th>
+                            )}
+                            {event.trackClicks && (
+                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Clicked</th>
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-100">
+                          {participants.map((email, i) => {
+                            const rec = tracking.find(t => t.email === email);
+                            return (
+                              <tr key={`trk-${i}`} className="text-sm">
+                                <td className="px-4 py-2 text-gray-800">{email}</td>
+                                <td className="px-4 py-2 text-gray-600">{rec?.sentAt ? new Date(rec.sentAt).toLocaleString() : (event.sendNotification ? 'Sent' : '—')}</td>
+                                {event.trackOpens && (
+                                  <td className="px-4 py-2">{rec?.openedAt ? <span className="text-green-700">{new Date(rec.openedAt).toLocaleString()}</span> : <span className="text-gray-400">—</span>}</td>
+                                )}
+                                {event.trackClicks && (
+                                  <td className="px-4 py-2">{rec?.clickedAt ? <span className="text-blue-700">{new Date(rec.clickedAt).toLocaleString()}</span> : <span className="text-gray-400">—</span>}</td>
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">Tracking is optional and respects recipients' email clients. Some clients block pixels by default.</p>
+                  </div>
+                )}
               </div>
 
               {/* Right Column: Actions */}

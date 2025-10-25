@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { createZoomMeeting } from '../../../lib/zoom';
 import { sendEmail } from '../../../lib/email';
+import { ObjectId } from 'mongodb';
+import crypto from 'crypto';
 
 // Helper function to get user from token
 async function getUserFromToken(token) {
@@ -53,7 +55,7 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '' } = await request.json();
+    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '', trackOpens = false, trackClicks = false, trackAck = false } = await request.json();
 
     if (!title || !description || !startTime || !duration) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -70,7 +72,9 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Start time must be in the future' }, { status: 400 });
     }
 
+    const eventId = new ObjectId();
     const eventData = {
+        _id: eventId,
         title,
         description,
         host: user.email,
@@ -83,6 +87,9 @@ export async function POST(request) {
         createdAt: new Date(),
         zoomSettings,
         provider,
+        trackOpens: !!trackOpens,
+        trackClicks: !!trackClicks,
+        trackAck: !!trackAck,
     };
 
     if (provider === 'zoom') {
@@ -97,26 +104,45 @@ export async function POST(request) {
       eventData.joinUrl = joinUrl;
     }
 
+    // If sending notifications, generate tracking tokens per recipient
+    if (eventData.sendNotification && eventData.participants.length > 0 && (trackOpens || trackClicks || trackAck)) {
+      eventData.tracking = eventData.participants.map(email => ({
+        email,
+        token: crypto.randomBytes(16).toString('hex'),
+        sentAt: new Date(),
+      }));
+    }
+
     const result = await db.collection('events').insertOne(eventData);
 
     if (eventData.sendNotification && eventData.participants.length > 0) {
       const subject = `You're invited to: ${eventData.title}`;
-      const emailOptions = {
-        host: eventData.host,
-        event: {
-          title: eventData.title,
-          description: includeAgenda ? eventData.description : undefined,
-          startTime: eventData.startTime,
-          duration: eventData.duration,
-          zoomMeetingUrl: eventData.zoomMeetingUrl,
-          joinUrl: eventData.joinUrl,
-          provider: eventData.provider,
-        },
-        participants: includeParticipants ? eventData.participants : undefined,
-        notes: includeNotes ? notes : undefined,
-      };
 
       for (const participantEmail of eventData.participants) {
+        const tokenEntry = (eventData.tracking || []).find(t => t.email === participantEmail);
+        const base = process.env.NEXT_PUBLIC_BASE_URL || '';
+        const openPixelUrl = trackOpens && tokenEntry ? `${base}/api/events/${eventData._id}/track/open?token=${tokenEntry.token}` : undefined;
+        const trackedJoinUrl = trackClicks && tokenEntry ? `${base}/api/events/${eventData._id}/track/click?token=${tokenEntry.token}` : undefined;
+        const ackUrl = trackAck && tokenEntry ? `${base}/api/events/${eventData._id}/track/ack?token=${tokenEntry.token}` : undefined;
+
+        const emailOptions = {
+          host: eventData.host,
+          event: {
+            title: eventData.title,
+            description: includeAgenda ? eventData.description : undefined,
+            startTime: eventData.startTime,
+            duration: eventData.duration,
+            zoomMeetingUrl: eventData.zoomMeetingUrl,
+            joinUrl: eventData.joinUrl,
+            provider: eventData.provider,
+          },
+          participants: includeParticipants ? eventData.participants : undefined,
+          notes: includeNotes ? notes : undefined,
+          openPixelUrl,
+          trackedJoinUrl,
+          ackUrl,
+        };
+
         await sendEmail(participantEmail, subject, emailOptions);
       }
     }

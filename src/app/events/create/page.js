@@ -56,6 +56,9 @@ const CreateEventPage = () => {
     startTime: null,
     duration: '60',
     sendNotification: true,
+    trackOpens: false,
+    trackClicks: false,
+    trackAck: false,
   });
   const [zoomSettings, setZoomSettings] = useState({
     waiting_room: true,
@@ -421,7 +424,6 @@ const CreateEventPage = () => {
                   isLoading={loadingUsers}
                   value={selectedParticipants}
                   onChange={setSelectedParticipants}
-                  styles={customSelectStyles}
                   placeholder="Search and select participants..."
                   noOptionsMessage={() => loadingUsers ? "Loading users..." : "No users found"}
                   loadingMessage={() => "Loading users..."}
@@ -631,6 +633,29 @@ const CreateEventPage = () => {
                 onChange={handleInputChange}
                 description="Send calendar invitations and reminders"
               />
+              <div className="mt-2 pl-0">
+                <Toggle
+                  label="Track email opens (pixel)"
+                  name="trackOpens"
+                  checked={formData.trackOpens}
+                  onChange={handleInputChange}
+                  description="Embed a tiny tracking pixel to record when recipients open the email"
+                />
+                <Toggle
+                  label="Track join button clicks"
+                  name="trackClicks"
+                  checked={formData.trackClicks}
+                  onChange={handleInputChange}
+                  description="Route the Join link through a tracker to record click events"
+                />
+                <Toggle
+                  label="Manual read acknowledgment"
+                  name="trackAck"
+                  checked={formData.trackAck}
+                  onChange={handleInputChange}
+                  description="Adds an 'Acknowledge receipt' link in the email for users to confirm they've received/read it"
+                />
+              </div>
             </div>
 
             

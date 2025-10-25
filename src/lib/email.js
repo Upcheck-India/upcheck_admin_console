@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
  * Sends a styled invitation email.
  */
 export const sendEmail = async (to, subject, options) => {
-  const { host, event, participants = [], notes } = options;
+  const { host, event, participants = [], notes, openPixelUrl, trackedJoinUrl, ackUrl } = options;
   const joinLink = event.joinUrl || event.zoomMeetingUrl;
   const providerLabel = event.provider === 'google_meet' ? 'Google Meet' : 'Zoom';
 
@@ -20,6 +20,7 @@ export const sendEmail = async (to, subject, options) => {
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
       <div style="background-color: #4F46E5; color: #ffffff; padding: 24px; text-align: center;">
         <h1 style="margin: 0; font-size: 24px;">📩 You're Invited to a meeting!</h1>
+        ${openPixelUrl ? `<img src="${openPixelUrl}" alt="" width="1" height="1" style="display:none;" />` : ''}
       </div>
 
       <div style="padding: 24px; color: #333333;">
@@ -52,10 +53,18 @@ export const sendEmail = async (to, subject, options) => {
         ` : ''}
 
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${joinLink}" style="background-color: #22C55E; color: white; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 16px; display: inline-block;">
+          <a href="${trackedJoinUrl || joinLink}" style="background-color: #22C55E; color: white; text-decoration: none; padding: 14px 28px; border-radius: 6px; font-size: 16px; display: inline-block;">
             Join Meeting
           </a>
         </div>
+
+        ${ackUrl ? `
+        <div style="text-align: center; margin: 10px 0 30px;">
+          <a href="${ackUrl}" style="color: #4F46E5; text-decoration: underline; font-size: 14px;">
+            Acknowledge that you've received this invite
+          </a>
+        </div>
+        ` : ''}
 
         <p style="font-size: 14px;">You can view this and other events at <a href="https://erp.upcheck.in/events" style="color: #4F46E5;">Upcheck Console</a>.</p>
         <p style="font-size: 14px;">If you have any questions, feel free to contact the host at <a href="mailto:${host}" style="color: #4F46E5;">${host}</a>.</p>
@@ -78,8 +87,9 @@ export const sendEmail = async (to, subject, options) => {
   };
 
   try {
-    await transporter.sendMail(mailOptions);
+    const info = await transporter.sendMail(mailOptions);
     console.log(`Email sent to ${to}`);
+    return info;
   } catch (error) {
     console.error(`Error sending email to ${to}:`, error);
     throw new Error('Failed to send email');
