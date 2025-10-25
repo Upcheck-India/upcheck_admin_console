@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
+
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check, ExternalLink } from 'lucide-react';
@@ -411,7 +413,7 @@ const CreateEventPage = () => {
                 <h2 className="text-xl font-semibold text-gray-900">Participants</h2>
               </div>
               <div className="space-y-4">
-                <Select
+                <CreatableSelect
                   id="participants"
                   isMulti
                   closeMenuOnSelect={false}
@@ -423,7 +425,26 @@ const CreateEventPage = () => {
                   placeholder="Search and select participants..."
                   noOptionsMessage={() => loadingUsers ? "Loading users..." : "No users found"}
                   loadingMessage={() => "Loading users..."}
+                  createOptionPosition="first"
+                  menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+                  styles={{
+                    ...customSelectStyles,
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 })
+                  }}
+                  formatCreateLabel={(inputValue) => `Add external: ${inputValue}`}
+                  isValidNewOption={(inputValue, selectValue, selectOptions) => {
+                    const email = inputValue.trim();
+                    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    const notDuplicate = ![...selectOptions, ...selectValue].some(o => o.value.toLowerCase() === email.toLowerCase());
+                    return emailRe.test(email) && notDuplicate;
+                  }}
+                  onCreateOption={(inputValue) => {
+                    const email = inputValue.trim();
+                    const option = { value: email, label: email };
+                    setSelectedParticipants(prev => [...prev, option]);
+                  }}
                 />
+                <p className="text-xs text-gray-500">Type an email and press Enter to add as an external participant.</p>
                 {fieldErrors.participants && (
                   <div className="flex items-center mt-1 text-sm text-red-600">
                     <AlertCircle className="w-4 h-4 mr-1" />

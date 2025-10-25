@@ -14,6 +14,7 @@ const EventDetailPage = () => {
   const [error, setError] = useState(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [internalEmails, setInternalEmails] = useState([]);
 
   useEffect(() => {
     if (id) {
@@ -40,6 +41,18 @@ const EventDetailPage = () => {
       fetchEvent();
     }
   }, [id]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch('/api/users', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setInternalEmails(data.map(u => u.email?.toLowerCase()).filter(Boolean));
+      } catch {}
+    };
+    fetchUsers();
+  }, []);
 
   const canJoinMeeting = user && event && (event.host === user.email || event.participants.includes(user.email));
 
@@ -81,6 +94,11 @@ const EventDetailPage = () => {
   }
 
   const eventDate = new Date(event.startTime);
+
+  // Split participants into internal vs external
+  const participants = Array.isArray(event.participants) ? event.participants : [];
+  const internal = participants.filter(p => internalEmails.includes((p || '').toLowerCase()));
+  const external = participants.filter(p => !internalEmails.includes((p || '').toLowerCase()));
 
   return (
     <div className="bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
@@ -127,10 +145,34 @@ const EventDetailPage = () => {
                 </div>
 
                 <div>
-                  <h3 className="font-semibold text-gray-800 mb-2 flex items-center"><Users className="w-5 h-5 mr-2 text-indigo-600"/>Participants ({event.participants.length})</h3>
-                  <ul className="list-disc list-inside text-gray-700">
-                    {event.participants.map((p, i) => <li key={i}>{p}</li>)}
-                  </ul>
+                  <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                    <Users className="w-5 h-5 mr-2 text-indigo-600"/>
+                    Participants ({participants.length})
+                  </h3>
+                  {external.length > 0 ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Internal ({internal.length})</p>
+                        {internal.length === 0 ? (
+                          <p className="text-sm text-gray-500">None</p>
+                        ) : (
+                          <ul className="list-disc list-inside text-gray-700">
+                            {internal.map((p, i) => <li key={`in-${i}`}>{p}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">External ({external.length})</p>
+                        <ul className="list-disc list-inside text-gray-700">
+                          {external.map((p, i) => <li key={`ex-${i}`}>{p}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <ul className="list-disc list-inside text-gray-700">
+                      {participants.map((p, i) => <li key={i}>{p}</li>)}
+                    </ul>
+                  )}
                 </div>
               </div>
 
