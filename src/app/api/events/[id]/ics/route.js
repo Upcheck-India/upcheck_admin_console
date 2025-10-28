@@ -26,12 +26,30 @@ export async function GET(request, { params }) {
 
     const eventData = {
       title,
-      description,
-      start: [startDate.getFullYear(), startDate.getMonth() + 1, startDate.getDate(), startDate.getHours(), startDate.getMinutes()],
+      description: `${description || ''}\n\nJoin: ${event.joinUrl || event.zoomMeetingUrl || ''}`.trim(),
+      // Use UTC components to avoid timezone drift across clients
+      start: [
+        startDate.getUTCFullYear(),
+        startDate.getUTCMonth() + 1,
+        startDate.getUTCDate(),
+        startDate.getUTCHours(),
+        startDate.getUTCMinutes(),
+      ],
+      startInputType: 'utc',
       duration: { minutes: duration },
       status: 'CONFIRMED',
+      method: 'REQUEST',
       organizer: { name: 'Upcheck Admin', email: event.host },
-      attendees: event.participants.map(p => ({ email: p, rsvp: true, partstat: 'NEEDS-ACTION' }))
+      url: event.joinUrl || event.zoomMeetingUrl,
+      location: event.provider === 'google_meet' ? 'Google Meet' : 'Zoom',
+      alarms: [
+        {
+          action: 'display',
+          description: 'Event reminder',
+          trigger: { minutes: 15, before: true },
+        },
+      ],
+      attendees: event.participants.map(p => ({ email: p, rsvp: true, partstat: 'NEEDS-ACTION' })),
     };
 
     const { error, value } = ics.createEvent(eventData);

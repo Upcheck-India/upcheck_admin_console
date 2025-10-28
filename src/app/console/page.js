@@ -113,9 +113,9 @@ const AdminLandingPage = () => {
     },
     {
       title: "Organization",
-      description: "Company structure and department management",
+      description: "Company structure, department managementand financial management",
       icon: <Building2 className="w-6 h-6 text-white" />,
-      link: "/coming-soon",
+      link: "/organization",
       gradient: "from-blue-400 via-green-500 to-teal-400",
       bgLight: "bg-blue-50"
     },

@@ -123,6 +123,7 @@ export async function POST(request) {
         const openPixelUrl = trackOpens && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/open?token=${tokenEntry.token}` : undefined;
         const trackedJoinUrl = trackClicks && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/click?token=${tokenEntry.token}` : undefined;
         const ackUrl = trackAck && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/ack?token=${tokenEntry.token}` : undefined;
+        const icsUrl = `${absoluteBase}/api/events/${eventData._id}/ics`;
 
         const emailOptions = {
           host: eventData.host,
@@ -140,6 +141,7 @@ export async function POST(request) {
           openPixelUrl,
           trackedJoinUrl,
           ackUrl,
+          icsUrl,
         };
 
         await sendEmail(participantEmail, subject, emailOptions);

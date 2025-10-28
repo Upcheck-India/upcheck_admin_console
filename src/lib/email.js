@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import * as ics from 'ics';
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -15,6 +16,38 @@ export const sendEmail = async (to, subject, options) => {
   const { host, event, participants = [], notes, openPixelUrl, trackedJoinUrl, ackUrl } = options;
   const joinLink = event.joinUrl || event.zoomMeetingUrl;
   const providerLabel = event.provider === 'google_meet' ? 'Google Meet' : 'Zoom';
+
+  const startDate = new Date(event.startTime);
+  const eventData = {
+    title: event.title,
+    description: `${event.description || ''}\n\nJoin: ${joinLink || ''}`.trim(),
+    start: [
+      startDate.getUTCFullYear(),
+      startDate.getUTCMonth() + 1,
+      startDate.getUTCDate(),
+      startDate.getUTCHours(),
+      startDate.getUTCMinutes(),
+    ],
+    startInputType: 'utc',
+    duration: { minutes: Number(event.duration) || 0 },
+    status: 'CONFIRMED',
+    organizer: { name: 'Upcheck Admin', email: host },
+    url: joinLink,
+    location: providerLabel,
+    alarms: [
+      {
+        action: 'display',
+        description: 'Event reminder',
+        trigger: { minutes: 15, before: true },
+      },
+    ],
+    attendees: (participants || []).map(p => ({ email: p, rsvp: true, partstat: 'NEEDS-ACTION' })),
+  };
+  const { error: icsError, value: icsContent } = ics.createEvent(eventData);
+  if (icsError) {
+    console.error('Failed generating ICS:', icsError);
+  }
+  const safeTitle = (event.title || 'event').replace(/[^a-zA-Z0-9]/g, '_');
 
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden;">
@@ -58,6 +91,14 @@ export const sendEmail = async (to, subject, options) => {
           </a>
         </div>
 
+        ${options.icsUrl ? `
+        <div style="text-align: center; margin: -10px 0 30px;">
+          <a href="${options.icsUrl}" style="background-color: #0EA5E9; color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; display: inline-block;">
+            Add to Calendar
+          </a>
+        </div>
+        ` : ''}
+
         ${ackUrl ? `
         <div style="text-align: center; margin: 10px 0 30px;">
           <a href="${ackUrl}" style="color: #4F46E5; text-decoration: underline; font-size: 14px;">
@@ -84,6 +125,13 @@ export const sendEmail = async (to, subject, options) => {
     to,
     subject,
     html: htmlBody,
+    attachments: icsContent ? [
+      {
+        filename: `${safeTitle}.ics`,
+        content: icsContent,
+        contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+      }
+    ] : undefined,
   };
 
   try {
