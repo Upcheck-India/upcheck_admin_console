@@ -26,8 +26,14 @@ import FiltersPanel from './_components/FiltersPanel';
 import SummaryCards from './_components/SummaryCards';
 import MonthlyTrendsChart from './_components/MonthlyTrendsChart';
 import CategoryPie from './_components/CategoryPie';
+import InflowOutflowDonut from './_components/InflowOutflowDonut';
+import TypeBreakdowns from './_components/TypeBreakdowns';
+import QuickStats from './_components/QuickStats';
+import CashflowSparkline from './_components/CashflowSparkline';
+import TopLists from './_components/TopLists';
 import TransactionsTable from './_components/TransactionsTable';
 import EntryModal from './_components/EntryModal';
+import ExportModal from './_components/ExportModal';
 import { CATEGORIES } from './_components/constants';
 import useFundsData from './_hooks/useFundsData';
 import DetailsDrawer from './_components/DetailsDrawer';
@@ -71,6 +77,8 @@ export default function OrgFundsPage() {
     exportCSV,
     chartData,
     pieData,
+    inflowPieData,
+    outflowPieData,
     runway,
     numberFmt,
   } = useFundsData();
@@ -87,12 +95,30 @@ export default function OrgFundsPage() {
   const [viewItem, setViewItem] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(null);
+  const [untransferredSummary, setUntransferredSummary] = useState(null);
+  const [showExport, setShowExport] = useState(false);
 
   // Load username from localStorage
   useEffect(() => {
     const storedUsername = localStorage.getItem('username');
     if (storedUsername) setUsername(storedUsername);
   }, []);
+
+  // Load untransferred funds summary
+  useEffect(() => {
+    if (!isAdmin) return;
+    const loadUntransferred = async () => {
+      try {
+        const res = await fetch('/api/organization/untransferred', { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        setUntransferredSummary(data.summary);
+      } catch (e) {
+        console.error('Failed to load untransferred summary', e);
+      }
+    };
+    loadUntransferred();
+  }, [isAdmin]);
 
   // Sync account filter when authenticated; actual loading is handled by useFundsData effect
   useEffect(() => {
@@ -338,10 +364,10 @@ export default function OrgFundsPage() {
             </button>
             
             <button
-              onClick={exportCSV}
+              onClick={() => setShowExport(true)}
               disabled={!hasData || noAccount}
               className="px-4 py-2 rounded-xl bg-white border-2 border-slate-200 text-slate-700 hover:border-green-300 hover:bg-green-50 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-              title="Export to CSV"
+              title="Export data"
             >
               <FileDown className="w-4 h-4" />
               <span className="hidden sm:inline">Export</span>
@@ -451,11 +477,15 @@ export default function OrgFundsPage() {
             {/* Dashboard View */}
             {activeView === 'dashboard' && (
               <div className="animate-in fade-in duration-300">
-                <SummaryCards summary={summary} runway={runway} numberFmt={numberFmt} />
+                <SummaryCards summary={summary} runway={runway} numberFmt={numberFmt} untransferredSummary={untransferredSummary} />
+                <QuickStats items={items} monthlyTrends={chartData} numberFmt={numberFmt} />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                   <MonthlyTrendsChart data={chartData} numberFmt={numberFmt} groupBy={filters.groupBy} />
-                  <CategoryPie data={pieData} numberFmt={numberFmt} />
+                  <InflowOutflowDonut summary={summary} numberFmt={numberFmt} />
                 </div>
+                <CashflowSparkline data={chartData} numberFmt={numberFmt} />
+                <TypeBreakdowns inflowPieData={inflowPieData} outflowPieData={outflowPieData} items={items} numberFmt={numberFmt} />
+                <TopLists items={items} numberFmt={numberFmt} />
               </div>
             )}
 
@@ -555,6 +585,15 @@ export default function OrgFundsPage() {
               </div>
             )}
           </>
+        )}
+
+        {showExport && (
+          <ExportModal
+            onClose={() => setShowExport(false)}
+            items={items}
+            numberFmt={numberFmt}
+            defaultFilename={`funds-${new Date().toISOString().split('T')[0]}`}
+          />
         )}
       </div>
 

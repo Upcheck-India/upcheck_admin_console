@@ -93,15 +93,15 @@ export default function FinancePage() {
       available: true
     },
     {
-      title: 'Budgets',
-      desc: 'Plan by category/department and compare vs actuals',
-      href: '#',
+      title: 'Planning & Budgets',
+      desc: 'Track grant applications and plan budget allocations',
+      href: '/organization/planning-budgets',
       icon: <Target className="w-6 h-6" />, 
       gradient: 'from-teal-500 via-emerald-500 to-green-500',
       bgGradient: 'from-teal-50 to-emerald-50',
       iconColor: 'text-teal-600',
       hoverBorder: 'group-hover:border-teal-300',
-      available: false
+      available: true
     },
     {
       title: 'Cost Centers',
@@ -124,6 +124,17 @@ export default function FinancePage() {
       iconColor: 'text-purple-600',
       hoverBorder: 'group-hover:border-purple-300',
       available: false
+    },
+        {
+      title: 'Untransferred Funds',
+      desc: 'Received by org but not assigned to any billing account',
+      href: '/organization/untransferred',
+      icon: <Wallet className="w-6 h-6" />, 
+      gradient: 'from-emerald-500 via-teal-500 to-green-500',
+      bgGradient: 'from-emerald-50 to-green-50',
+      iconColor: 'text-emerald-600',
+      hoverBorder: 'group-hover:border-emerald-300',
+      available: true
     }
   ];
 

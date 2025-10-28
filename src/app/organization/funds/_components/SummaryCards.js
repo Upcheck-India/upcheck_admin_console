@@ -1,10 +1,11 @@
 'use client';
 
-import { ArrowDownCircle, ArrowUpCircle, Wallet, Clock, TrendingUp, TrendingDown, DollarSign, Target } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowDownCircle, ArrowUpCircle, Wallet, Clock, TrendingUp, TrendingDown, DollarSign, Target, Inbox } from 'lucide-react';
 
-export default function SummaryCards({ summary, runway, numberFmt }) {
+export default function SummaryCards({ summary, runway, numberFmt, untransferredSummary }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
       <Card>
         <div className="flex items-start justify-between mb-3">
           <IconWrap className="from-green-50 to-emerald-50"><ArrowDownCircle className="w-6 h-6 text-green-600" /></IconWrap>
@@ -40,6 +41,19 @@ export default function SummaryCards({ summary, runway, numberFmt }) {
         <Value>{runway ? `${runway} months` : 'N/A'}</Value>
         <Label>Estimated Runway</Label>
       </Card>
+
+      {untransferredSummary && (
+        <Link href="/organization/untransferred">
+          <Card>
+            <div className="flex items-start justify-between mb-3">
+              <IconWrap className="from-teal-50 to-emerald-50"><Inbox className="w-6 h-6 text-teal-600" /></IconWrap>
+              <TrendingUp className="w-5 h-5 text-teal-600" />
+            </div>
+            <Value>{numberFmt(untransferredSummary.remaining || 0)}</Value>
+            <Label>Untransferred Funds</Label>
+          </Card>
+        </Link>
+      )}
     </div>
   );
 }

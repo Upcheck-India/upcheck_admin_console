@@ -1,4 +1,4 @@
-import { Edit2, Trash2, Eye, Loader2 } from 'lucide-react';
+import { Edit2, Trash2, Eye, Loader2, ArrowRightLeft } from 'lucide-react';
 import { INFLOW_TYPES, EXPENSE_TYPES } from './constants';
 
 export default function TransactionsTable({ items, numberFmt, onEdit, onDelete, onView, isDeleting }) {
@@ -34,7 +34,16 @@ export default function TransactionsTable({ items, numberFmt, onEdit, onDelete, 
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-700">{it.kind === 'in' ? inflowLabel(it.inflowType || it.category) : expenseLabel(it.expenseType || it.category)}</td>
-                <td className="px-4 py-3 text-sm text-slate-900">{it.title}</td>
+                <td className="px-4 py-3 text-sm text-slate-900">
+                  <div className="flex items-center gap-2">
+                    {it.title}
+                    {it.isTransfer && (
+                      <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200" title="Internal transfer from Untransferred Funds">
+                        <ArrowRightLeft className="w-3 h-3" /> Transfer
+                      </span>
+                    )}
+                  </div>
+                </td>
                 <td className={`px-4 py-3 text-sm font-semibold ${it.kind === 'in' ? 'text-green-700' : 'text-red-700'}`}>{numberFmt(it.amount)}</td>
                 <td className="px-4 py-3 text-sm text-slate-600">{it.notes || '-'}</td>
                 <td className="px-4 py-3 text-sm">

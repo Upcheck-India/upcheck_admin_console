@@ -43,6 +43,7 @@ export async function GET(request) {
     const accountId = searchParams.get('accountId');
     const inflowType = searchParams.get('inflowType');
     const expenseType = searchParams.get('expenseType');
+    const excludeTransfers = searchParams.get('excludeTransfers') === 'true';
 
     // Require billing account
     if (!accountId) {
@@ -103,6 +104,7 @@ export async function GET(request) {
 
     // Build filter
     const filter = {};
+    if (excludeTransfers) filter.isTransfer = { $ne: true };
     if (rangeStart || rangeEnd) {
       filter.date = {};
       if (rangeStart) filter.date.$gte = rangeStart;
@@ -155,7 +157,7 @@ export async function GET(request) {
     ]).toArray();
 
     // Time trends based on groupBy within effective date range or default last 12 months
-    const trendMatch = {};
+    const trendMatch = excludeTransfers ? { isTransfer: { $ne: true } } : {};
     if (rangeStart || rangeEnd) {
       trendMatch.date = {};
       if (rangeStart) trendMatch.date.$gte = rangeStart;
@@ -199,7 +201,7 @@ export async function POST(request) {
     if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await request.json();
-    const { kind, amount, title, date, notes, category, source, counterparty, reference, tags, accountId, inflowType, expenseType, fundRestriction, allocations } = body || {};
+    const { kind, amount, title, date, notes, category, source, counterparty, reference, tags, accountId, inflowType, expenseType, fundRestriction, allocations, isTransfer } = body || {};
 
     if (!['in', 'out'].includes(kind)) {
       return NextResponse.json({ error: 'Invalid kind' }, { status: 400 });
@@ -231,6 +233,7 @@ export async function POST(request) {
       counterparty: counterparty || '',
       reference: reference || '',
       tags: Array.isArray(tags) ? tags.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim()) : [],
+      isTransfer: isTransfer === true,
       createdAt: new Date(),
       createdBy: { id: user._id?.toString?.() || null, email: user.email, username: user.username, role: user.role },
     };

@@ -32,6 +32,7 @@ export default function useFundsData() {
       if (filters.groupBy) params.append('groupBy', filters.groupBy);
       if (filters.datePreset) params.append('datePreset', filters.datePreset);
       if (filters.accountId) params.append('accountId', filters.accountId);
+      // Don't exclude transfers - they represent real fund movements into billing accounts
       const res = await fetch(`/api/organization/funds?${params.toString()}`, { credentials: 'include' });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -129,6 +130,29 @@ export default function useFundsData() {
     return Object.entries(catTotals).map(([name, value]) => ({ name, value }));
   }, [categoryBreakdown]);
 
+  // New: Inflow and Outflow breakdowns by type
+  const inflowPieData = useMemo(() => {
+    const totals = {};
+    categoryBreakdown
+      .filter((c) => c._id && c._id.kind === 'in')
+      .forEach((c) => {
+        const name = c._id.group || 'other_income';
+        totals[name] = (totals[name] || 0) + c.total;
+      });
+    return Object.entries(totals).map(([name, value]) => ({ name, value }));
+  }, [categoryBreakdown]);
+
+  const outflowPieData = useMemo(() => {
+    const totals = {};
+    categoryBreakdown
+      .filter((c) => c._id && c._id.kind === 'out')
+      .forEach((c) => {
+        const name = c._id.group || 'other';
+        totals[name] = (totals[name] || 0) + c.total;
+      });
+    return Object.entries(totals).map(([name, value]) => ({ name, value }));
+  }, [categoryBreakdown]);
+
   const runway = useMemo(() => {
     const outs = monthlyTrends.filter((t) => t._id.kind === 'out');
     const last3 = outs.slice(-3);
@@ -154,6 +178,8 @@ export default function useFundsData() {
     exportCSV,
     chartData,
     pieData,
+    inflowPieData,
+    outflowPieData,
     runway,
     numberFmt,
   };
