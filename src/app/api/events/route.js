@@ -55,7 +55,7 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '', trackOpens = false, trackClicks = false, trackAck = false } = await request.json();
+    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '', trackOpens = false, trackClicks = false, trackAck = false, inviteUpcheckBot = false, useInterstitialJoin = true, redirectDelay = 5, includeDirectMeetingLink = true } = await request.json();
 
     if (!title || !description || !startTime || !duration) {
         return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -90,6 +90,10 @@ export async function POST(request) {
         trackOpens: !!trackOpens,
         trackClicks: !!trackClicks,
         trackAck: !!trackAck,
+        inviteUpcheckBot: !!inviteUpcheckBot,
+        useInterstitialJoin: !!useInterstitialJoin,
+        redirectDelay: Math.max(0, Number(redirectDelay) || 0),
+        includeDirectMeetingLink: !!includeDirectMeetingLink,
     };
 
     if (provider === 'zoom') {
@@ -121,7 +125,11 @@ export async function POST(request) {
       for (const participantEmail of eventData.participants) {
         const tokenEntry = (eventData.tracking || []).find(t => t.email === participantEmail);
         const openPixelUrl = trackOpens && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/open?token=${tokenEntry.token}` : undefined;
-        const trackedJoinUrl = trackClicks && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/click?token=${tokenEntry.token}` : undefined;
+        // Build join button target respecting interstitial config
+        const interstitialUrl = `${absoluteBase}/meet/join/${eventData._id}?meetingUrl=${encodeURIComponent(eventData.joinUrl)}&email=${encodeURIComponent(participantEmail)}&delay=${encodeURIComponent(eventData.redirectDelay || 5)}`;
+        const buttonUrl = eventData.useInterstitialJoin ? interstitialUrl : (eventData.joinUrl || '');
+        // If you want to preserve legacy click-tracking redirect, replace buttonUrl here with tracker endpoint that redirects to buttonUrl
+        const trackedJoinUrl = buttonUrl;
         const ackUrl = trackAck && tokenEntry ? `${absoluteBase}/api/events/${eventData._id}/track/ack?token=${tokenEntry.token}` : undefined;
         const icsUrl = `${absoluteBase}/api/events/${eventData._id}/ics`;
 
@@ -142,10 +150,36 @@ export async function POST(request) {
           trackedJoinUrl,
           ackUrl,
           icsUrl,
+          includeDirectMeetingLink: !!eventData.includeDirectMeetingLink,
         };
 
         await sendEmail(participantEmail, subject, emailOptions);
       }
+    }
+
+    // If requested, schedule the Upcheck bot to join the meeting at start time (Google Meet only)
+    try {
+      if (eventData.provider === 'google_meet' && eventData.inviteUpcheckBot && eventData.joinUrl) {
+        const botUrl = process.env.UPCHECK_BOT_URL;
+        if (botUrl) {
+          await fetch(`${botUrl.replace(/\/$/, '')}/api/schedule`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              eventId: eventData._id,
+              meetingUrl: eventData.joinUrl,
+              startTime: eventData.startTime,
+              displayName: 'Upcheck Bot',
+              options: { muteAudio: true, disableVideo: true }
+            })
+          });
+        } else {
+          console.warn('UPCHECK_BOT_URL not set; skipping bot scheduling');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to schedule bot join:', e);
+      // Non-fatal
     }
 
     return NextResponse.json({ ...eventData, _id: result.insertedId }, { status: 201 });

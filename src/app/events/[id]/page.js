@@ -15,6 +15,8 @@ const EventDetailPage = () => {
   const [isCopied, setIsCopied] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [internalEmails, setInternalEmails] = useState([]);
+  const [forcingBot, setForcingBot] = useState(false);
+  const [forceMsg, setForceMsg] = useState('');
 
   useEffect(() => {
     if (id) {
@@ -37,7 +39,6 @@ const EventDetailPage = () => {
           setLoading(false);
         }
       };
-
       fetchEvent();
     }
   }, [id]);
@@ -78,6 +79,27 @@ const EventDetailPage = () => {
     } catch (err) {
       setError(err.message);
       setIsDeleteModalOpen(false);
+    }
+  };
+
+  const handleForceBotJoin = async () => {
+    try {
+      setForceMsg('');
+      setForcingBot(true);
+      const res = await fetch(`/api/events/${id}/bot/join`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to trigger bot join');
+      }
+      setForceMsg('Bot join requested.');
+    } catch (e) {
+      setForceMsg(e.message || 'Failed to trigger bot join');
+    } finally {
+      setForcingBot(false);
+      setTimeout(() => setForceMsg(''), 4000);
     }
   };
 
@@ -253,6 +275,15 @@ const EventDetailPage = () => {
                         <Video className="w-5 h-5 mr-2" />
                         Join Meeting
                       </button>
+                      {user && event && user.email === event.host && event.provider === 'google_meet' && (
+                        <button
+                          onClick={handleForceBotJoin}
+                          disabled={forcingBot}
+                          className="w-full flex items-center justify-center px-4 py-3 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
+                        >
+                          {forcingBot ? 'Requesting...' : 'Force Bot Join'}
+                        </button>
+                      )}
                       <a href={`/api/events/${id}/ics`} download className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                           <Download className="w-5 h-5 mr-2" />
                           Add to Calendar
@@ -261,6 +292,9 @@ const EventDetailPage = () => {
                         {isCopied ? <Check className="w-5 h-5 mr-2 text-green-500" /> : <Copy className="w-5 h-5 mr-2" />}
                         {isCopied ? 'Link Copied!' : 'Copy Link'}
                       </button>
+                      {forceMsg && (
+                        <div className="text-xs text-gray-600 text-center">{forceMsg}</div>
+                      )}
                     </div>
                   ) : (
                     <div className="w-full p-4 rounded-md bg-yellow-100 text-yellow-800">

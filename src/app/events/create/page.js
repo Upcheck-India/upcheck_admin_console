@@ -59,6 +59,10 @@ const CreateEventPage = () => {
     trackOpens: false,
     trackClicks: false,
     trackAck: false,
+    inviteUpcheckBot: false,
+    useInterstitialJoin: true,
+    redirectDelay: 5,
+    includeDirectMeetingLink: true,
   });
   const [zoomSettings, setZoomSettings] = useState({
     waiting_room: true,
@@ -658,7 +662,63 @@ const CreateEventPage = () => {
               </div>
             </div>
 
-            
+            {/* Join Experience */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center mb-6">
+                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                  <Settings className="w-6 h-6 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Join Experience</h2>
+              </div>
+              <div className="space-y-2">
+                <Toggle
+                  label="Use interstitial Join page"
+                  name="useInterstitialJoin"
+                  checked={formData.useInterstitialJoin}
+                  onChange={handleInputChange}
+                  description="Show a setup screen, track the join, and auto-redirect to the meeting"
+                />
+                <div className={`pl-4 ${formData.useInterstitialJoin ? '' : 'opacity-50 pointer-events-none'}`}>
+                  <InputField
+                    label="Redirect delay (seconds)"
+                    name="redirectDelay"
+                    type="number"
+                    value={formData.redirectDelay}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="30"
+                    placeholder="5"
+                  />
+                </div>
+                <Toggle
+                  label="Include direct meeting link in email"
+                  name="includeDirectMeetingLink"
+                  checked={formData.includeDirectMeetingLink}
+                  onChange={handleInputChange}
+                  description="Adds a visible fallback link in case the Join button cannot load"
+                />
+                <div className="text-xs text-gray-500">
+                  The email Join button will point to our interstitial page when enabled; otherwise it will link directly to the meeting.
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${provider !== 'google_meet' ? 'hidden' : ''}`}>
+              <div className="flex items-center mb-6">
+                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                  <Video className="w-6 h-6 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Upcheck Bot</h2>
+              </div>
+              <Toggle
+                label="Invite Upcheck Bot"
+                name="inviteUpcheckBot"
+                checked={formData.inviteUpcheckBot}
+                onChange={handleInputChange}
+                description="Automatically join Google Meet at start time with the Upcheck bot"
+              />
+            </div>
+
           </div>
 
           {/* Bottom Section */}

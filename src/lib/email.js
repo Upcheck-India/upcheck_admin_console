@@ -91,6 +91,13 @@ export const sendEmail = async (to, subject, options) => {
           </a>
         </div>
 
+        ${options.includeDirectMeetingLink ? `
+        <div style="text-align: center; margin: -10px 0 30px; font-size: 14px; color: #374151;">
+          If the button doesn't work, open this link:&nbsp;
+          <a href="${joinLink}" style="color: #4F46E5; word-break: break-all;">${joinLink}</a>
+        </div>
+        ` : ''}
+
         ${options.icsUrl ? `
         <div style="text-align: center; margin: -10px 0 30px;">
           <a href="${options.icsUrl}" style="background-color: #0EA5E9; color: white; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 16px; display: inline-block;">

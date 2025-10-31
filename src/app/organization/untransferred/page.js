@@ -306,7 +306,7 @@ export default function UntransferredPage() {
 
         {/* Info Note */}
         <div className="mt-4 p-3 rounded-xl bg-blue-50 text-blue-700 text-sm border border-blue-200">
-          <strong>Note:</strong> When you transfer funds to a billing account, they appear as inflow entries in the Funds page with a "Transfer" badge. 
+          <strong>Note:</strong> When you transfer funds to a billing account, they appear as inflow entries in the Funds page with a <span className="font-semibold">&apos;Transfer&apos;</span> badge. 
           Once transferred, items with remaining amount of 0 are automatically hidden from this list.
         </div>
       </div>
