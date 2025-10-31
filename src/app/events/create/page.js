@@ -708,15 +708,17 @@ const CreateEventPage = () => {
                 <div className="p-2 bg-indigo-100 rounded-lg mr-3">
                   <Video className="w-6 h-6 text-indigo-600" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Upcheck Bot</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Upcheck Bot <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 align-middle">Locked beta</span></h2>
               </div>
-              <Toggle
-                label="Invite Upcheck Bot"
-                name="inviteUpcheckBot"
-                checked={formData.inviteUpcheckBot}
-                onChange={handleInputChange}
-                description="Automatically join Google Meet at start time with the Upcheck bot"
-              />
+              <div className="opacity-60 pointer-events-none">
+                <Toggle
+                  label="Invite Upcheck Bot"
+                  name="inviteUpcheckBot"
+                  checked={false}
+                  onChange={() => {}}
+                  description="Automatically join Google Meet at start time with the Upcheck bot (locked beta)"
+                />
+              </div>
             </div>
 
           </div>
