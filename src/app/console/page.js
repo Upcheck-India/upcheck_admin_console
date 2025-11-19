@@ -30,7 +30,8 @@ import {
   Brain,
   MessageSquare,
   PartyPopper,
-  Video
+  Video,
+  MessageCircle
 } from 'lucide-react';
 import AvatarWithStatus from '../../components/AvatarWithStatus';
 import useHeartbeat from '../../hooks/useHeartbeat';
@@ -112,9 +113,9 @@ const AdminLandingPage = () => {
     },
     {
       title: "Organization",
-      description: "Company structure and department management",
+      description: "Company structure, department and financial management",
       icon: <Building2 className="w-6 h-6 text-white" />,
-      link: "/coming-soon",
+      link: "/organization",
       gradient: "from-blue-400 via-green-500 to-teal-400",
       bgLight: "bg-blue-50"
     },
@@ -206,6 +207,16 @@ const AdminLandingPage = () => {
                   )}
                 </button>
 
+                {/* Admin Console Icon */}
+                <Link 
+                  href="/console-admin" 
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
+                  title="Console admin"
+                >
+                  <Shield className="h-5 w-5" />
+                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white"></span>
+                </Link>
+
                 {/* Mail Icon */}
                 <Link 
                   href="/mail" 
@@ -216,14 +227,13 @@ const AdminLandingPage = () => {
                   <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                 </Link>
 
-                {/* Admin Console Icon */}
                 <Link 
-                  href="/console-admin" 
+                  href="/messages" 
                   className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
-                  title="Console admin"
+                  title="Chat"
                 >
-                  <Shield className="h-5 w-5" />
-                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-blue-500 ring-2 ring-white"></span>
+                  <MessageCircle className="h-5 w-5" />
+                  <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-green-500 ring-2 ring-white"></span>
                 </Link>
                 
                 {/* Profile Dropdown */}

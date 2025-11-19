@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
+
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check, ExternalLink } from 'lucide-react';
@@ -19,9 +21,8 @@ const InputField = memo(({ label, name, type = 'text', value, onChange, required
         name={name}
         value={value}
         onChange={onChange}
-        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
-          error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
-        }`}
+        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+          }`}
         {...props}
       />
     ) : (
@@ -31,9 +32,8 @@ const InputField = memo(({ label, name, type = 'text', value, onChange, required
         name={name}
         value={value}
         onChange={onChange}
-        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
-          error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
-        }`}
+        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+          }`}
         {...props}
       />
     )}
@@ -54,6 +54,13 @@ const CreateEventPage = () => {
     startTime: null,
     duration: '60',
     sendNotification: true,
+    trackOpens: false,
+    trackClicks: false,
+    trackAck: false,
+    inviteUpcheckBot: false,
+    useInterstitialJoin: true,
+    redirectDelay: 5,
+    includeDirectMeetingLink: true,
   });
   const [zoomSettings, setZoomSettings] = useState({
     waiting_room: true,
@@ -119,9 +126,9 @@ const CreateEventPage = () => {
   const handleInputChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    
+
     setFormData(prev => ({ ...prev, [name]: newValue }));
-    
+
     // Clear any existing error for this field when user starts typing
     setFieldErrors(prev => {
       if (prev[name]) {
@@ -135,7 +142,7 @@ const CreateEventPage = () => {
 
   const handleDateChange = useCallback((date) => {
     setFormData(prev => ({ ...prev, startTime: date }));
-    
+
     // Clear any existing error for startTime when user selects a date
     setFieldErrors(prev => {
       if (prev.startTime) {
@@ -154,11 +161,11 @@ const CreateEventPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate all fields and collect errors
     const newErrors = {};
     const fieldsToValidate = ['title', 'description', 'startTime', 'duration'];
-    
+
     fieldsToValidate.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) {
@@ -265,15 +272,13 @@ const CreateEventPage = () => {
           onChange={onChange}
         />
         <div
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${
-            checked ? 'bg-indigo-600' : 'bg-gray-200'
-          }`}
-          onClick={() => onChange({ target: { name, checked: !checked } })}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${checked ? 'bg-indigo-600' : 'bg-gray-200'
+            }`}
+          onClick={() => onChange({ target: { name, checked: !checked, type: 'checkbox' } })}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-              checked ? 'translate-x-6' : 'translate-x-1'
-            }`}
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-6' : 'translate-x-1'
+              }`}
           />
         </div>
       </div>
@@ -411,7 +416,7 @@ const CreateEventPage = () => {
                 <h2 className="text-xl font-semibold text-gray-900">Participants</h2>
               </div>
               <div className="space-y-4">
-                <Select
+                <CreatableSelect
                   id="participants"
                   isMulti
                   closeMenuOnSelect={false}
@@ -419,11 +424,29 @@ const CreateEventPage = () => {
                   isLoading={loadingUsers}
                   value={selectedParticipants}
                   onChange={setSelectedParticipants}
-                  styles={customSelectStyles}
                   placeholder="Search and select participants..."
                   noOptionsMessage={() => loadingUsers ? "Loading users..." : "No users found"}
                   loadingMessage={() => "Loading users..."}
+                  createOptionPosition="first"
+                  menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+                  styles={{
+                    ...customSelectStyles,
+                    menuPortal: (base) => ({ ...base, zIndex: 9999 })
+                  }}
+                  formatCreateLabel={(inputValue) => `Add external: ${inputValue}`}
+                  isValidNewOption={(inputValue, selectValue, selectOptions) => {
+                    const email = inputValue.trim();
+                    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    const notDuplicate = ![...selectOptions, ...selectValue].some(o => o.value.toLowerCase() === email.toLowerCase());
+                    return emailRe.test(email) && notDuplicate;
+                  }}
+                  onCreateOption={(inputValue) => {
+                    const email = inputValue.trim();
+                    const option = { value: email, label: email };
+                    setSelectedParticipants(prev => [...prev, option]);
+                  }}
                 />
+                <p className="text-xs text-gray-500">Type an email and press Enter to add as an external participant.</p>
                 {fieldErrors.participants && (
                   <div className="flex items-center mt-1 text-sm text-red-600">
                     <AlertCircle className="w-4 h-4 mr-1" />
@@ -458,9 +481,8 @@ const CreateEventPage = () => {
                     onChange={handleDateChange}
                     showTimeSelect
                     dateFormat="MMMM d, yyyy h:mm aa"
-                    className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
-                      fieldErrors.startTime ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
-                    }`}
+                    className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${fieldErrors.startTime ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+                      }`}
                     closeOnScroll={true}
                     placeholderText="Select date and time"
                     minDate={new Date()}
@@ -610,9 +632,90 @@ const CreateEventPage = () => {
                 onChange={handleInputChange}
                 description="Send calendar invitations and reminders"
               />
+              <div className="mt-2 pl-0">
+                <Toggle
+                  label="Track email opens (pixel)"
+                  name="trackOpens"
+                  checked={formData.trackOpens}
+                  onChange={handleInputChange}
+                  description="Embed a tiny tracking pixel to record when recipients open the email"
+                />
+                <Toggle
+                  label="Track join button clicks"
+                  name="trackClicks"
+                  checked={formData.trackClicks}
+                  onChange={handleInputChange}
+                  description="Route the Join link through a tracker to record click events"
+                />
+                <Toggle
+                  label="Manual read acknowledgment"
+                  name="trackAck"
+                  checked={formData.trackAck}
+                  onChange={handleInputChange}
+                  description="Adds an 'Acknowledge receipt' link in the email for users to confirm they've received/read it"
+                />
+              </div>
             </div>
 
-            
+            {/* Join Experience */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="flex items-center mb-6">
+                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                  <Settings className="w-6 h-6 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Join Experience</h2>
+              </div>
+              <div className="space-y-2">
+                <Toggle
+                  label="Use interstitial Join page"
+                  name="useInterstitialJoin"
+                  checked={formData.useInterstitialJoin}
+                  onChange={handleInputChange}
+                  description="Show a setup screen, track the join, and auto-redirect to the meeting"
+                />
+                <div className={`pl-4 ${formData.useInterstitialJoin ? '' : 'opacity-50 pointer-events-none'}`}>
+                  <InputField
+                    label="Redirect delay (seconds)"
+                    name="redirectDelay"
+                    type="number"
+                    value={formData.redirectDelay}
+                    onChange={handleInputChange}
+                    min="0"
+                    max="30"
+                    placeholder="5"
+                  />
+                </div>
+                <Toggle
+                  label="Include direct meeting link in email"
+                  name="includeDirectMeetingLink"
+                  checked={formData.includeDirectMeetingLink}
+                  onChange={handleInputChange}
+                  description="Adds a visible fallback link in case the Join button cannot load"
+                />
+                <div className="text-xs text-gray-500">
+                  The email Join button will point to our interstitial page when enabled; otherwise it will link directly to the meeting.
+                </div>
+              </div>
+            </div>
+
+            <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${provider !== 'google_meet' ? 'hidden' : ''}`}>
+              <div className="flex items-center mb-6">
+                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                  <Video className="w-6 h-6 text-indigo-600" />
+                </div>
+                <h2 className="text-xl font-semibold text-gray-900">Upcheck Bot <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 align-middle">Locked beta</span></h2>
+              </div>
+              <div className="opacity-60 pointer-events-none">
+                <Toggle
+                  label="Invite Upcheck Bot"
+                  name="inviteUpcheckBot"
+                  checked={false}
+                  onChange={() => { }}
+                  description="Automatically join Google Meet at start time with the Upcheck bot (locked beta)"
+                />
+              </div>
+            </div>
+
           </div>
 
           {/* Bottom Section */}
@@ -625,13 +728,13 @@ const CreateEventPage = () => {
                 </div>
               </div>
             )}
-            
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-center text-sm text-gray-500 mb-6">
                 <span className="mr-2">Provider:</span>
                 <span className="font-medium">{provider === 'zoom' ? 'Zoom' : 'Google Meet'}</span>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
                   type="button"

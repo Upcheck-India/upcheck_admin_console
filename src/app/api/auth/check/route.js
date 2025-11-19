@@ -27,7 +27,8 @@ export async function GET() {
           username: 1, 
           role: 1,
           email: 1,
-          name: 1
+          name: 1,
+          messagingId: 1,
         } 
       }
     );
@@ -48,7 +49,8 @@ export async function GET() {
           username: user.username,
           email: user.email,
           name: user.name,
-          role: user.role || 'user' // Default role if not specified
+          role: user.role || 'user', // Default role if not specified
+          messagingId: user.messagingId || null,
         }
       },
       { status: 200 }

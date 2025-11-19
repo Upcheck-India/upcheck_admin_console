@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../../hooks/useAuth';
 import Select from 'react-select';
+import CreatableSelect from 'react-select/creatable';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -186,14 +187,31 @@ const EditEventPage = () => {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Participants</label>
-          <Select
+          <CreatableSelect
             isMulti
             options={allUsers}
             value={selectedParticipants}
             onChange={setSelectedParticipants}
             className="mt-1"
             classNamePrefix="select"
+            placeholder="Search users or add external emails"
+            createOptionPosition="first"
+            menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+            styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+            formatCreateLabel={(inputValue) => `Add external: ${inputValue}`}
+            isValidNewOption={(inputValue, selectValue, selectOptions) => {
+              const email = inputValue.trim();
+              const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+              const notDuplicate = ![...selectOptions, ...selectValue].some(o => o.value.toLowerCase() === email.toLowerCase());
+              return emailRe.test(email) && notDuplicate;
+            }}
+            onCreateOption={(inputValue) => {
+              const email = inputValue.trim();
+              const option = { value: email, label: email };
+              setSelectedParticipants(prev => [...prev, option]);
+            }}
           />
+          <p className="text-xs text-gray-500 mt-1">Type an email and press Enter to add as an external participant.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            <div>
