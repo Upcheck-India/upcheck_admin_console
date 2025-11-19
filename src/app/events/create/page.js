@@ -21,9 +21,8 @@ const InputField = memo(({ label, name, type = 'text', value, onChange, required
         name={name}
         value={value}
         onChange={onChange}
-        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
-          error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
-        }`}
+        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+          }`}
         {...props}
       />
     ) : (
@@ -33,9 +32,8 @@ const InputField = memo(({ label, name, type = 'text', value, onChange, required
         name={name}
         value={value}
         onChange={onChange}
-        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
-          error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
-        }`}
+        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+          }`}
         {...props}
       />
     )}
@@ -128,9 +126,9 @@ const CreateEventPage = () => {
   const handleInputChange = useCallback((e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    
+
     setFormData(prev => ({ ...prev, [name]: newValue }));
-    
+
     // Clear any existing error for this field when user starts typing
     setFieldErrors(prev => {
       if (prev[name]) {
@@ -144,7 +142,7 @@ const CreateEventPage = () => {
 
   const handleDateChange = useCallback((date) => {
     setFormData(prev => ({ ...prev, startTime: date }));
-    
+
     // Clear any existing error for startTime when user selects a date
     setFieldErrors(prev => {
       if (prev.startTime) {
@@ -163,11 +161,11 @@ const CreateEventPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate all fields and collect errors
     const newErrors = {};
     const fieldsToValidate = ['title', 'description', 'startTime', 'duration'];
-    
+
     fieldsToValidate.forEach(field => {
       const error = validateField(field, formData[field]);
       if (error) {
@@ -274,15 +272,13 @@ const CreateEventPage = () => {
           onChange={onChange}
         />
         <div
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${
-            checked ? 'bg-indigo-600' : 'bg-gray-200'
-          }`}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${checked ? 'bg-indigo-600' : 'bg-gray-200'
+            }`}
           onClick={() => onChange({ target: { name, checked: !checked, type: 'checkbox' } })}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
-              checked ? 'translate-x-6' : 'translate-x-1'
-            }`}
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-6' : 'translate-x-1'
+              }`}
           />
         </div>
       </div>
@@ -485,9 +481,8 @@ const CreateEventPage = () => {
                     onChange={handleDateChange}
                     showTimeSelect
                     dateFormat="MMMM d, yyyy h:mm aa"
-                    className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${
-                      fieldErrors.startTime ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
-                    }`}
+                    className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${fieldErrors.startTime ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+                      }`}
                     closeOnScroll={true}
                     placeholderText="Select date and time"
                     minDate={new Date()}
@@ -715,7 +710,7 @@ const CreateEventPage = () => {
                   label="Invite Upcheck Bot"
                   name="inviteUpcheckBot"
                   checked={false}
-                  onChange={() => {}}
+                  onChange={() => { }}
                   description="Automatically join Google Meet at start time with the Upcheck bot (locked beta)"
                 />
               </div>
@@ -733,13 +728,13 @@ const CreateEventPage = () => {
                 </div>
               </div>
             )}
-            
+
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-center text-sm text-gray-500 mb-6">
                 <span className="mr-2">Provider:</span>
                 <span className="font-medium">{provider === 'zoom' ? 'Zoom' : 'Google Meet'}</span>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
                   type="button"
