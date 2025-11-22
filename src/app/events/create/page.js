@@ -7,7 +7,8 @@ import CreatableSelect from 'react-select/creatable';
 
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check, ExternalLink, Repeat } from 'lucide-react';
+import { RecurrencePatternSelector, SeriesNotificationSettings } from '../../../components/recurring';
 
 const InputField = memo(({ label, name, type = 'text', value, onChange, required = false, error, ...props }) => (
   <div className="space-y-2">
@@ -61,6 +62,12 @@ const CreateEventPage = () => {
     useInterstitialJoin: true,
     redirectDelay: 5,
     includeDirectMeetingLink: true,
+    isRecurring: false,
+  });
+  const [recurrencePattern, setRecurrencePattern] = useState(null);
+  const [seriesNotificationSettings, setSeriesNotificationSettings] = useState({
+    enabled: true,
+    sendImmediately: true,
   });
   const [zoomSettings, setZoomSettings] = useState({
     waiting_room: true,
@@ -184,6 +191,11 @@ const CreateEventPage = () => {
       newErrors.participants = 'Please select at least one participant.';
     }
 
+    // Validate recurring pattern if recurring is enabled
+    if (formData.isRecurring && !recurrencePattern) {
+      newErrors.recurrencePattern = 'Please configure the recurrence pattern.';
+    }
+
     // Update field errors state
     setFieldErrors(newErrors);
 
@@ -204,7 +216,16 @@ const CreateEventPage = () => {
         ...(provider === 'google_meet' ? { joinUrl } : {}),
       };
 
-      const response = await fetch('/api/events', {
+      // Choose API endpoint based on recurring or single meeting
+      const apiEndpoint = formData.isRecurring ? '/api/events/recurring' : '/api/events';
+      
+      // Add recurring-specific data if needed
+      if (formData.isRecurring) {
+        payload.recurrencePattern = recurrencePattern;
+        payload.seriesNotification = seriesNotificationSettings;
+      }
+
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -216,7 +237,8 @@ const CreateEventPage = () => {
         throw new Error(errorData.error || 'Failed to create event');
       }
 
-      router.push('/events?created=true');
+      const successParam = formData.isRecurring ? 'recurring_created=true' : 'created=true';
+      router.push(`/events?${successParam}`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -472,9 +494,43 @@ const CreateEventPage = () => {
                 <h2 className="text-xl font-semibold text-gray-900">Schedule</h2>
               </div>
               <div className="space-y-6">
+                {/* Recurring Toggle */}
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <label htmlFor="isRecurring" className="text-sm font-medium text-gray-900 cursor-pointer">
+                      Make this a recurring meeting
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Create a series of meetings that repeat on a schedule
+                    </p>
+                  </div>
+                  <div className="ml-4">
+                    <input
+                      id="isRecurring"
+                      name="isRecurring"
+                      type="checkbox"
+                      className="sr-only"
+                      checked={formData.isRecurring}
+                      onChange={handleInputChange}
+                    />
+                    <div
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${
+                        formData.isRecurring ? 'bg-indigo-600' : 'bg-gray-200'
+                      }`}
+                      onClick={() => handleInputChange({ target: { name: 'isRecurring', checked: !formData.isRecurring, type: 'checkbox' } })}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                          formData.isRecurring ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="space-y-2">
                   <label htmlFor="startTime" className="block text-sm font-semibold text-gray-700">
-                    Start Time <span className="text-red-500">*</span>
+                    {formData.isRecurring ? 'First Meeting Time' : 'Start Time'} <span className="text-red-500">*</span>
                   </label>
                   <DatePicker
                     selected={formData.startTime}
@@ -513,6 +569,40 @@ const CreateEventPage = () => {
                 </div>
               </div>
             </div>
+
+            {/* Recurring Pattern - Only show if recurring is enabled */}
+            {formData.isRecurring && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center mb-6">
+                  <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                    <Repeat className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Recurrence Pattern</h2>
+                </div>
+                <RecurrencePatternSelector
+                  value={recurrencePattern}
+                  onChange={setRecurrencePattern}
+                  startDate={formData.startTime}
+                  error={fieldErrors.recurrencePattern}
+                />
+              </div>
+            )}
+
+            {/* Series Notification Settings - Only show if recurring is enabled */}
+            {formData.isRecurring && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-center mb-6">
+                  <div className="p-2 bg-indigo-100 rounded-lg mr-3">
+                    <Mail className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">Series Notification</h2>
+                </div>
+                <SeriesNotificationSettings
+                  value={seriesNotificationSettings}
+                  onChange={setSeriesNotificationSettings}
+                />
+              </div>
+            )}
 
             {/* Meeting Options - Zoom */}
             <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${provider !== 'zoom' ? 'hidden' : ''}`}>

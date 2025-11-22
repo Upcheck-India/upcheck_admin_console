@@ -32,9 +32,45 @@ export async function GET(request) {
     const client = await clientPromise;
     const db = client.db("resources");
 
+    // Get URL parameters
+    const { searchParams } = new URL(request.url);
+    const includeRecurring = searchParams.get('includeRecurring') === 'true';
+
+    // Fetch individual events
     const events = await db.collection('events').find({}).sort({ startTime: 1 }).toArray();
 
-    return NextResponse.json(events);
+    if (!includeRecurring) {
+      return NextResponse.json(events);
+    }
+
+    // Fetch recurring series
+    const recurringSeries = await db.collection('recurring_series')
+      .find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    // Transform recurring series to look like events for display
+    const seriesAsEvents = recurringSeries.map(series => ({
+      ...series,
+      _id: series._id,
+      title: `🔄 ${series.title}`, // Add recurring indicator
+      description: series.description,
+      startTime: series.nextGenerationDate || series.createdAt,
+      endTime: null,
+      participants: series.participants || [],
+      duration: series.duration,
+      provider: series.provider,
+      isRecurringSeries: true, // Flag to identify recurring series
+      totalInstances: series.totalInstances || 0,
+      completedInstances: series.completedInstances || 0,
+    }));
+
+    // Combine and sort all items
+    const allItems = [...events, ...seriesAsEvents].sort((a, b) => 
+      new Date(a.startTime) - new Date(b.startTime)
+    );
+
+    return NextResponse.json(allItems);
   } catch (error) {
     console.error('Error fetching events:', error);
     return NextResponse.json({ error: 'Failed to fetch events' }, { status: 500 });
