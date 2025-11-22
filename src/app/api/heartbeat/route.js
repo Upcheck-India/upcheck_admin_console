@@ -4,6 +4,19 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../lib/mongodb';
+import { startJobProcessing } from '../../../lib/jobHandlers.js';
+
+// Initialize job processing system once
+let jobSystemInitialized = false;
+if (!jobSystemInitialized) {
+  try {
+    startJobProcessing();
+    jobSystemInitialized = true;
+    console.log('Job processing system initialized via heartbeat');
+  } catch (error) {
+    console.error('Failed to initialize job processing system:', error);
+  }
+}
 
 // POST  /api/heartbeat
 // Updates the lastHeartbeat timestamp for the currently authenticated user.

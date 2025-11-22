@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw, CheckCircle, RotateCwSquare } from 'lucide-react';
 
 const EventsPage = () => {
   const [events, setEvents] = useState([]);
@@ -10,11 +10,14 @@ const EventsPage = () => {
   const [filter, setFilter] = useState('Upcoming');
   const [searchTerm, setSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [showRecurring, setShowRecurring] = useState(true);
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await fetch('/api/events', { credentials: 'include' });
+        const url = showRecurring ? '/api/events?includeRecurring=true' : '/api/events';
+        const response = await fetch(url, { credentials: 'include' });
         if (!response.ok) {
           throw new Error('Failed to fetch events');
         }
@@ -28,12 +31,31 @@ const EventsPage = () => {
     };
 
     fetchEvents();
-  }, []);
+
+    // Check for success messages from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('created') === 'true') {
+      setNotification({ message: 'Meeting created successfully!', type: 'success' });
+      // Clean up URL
+      window.history.replaceState({}, '', '/events');
+    } else if (urlParams.get('recurring_created') === 'true') {
+      setNotification({ message: 'Recurring meeting series created successfully!', type: 'success' });
+      // Clean up URL
+      window.history.replaceState({}, '', '/events');
+    }
+
+    // Auto-hide notification after 5 seconds
+    if (notification) {
+      const timer = setTimeout(() => setNotification(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification, showRecurring]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      const response = await fetch('/api/events', { credentials: 'include' });
+      const url = showRecurring ? '/api/events?includeRecurring=true' : '/api/events';
+      const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Failed to fetch events');
       }
@@ -52,6 +74,9 @@ const EventsPage = () => {
     
     if (!matchesSearch) return false;
     
+    // Recurring series are always shown if enabled, regardless of time filter
+    if (event.isRecurringSeries) return true;
+    
     if (filter === 'All') return true;
     const isPast = new Date(event.startTime) < new Date();
     if (filter === 'Upcoming') return !isPast;
@@ -61,32 +86,52 @@ const EventsPage = () => {
 
   const getEventStats = () => {
     const now = new Date();
-    const upcoming = events.filter(event => new Date(event.startTime) > now).length;
-    const past = events.filter(event => new Date(event.startTime) < now).length;
-    const today = events.filter(event => {
+    const regularEvents = events.filter(event => !event.isRecurringSeries);
+    const recurringSeries = events.filter(event => event.isRecurringSeries);
+    
+    const upcoming = regularEvents.filter(event => new Date(event.startTime) > now).length;
+    const past = regularEvents.filter(event => new Date(event.startTime) < now).length;
+    const today = regularEvents.filter(event => {
       const eventDate = new Date(event.startTime);
       return eventDate.toDateString() === now.toDateString();
     }).length;
     
-    return { upcoming, past, today, total: events.length };
+    return { 
+      upcoming, 
+      past, 
+      today, 
+      total: regularEvents.length,
+      recurring: recurringSeries.length
+    };
   };
 
   const stats = getEventStats();
 
   const EventCard = ({ event }) => {
-    const isPast = new Date(event.startTime) < new Date();
+    const isRecurringSeries = event.isRecurringSeries;
+    const isPast = !isRecurringSeries && new Date(event.startTime) < new Date();
     const eventDate = new Date(event.startTime);
-    const isToday = eventDate.toDateString() === new Date().toDateString();
+    const isToday = !isRecurringSeries && eventDate.toDateString() === new Date().toDateString();
     const isUpcoming = eventDate > new Date();
 
+    const linkHref = isRecurringSeries ? `/events/recurring` : `/events/${event._id}`;
+
     return (
-      <Link href={`/events/${event._id}`}>
+      <Link href={linkHref}>
         <div className={`bg-white rounded-xl shadow-sm border hover:shadow-lg transition-all duration-300 p-6 group relative overflow-hidden ${
-          isToday ? 'border-indigo-200 bg-gradient-to-br from-indigo-50 to-white' : 'border-gray-200 hover:border-indigo-300'
+          isRecurringSeries 
+            ? 'border-purple-200 bg-gradient-to-br from-purple-50 to-white'
+            : isToday 
+              ? 'border-indigo-200 bg-gradient-to-br from-indigo-50 to-white' 
+              : 'border-gray-200 hover:border-indigo-300'
         }`}>
-          {/* Gradient overlay for today's events */}
-          {isToday && (
-            <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-indigo-500/10 to-transparent rounded-bl-full"></div>
+          {/* Gradient overlay for today's events or recurring series */}
+          {(isToday || isRecurringSeries) && (
+            <div className={`absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl ${
+              isRecurringSeries 
+                ? 'from-purple-500/10 to-transparent' 
+                : 'from-indigo-500/10 to-transparent'
+            } rounded-bl-full`}></div>
           )}
           
           <div className="flex flex-col justify-between h-full">
@@ -96,17 +141,30 @@ const EventsPage = () => {
                   {event.title}
                 </h2>
                 <div className="flex items-center space-x-2">
-                  {isToday && (
+                  {isRecurringSeries && (
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 flex items-center">
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Series
+                    </span>
+                  )}
+                  {isToday && !isRecurringSeries && (
                     <span className="px-2 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700 flex items-center">
                       <Zap className="w-3 h-3 mr-1" />
                       Today
                     </span>
                   )}
-                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                    isPast ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'
-                  }`}>
-                    {isPast ? 'Past' : 'Upcoming'}
-                  </span>
+                  {!isRecurringSeries && (
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      isPast ? 'bg-gray-100 text-gray-600' : 'bg-green-100 text-green-700'
+                    }`}>
+                      {isPast ? 'Past' : 'Upcoming'}
+                    </span>
+                  )}
+                  {isRecurringSeries && (
+                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+                      Active
+                    </span>
+                  )}
                 </div>
               </div>
               
@@ -120,12 +178,19 @@ const EventsPage = () => {
                     <Calendar className="w-4 h-4 text-gray-500" />
                   </div>
                   <span className="font-medium">
-                    {eventDate.toLocaleDateString(undefined, { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}
+                    {isRecurringSeries 
+                      ? `Created ${eventDate.toLocaleDateString(undefined, { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric' 
+                        })}`
+                      : eventDate.toLocaleDateString(undefined, { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric' 
+                        })
+                    }
                   </span>
                 </div>
                 
@@ -134,10 +199,13 @@ const EventsPage = () => {
                     <Clock className="w-4 h-4 text-gray-500" />
                   </div>
                   <span className="font-medium">
-                    {eventDate.toLocaleTimeString(undefined, { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })} • {event.duration} mins
+                    {isRecurringSeries 
+                      ? `${event.duration} mins • ${event.totalInstances || 0} meetings`
+                      : `${eventDate.toLocaleTimeString(undefined, { 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })} • ${event.duration} mins`
+                    }
                   </span>
                 </div>
                 
@@ -155,10 +223,17 @@ const EventsPage = () => {
             <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100">
               <div className="flex items-center text-xs text-gray-500">
                 <Video className="w-4 h-4 mr-1" />
-                {event.provider === 'google_meet' ? 'Google Meet' : 'Zoom Meeting'}
+                {isRecurringSeries 
+                  ? `Recurring ${event.provider === 'google_meet' ? 'Google Meet' : 'Zoom'}`
+                  : event.provider === 'google_meet' ? 'Google Meet' : 'Zoom Meeting'
+                }
               </div>
-              <div className="flex items-center text-sm font-semibold text-indigo-600 group-hover:text-indigo-700 transition-colors">
-                View Details
+              <div className={`flex items-center text-sm font-semibold transition-colors ${
+                isRecurringSeries 
+                  ? 'text-purple-600 group-hover:text-purple-700'
+                  : 'text-indigo-600 group-hover:text-indigo-700'
+              }`}>
+                {isRecurringSeries ? 'Manage Series' : 'View Details'}
                 <ArrowUpRight className="w-4 h-4 ml-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </div>
             </div>
@@ -213,22 +288,90 @@ const EventsPage = () => {
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <Link 
-              href="/events/create"
-              className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            <Link
+              href="/events/recurring"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
             >
-              <Plus className="w-4 h-4 mr-2" />
-              New Meeting
+              <RotateCwSquare className="w-4 h-4 mr-2" />
+              Recurring Meetings
             </Link>
+            <div className="relative inline-block text-left">
+              <div className="flex">
+                <Link 
+                  href="/events/create"
+                  className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-l-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  New Meeting
+                </Link>
+                <div className="relative">
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-2 py-2 border border-l-0 border-transparent text-sm font-medium rounded-r-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                    onClick={() => {
+                      // Simple dropdown - you can enhance this with proper state management
+                      const dropdown = document.getElementById('meeting-dropdown');
+                      dropdown.classList.toggle('hidden');
+                    }}
+                  >
+                    <ChevronRight className="w-4 h-4 rotate-90" />
+                  </button>
+                  <div
+                    id="meeting-dropdown"
+                    className="hidden absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
+                  >
+                    <div className="py-1">
+                      <Link
+                        href="/events/create"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <Calendar className="w-4 h-4 mr-3" />
+                        Single Meeting
+                      </Link>
+                      <Link
+                        href="/events/recurring/create"
+                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <RefreshCw className="w-4 h-4 mr-3" />
+                        Recurring Series
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
+        {/* Notification */}
+        {notification && (
+          <div className={`mb-6 p-4 rounded-lg border ${
+            notification.type === 'error' 
+              ? 'bg-red-50 border-red-200 text-red-800' 
+              : 'bg-green-50 border-green-200 text-green-800'
+          }`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <CheckCircle className="w-5 h-5 mr-2" />
+                <span className="font-medium">{notification.message}</span>
+              </div>
+              <button
+                onClick={() => setNotification(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <StatCard icon={CalendarDays} label="Total Events" value={stats.total} color="indigo" />
           <StatCard icon={Clock} label="Upcoming" value={stats.upcoming} color="green" />
           <StatCard icon={Zap} label="Today" value={stats.today} color="yellow" />
           <StatCard icon={Calendar} label="Past Events" value={stats.past} color="gray" />
+          <StatCard icon={RotateCwSquare} label="Recurring Series" value={stats.recurring} color="purple" />
         </div>
 
         {/* Search and Filter */}
@@ -245,27 +388,42 @@ const EventsPage = () => {
               />
             </div>
             
-            <div className="flex items-center space-x-2">
-              <Filter className="w-4 h-4 text-gray-500 mr-2" />
-              <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                <FilterTab 
-                  value="Upcoming" 
-                  label="Upcoming" 
-                  isActive={filter === 'Upcoming'} 
-                  onClick={() => setFilter('Upcoming')} 
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <Filter className="w-4 h-4 text-gray-500 mr-2" />
+                <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                  <FilterTab 
+                    value="Upcoming" 
+                    label="Upcoming" 
+                    isActive={filter === 'Upcoming'} 
+                    onClick={() => setFilter('Upcoming')} 
+                  />
+                  <FilterTab 
+                    value="Past" 
+                    label="Past" 
+                    isActive={filter === 'Past'} 
+                    onClick={() => setFilter('Past')} 
+                  />
+                  <FilterTab 
+                    value="All" 
+                    label="All" 
+                    isActive={filter === 'All'} 
+                    onClick={() => setFilter('All')} 
+                  />
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="showRecurring"
+                  checked={showRecurring}
+                  onChange={(e) => setShowRecurring(e.target.checked)}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                <FilterTab 
-                  value="Past" 
-                  label="Past" 
-                  isActive={filter === 'Past'} 
-                  onClick={() => setFilter('Past')} 
-                />
-                <FilterTab 
-                  value="All" 
-                  label="All" 
-                  isActive={filter === 'All'} 
-                  onClick={() => setFilter('All')} 
-                />
+                <label htmlFor="showRecurring" className="text-sm text-gray-700 cursor-pointer">
+                  Show recurring series
+                </label>
               </div>
             </div>
           </div>
