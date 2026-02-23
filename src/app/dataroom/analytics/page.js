@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
