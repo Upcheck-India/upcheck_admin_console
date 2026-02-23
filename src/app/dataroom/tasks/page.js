@@ -245,7 +245,7 @@ export default function TasksPage() {
           </div>
         </div>
       )}
-      <NavigationSidebar />
+      </div>
     </div>
   );
 }

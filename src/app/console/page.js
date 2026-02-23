@@ -121,7 +121,7 @@ const AdminLandingPage = () => {
     },
     {
       title: "Data Management",
-      description: "Secure virtual data room for confidential document sharing, due diligence, and M&A transactions",
+      description: "Secure virtual data room for confidential document sharing",
       icon: <BookOpen className="w-6 h-6 text-white" />,
       link: "/dms",
       gradient: "from-green-400 via-teal-500 to-blue-400",

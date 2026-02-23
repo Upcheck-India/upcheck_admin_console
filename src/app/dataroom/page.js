@@ -17,7 +17,8 @@ import {
   Clock,
   Star,
   Share2,
-  Filter
+  Filter,
+  ArrowRight
 } from 'lucide-react';
 
 export default function DataRoomHome() {
@@ -32,12 +33,15 @@ export default function DataRoomHome() {
   const [sharedWithMe, setSharedWithMe] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [recentDocuments, setRecentDocuments] = useState([]);
+  const [totalDocuments, setTotalDocuments] = useState(0);
+  const [recentActivity, setRecentActivity] = useState([]);
 
   useEffect(() => {
     fetchUser();
     fetchRooms();
     fetchSharedDocuments();
     fetchRecentDocuments();
+    fetchRecentActivity();
   }, []);
 
   async function fetchUser() {
@@ -110,6 +114,8 @@ export default function DataRoomHome() {
       const response = await fetch('/api/dataroom/documents?limit=6&sort=recent');
       if (response.ok) {
         const data = await response.json();
+        // The API returns 'total' matching the filter, or 'count'
+        setTotalDocuments(data.total || data.count || 0);
         setRecentDocuments(data.items || data.documents || []);
       }
     } catch (error) {
@@ -117,11 +123,23 @@ export default function DataRoomHome() {
     }
   }
 
+  async function fetchRecentActivity() {
+    try {
+      const response = await fetch('/api/dataroom/audit?limit=10&sort=desc');
+      if (response.ok) {
+        const data = await response.json();
+        setRecentActivity(data.logs || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch recent activity:', error);
+    }
+  }
+
   const quickStats = [
     { label: 'Active Rooms', value: rooms.length, icon: Folder, color: 'blue' },
-    { label: 'Total Documents', value: recentDocuments.length, icon: FileText, color: 'green' },
-    { label: 'Shared with Me', value: 0, icon: Share2, color: 'purple' },
-    { label: 'Recent Activity', value: 0, icon: Activity, color: 'orange' },
+    { label: 'Total Documents', value: totalDocuments, icon: FileText, color: 'green' },
+    { label: 'Shared with Me', value: sharedWithMe.length, icon: Share2, color: 'purple' },
+    { label: 'Recent Activity', value: recentActivity.length, icon: Activity, color: 'orange' },
   ];
 
   return (
@@ -332,10 +350,79 @@ export default function DataRoomHome() {
                 </div>
               )}
             </div>
+
+            {/* Recent Activity Widget */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">Recent Activity</h2>
+                <button
+                  onClick={() => router.push('/dataroom/audit')}
+                  className="text-sm text-blue-600 hover:underline flex items-center space-x-1"
+                >
+                  <span>View All</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {recentActivity.length === 0 ? (
+                <div className="text-center py-8 text-slate-500">
+                  <Activity className="w-12 h-12 mx-auto mb-2 text-slate-300" />
+                  <p>No recent activity</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {recentActivity.slice(0, 5).map((activity, index) => {
+                    const timeAgo = getTimeAgo(activity.timestamp);
+                    const actionLabel = formatAction(activity.action);
+                    
+                    return (
+                      <div key={index} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-slate-50 transition-colors">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 flex-shrink-0"></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900">{actionLabel}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {activity.details?.documentName || activity.details?.roomName || activity.resourceType} • {activity.user?.username || activity.user?.email || 'System'}
+                          </p>
+                        </div>
+                        <span className="text-xs text-slate-400 flex-shrink-0">{timeAgo}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
       </div>
     </div>
   );
+
+  function getTimeAgo(timestamp) {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const diffInSeconds = Math.floor((now - then) / 1000);
+
+    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`;
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)} days ago`;
+    return then.toLocaleDateString();
+  }
+
+  function formatAction(action) {
+    if (!action) return 'Unknown action';
+    
+    const actionMap = {
+      'DOCUMENT_UPLOADED': 'Document uploaded',
+      'DOCUMENT_VIEWED': 'Document viewed',
+      'DOCUMENT_DOWNLOADED': 'Document downloaded',
+      'DOCUMENT_DELETED': 'Document deleted',
+      'ROOM_CREATED': 'Room created',
+      'PERMISSION_GRANTED': 'Permission granted',
+      'FOLDER_CREATED': 'Folder created',
+      'NDA_SIGNED': 'NDA signed',
+    };
+    return actionMap[action] || action.toLowerCase().replace(/_/g, ' ');
+  }
 }

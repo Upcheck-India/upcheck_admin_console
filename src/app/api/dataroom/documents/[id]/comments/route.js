@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../../lib/mongodb';
+import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { logAudit, AUDIT_ACTIONS } from '../../../../../../../lib/dataroom/audit-logger';
-import { checkPermission } from '../../../../../../../lib/dataroom/permission-checker';
+import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
+import { hasPermission } from '../../../../../../lib/dataroom/permission-checker';
 
 async function getUserFromToken(request) {
   try {
@@ -45,7 +45,7 @@ export async function GET(request, { params }) {
     }
 
     // Check view permission
-    const hasPermission = await checkPermission({
+    const canView = await hasPermission({
       user,
       permission: 'view',
       resourceType: 'document',
@@ -53,7 +53,7 @@ export async function GET(request, { params }) {
       roomId: document.roomId.toString(),
     });
 
-    if (!hasPermission && user.role !== 'Admin' && user.role !== 'Console admin') {
+    if (!canView && user.role !== 'Admin' && user.role !== 'Console admin') {
       return NextResponse.json({ error: 'You do not have permission to view this document' }, { status: 403 });
     }
 
@@ -141,7 +141,7 @@ export async function POST(request, { params }) {
     }
 
     // Check comment permission
-    const hasPermission = await checkPermission({
+    const canComment = await hasPermission({
       user,
       permission: 'comment',
       resourceType: 'document',
@@ -149,7 +149,7 @@ export async function POST(request, { params }) {
       roomId: document.roomId.toString(),
     });
 
-    if (!hasPermission && user.role !== 'Admin' && user.role !== 'Console admin') {
+    if (!canComment && user.role !== 'Admin' && user.role !== 'Console admin') {
       return NextResponse.json({ error: 'You do not have permission to comment on this document' }, { status: 403 });
     }
 

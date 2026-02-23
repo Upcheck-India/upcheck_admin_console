@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
-import { checkPermission } from '../../../../../../lib/dataroom/permission-checker';
+import { hasPermission } from '../../../../../../lib/dataroom/permission-checker';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
 
 async function getUserFromToken(request) {
@@ -50,15 +50,15 @@ export async function GET(request, { params }) {
     }
 
     // Check view permission
-    const hasPermission = await checkPermission({
+    const canView = await hasPermission({
       user,
-      targetType: 'document',
-      targetId: id,
-      requiredLevel: 'view',
-      db,
+      resourceType: 'document',
+      resourceId: id,
+      permission: 'view',
+      roomId: document.roomId,
     });
 
-    if (!hasPermission) {
+    if (!canView) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

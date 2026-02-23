@@ -32,6 +32,7 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url);
     const roomIdParam = searchParams.get('roomId');
+    const parentIdParam = searchParams.get('parentId');
 
     const client = await clientPromise;
     const db = client.db('resources');
@@ -44,8 +45,49 @@ export async function GET(request) {
       filter.roomId = new ObjectId(roomIdParam);
     }
 
-    const docs = await db.collection('dataroom_folders').find(filter).limit(200).toArray();
-    return NextResponse.json({ count: docs.length, items: docs });
+    // Filter by parentId to show only folders at the requested level
+    if (parentIdParam && parentIdParam !== 'null') {
+      if (!ObjectId.isValid(parentIdParam)) {
+        return NextResponse.json({ error: 'Invalid parentId' }, { status: 400 });
+      }
+      filter.parentId = new ObjectId(parentIdParam);
+    } else if (parentIdParam === 'null' || parentIdParam === null) {
+      // Explicitly requesting root-level folders
+      filter.parentId = null;
+    }
+
+    const folders = await db.collection('dataroom_folders').find(filter).limit(200).toArray();
+    
+    // Add document counts to each folder
+    const folderIds = folders.map(f => f._id);
+    const documentCounts = await db.collection('dataroom_documents').aggregate([
+      {
+        $match: {
+          folderId: { $in: folderIds },
+          isDeleted: { $ne: true }
+        }
+      },
+      {
+        $group: {
+          _id: '$folderId',
+          count: { $sum: 1 }
+        }
+      }
+    ]).toArray();
+    
+    // Create a map for quick lookup
+    const countMap = {};
+    documentCounts.forEach(item => {
+      countMap[item._id.toString()] = item.count;
+    });
+    
+    // Attach counts to folders
+    const foldersWithCounts = folders.map(folder => ({
+      ...folder,
+      documentCount: countMap[folder._id.toString()] || 0
+    }));
+    
+    return NextResponse.json({ count: foldersWithCounts.length, items: foldersWithCounts });
   } catch (e) {
     console.error('GET /api/dataroom/folders error', e);
     return NextResponse.json({ error: 'Failed to list folders' }, { status: 500 });

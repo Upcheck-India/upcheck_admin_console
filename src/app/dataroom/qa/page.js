@@ -175,10 +175,7 @@ export default function QAPage() {
           </div>
         </div>
       )}
-      <DataRoomNav />
+      </div>
     </div>
-  </div>
-  </div>
-</div>
   );
 }

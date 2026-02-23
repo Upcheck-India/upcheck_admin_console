@@ -55,12 +55,17 @@ export async function GET(request) {
 
     const logs = await queryAuditLogs(filters, { limit, skip });
 
+    const client = await clientPromise;
+    const db = client.db('resources');
+    const total = await db.collection('dataroom_audit_log').countDocuments(filters);
+
     return NextResponse.json({
       count: logs.length,
+      total,
       limit,
       skip,
       filters,
-      items: logs,
+      logs,
     });
   } catch (error) {
     console.error('GET /api/dataroom/audit error:', error);

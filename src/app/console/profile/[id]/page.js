@@ -1,7 +1,5 @@
 'use client';
 
-'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
@@ -26,7 +24,6 @@ import {
   Link as LinkIcon,
   Github,
   Linkedin,
-  Google,
   Plus,
   ArrowUpRight,
   Star,
@@ -50,7 +47,7 @@ const oauthProviders = [
   {
     id: 'google',
     name: 'Google',
-    icon: Google,
+    icon: Globe, // Using Globe as Google icon not available in lucide-react
     color: 'bg-red-100 text-red-600',
     connectEndpoint: '/api/auth/google/connect',
     disconnectEndpoint: '/api/auth/google/disconnect'

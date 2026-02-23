@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../../lib/mongodb';
+import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { logAudit, AUDIT_ACTIONS } from '../../../../../../../lib/dataroom/audit-logger';
+import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
 
 async function getUserFromToken(request) {
   try {

@@ -49,11 +49,14 @@ export async function GET(request) {
       filter.roomId = new ObjectId(roomId);
     }
 
-    if (folderId) {
+    if (folderId && folderId !== 'null') {
       if (!ObjectId.isValid(folderId)) {
         return NextResponse.json({ error: 'Invalid folderId' }, { status: 400 });
       }
       filter.folderId = new ObjectId(folderId);
+    } else if (roomId && (folderId === 'null' || folderId === null)) {
+      // If roomId is provided and folderId is explicitly 'null' or actual null, only return documents in the root of the room
+      filter.folderId = null;
     }
 
     if (search) {

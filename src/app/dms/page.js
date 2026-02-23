@@ -71,28 +71,28 @@ export default function DMSHomePage() {
   ];
 
   const statsConfig = [
-    { 
-      label: 'Total Documents', 
-      getValue: (data) => data?.totalDocuments?.toLocaleString() || '0',
-      icon: FileText, 
+        { 
+      label: 'Data Room Files', 
+      getValue: (data) => data?.dataroomDocuments?.toLocaleString() || '0',
+      icon: Database, 
       color: 'blue' 
     },
     { 
-      label: 'Active Users', 
-      getValue: (data) => data?.activeUsers?.toLocaleString() || '0',
-      icon: Users, 
+      label: 'Documentation Files', 
+      getValue: (data) => data?.documentationResources?.toLocaleString() || '0',
+      icon: FileText, 
       color: 'green' 
     },
     { 
-      label: 'Storage Used', 
+      label: 'Total Storage Used', 
       getValue: (data) => data?.storageUsed || '0 B',
       icon: Database, 
       color: 'purple' 
     },
     { 
-      label: 'Security Events', 
-      getValue: (data) => data?.securityEvents?.toLocaleString() || '0',
-      icon: Shield, 
+      label: 'Total Active Users', 
+      getValue: (data) => data?.activeUsers?.toLocaleString() || '0',
+      icon: Users, 
       color: 'orange' 
     },
   ];
@@ -127,19 +127,33 @@ export default function DMSHomePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat, index) => (
-            <div key={index} className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-slate-600 mb-1">{stat.label}</p>
-                  <p className="text-3xl font-bold text-slate-900">{stat.value}</p>
-                </div>
-                <div className={`w-12 h-12 bg-${stat.color}-100 rounded-lg flex items-center justify-center`}>
-                  <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
+          {loading ? (
+            statsConfig.map((_, index) => (
+              <div key={`loading-${index}`} className="bg-white rounded-xl border border-slate-200 p-6 animate-pulse">
+                <div className="flex items-center justify-between">
+                  <div className="w-full">
+                    <div className="h-4 bg-slate-200 rounded w-24 mb-2"></div>
+                    <div className="h-8 bg-slate-200 rounded w-16"></div>
+                  </div>
+                  <div className="w-12 h-12 bg-slate-100 rounded-lg flex-shrink-0"></div>
                 </div>
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            statsConfig.map((stat, index) => (
+              <div key={`stat-${index}`} className="bg-white rounded-xl border border-slate-200 p-6 hover:shadow-lg transition-shadow">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-600 mb-1">{stat.label}</p>
+                    <p className="text-3xl font-bold text-slate-900">{stat.getValue(stats)}</p>
+                  </div>
+                  <div className={`w-12 h-12 bg-${stat.color}-100 rounded-lg flex items-center justify-center flex-shrink-0`}>
+                    <stat.icon className={`w-6 h-6 text-${stat.color}-600`} />
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         {/* Main Modules */}

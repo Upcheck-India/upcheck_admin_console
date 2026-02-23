@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
-import { checkPermission } from '../../../../../../lib/dataroom/permission-checker';
+import { hasPermission } from '../../../../../../lib/dataroom/permission-checker';
 import { validateIpWhitelist, isRoomExpired, getClientIp } from '../../../../../../lib/dataroom/security';
 
 async function getUserFromToken(request) {
@@ -82,7 +82,7 @@ export async function GET(request, { params }) {
     }
 
     // SECURITY: Check granular permissions
-    const hasDownloadPermission = await checkPermission({
+    const canDownload = await hasPermission({
       user,
       permission: 'download',
       resourceType: 'document',
@@ -90,7 +90,7 @@ export async function GET(request, { params }) {
       roomId: room._id.toString(),
     });
 
-    if (!hasDownloadPermission && user.role !== 'Admin' && user.role !== 'Console admin') {
+    if (!canDownload && user.role !== 'Admin' && user.role !== 'Console admin') {
       return NextResponse.json({ error: 'You do not have download permission for this document' }, { status: 403 });
     }
 

@@ -63,12 +63,18 @@ export default function RoomPage() {
 
   async function fetchFolders() {
     try {
-      const url = `/api/dataroom/folders?roomId=${roomId}${currentFolder ? `&parentId=${currentFolder}` : ''}`;
+      // When currentFolder is null, we want root-level folders (parentId=null)
+      // When currentFolder has a value, we want subfolders in that folder
+      const parentParam = currentFolder ? `&parentId=${currentFolder}` : '&parentId=null';
+      const url = `/api/dataroom/folders?roomId=${roomId}${parentParam}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
         // API returns { items: [...] } not { folders: [...] }
-        setFolders(data.items || data.folders || []);
+        // Filter out "Root" folders - they are metadata only, not user-created folders
+        const allFolders = data.items || data.folders || [];
+        const userFolders = allFolders.filter(folder => folder.name !== 'Root');
+        setFolders(userFolders);
       }
     } catch (error) {
       console.error('Failed to fetch folders:', error);
@@ -77,7 +83,10 @@ export default function RoomPage() {
 
   async function fetchDocuments() {
     try {
-      const url = `/api/dataroom/documents?roomId=${roomId}${currentFolder ? `&folderId=${currentFolder}` : ''}`;
+      // When currentFolder is null, we want root-level documents (folderId=null)
+      // When currentFolder has a value, we want documents in that folder
+      const folderParam = currentFolder ? `&folderId=${currentFolder}` : '&folderId=null';
+      const url = `/api/dataroom/documents?roomId=${roomId}${folderParam}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();

@@ -278,6 +278,7 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+      </div>
       <nav className="fixed top-0 left-0 w-64 bg-white h-screen p-6 shadow-md">
         <ul>
           <li className="mb-4">

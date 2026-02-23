@@ -75,13 +75,46 @@ export async function GET(request) {
       });
     }
 
+    const limit = parseInt(searchParams.get('limit') || '100', 10);
+    const skip = parseInt(searchParams.get('skip') || '0', 10);
+
     const rooms = await db.collection('dataroom_rooms')
       .find(filter)
       .sort({ createdAt: -1 })
-      .limit(100)
+      .limit(limit)
+      .skip(skip)
       .toArray();
 
-    return NextResponse.json({ count: rooms.length, items: rooms });
+    // Add document counts to each room
+    const roomIds = rooms.map(r => r._id);
+    const documentCounts = await db.collection('dataroom_documents').aggregate([
+      {
+        $match: {
+          roomId: { $in: roomIds },
+          isDeleted: { $ne: true }
+        }
+      },
+      {
+        $group: {
+          _id: '$roomId',
+          count: { $sum: 1 }
+        }
+      }
+    ]).toArray();
+    
+    // Create a map for quick lookup
+    const countMap = {};
+    documentCounts.forEach(item => {
+      countMap[item._id.toString()] = item.count;
+    });
+    
+    // Attach counts to rooms
+    const roomsWithCounts = rooms.map(room => ({
+      ...room,
+      documentCount: countMap[room._id.toString()] || 0
+    }));
+
+    return NextResponse.json({ items: roomsWithCounts, total: roomsWithCounts.length });
   } catch (error) {
     console.error('GET /api/dataroom/rooms error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -245,27 +245,12 @@ export default function WorkflowsPage() {
               </div>
             </div>
             <div className="flex space-x-3 mt-6">
-          </div>
-          <div className="flex space-x-3 mt-6">
-            <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
-            <button onClick={handleCreate} disabled={!formData.name.trim()} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Create Workflow</button>
+              <button onClick={() => setShowModal(false)} className="flex-1 px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+              <button onClick={handleCreate} disabled={!formData.name.trim()} className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Create Workflow</button>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="absolute left-0 top-0 h-screen w-64 bg-white border-r border-slate-200">
-        <nav className="py-6">
-          <ul>
-            <li className="py-2 px-4 hover:bg-slate-100">
-              <a href="#" className="text-slate-600">Dashboard</a>
-            </li>
-            <li className="py-2 px-4 hover:bg-slate-100">
-              <a href="#" className="text-slate-600">Workflows</a>
-            </li>
-            <li className="py-2 px-4 hover:bg-slate-100">
-              <a href="#" className="text-slate-600">Documents</a>
-            </li>
-          </ul>
-        </nav>
+      )}
       </div>
     </div>
   );
