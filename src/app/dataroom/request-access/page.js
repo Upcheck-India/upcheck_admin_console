@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Lock, Send, ArrowLeft, FileText } from 'lucide-react';
 
-export default function RequestAccessPage() {
+function RequestAccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resourceType = searchParams.get('type') || 'document';
@@ -205,5 +205,17 @@ export default function RequestAccessPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RequestAccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    }>
+      <RequestAccessContent />
+    </Suspense>
   );
 }
