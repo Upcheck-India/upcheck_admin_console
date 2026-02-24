@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '../../../../hooks/useAuth';
+import SecureLoading from '../../../components/SecureLoading';
 import {
   Folder,
   FileText,
@@ -20,16 +22,22 @@ import {
   Trash2,
   Edit,
   FolderPlus,
-  ArrowLeft
+  ArrowLeft,
+  X,
+  Check,
+  Users
 } from 'lucide-react';
 import FolderTree from '../../../components/dataroom/FolderTree';
 import DocumentList from '../../../components/dataroom/DocumentList';
 import DocumentDetailPanel from '../../../components/dataroom/DocumentDetailPanel';
+import RoomUsersList from '../../../components/dataroom/RoomUsersList';
+import CreateFolderModal from '../../../components/dataroom/CreateFolderModal';
 
 export default function RoomPage() {
   const router = useRouter();
   const params = useParams();
   const roomId = params.id;
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
 
   const [room, setRoom] = useState(null);
   const [folders, setFolders] = useState([]);
@@ -40,6 +48,12 @@ export default function RoomPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [breadcrumbs, setBreadcrumbs] = useState([]);
+  const [activeView, setActiveView] = useState('documents');
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+
+  // State for Moving Documents
+  const [documentToMove, setDocumentToMove] = useState(null);
+  const [isMoving, setIsMoving] = useState(false);
 
   useEffect(() => {
     if (roomId) {
@@ -114,40 +128,57 @@ export default function RoomPage() {
   }
 
   function handleCreateFolder() {
-    // Open folder creation modal
-    const folderName = prompt('Enter folder name:');
-    if (folderName) {
-      createFolder(folderName);
-    }
+    setShowCreateFolder(true);
   }
 
-  async function createFolder(name) {
+  function handleFolderCreated() {
+    setShowCreateFolder(false);
+    fetchFolders();
+  }
+
+  async function handleMoveDocumentSubmit(e) {
+    if (e) e.preventDefault();
+    if (!documentToMove) return;
+
+    setIsMoving(true);
+    // documentToMove.targetFolder gets set from the modal selection UI. If null, it's Root.
+    const targetFolderId = documentToMove.targetFolder || null;
+
     try {
-      const response = await fetch('/api/dataroom/folders', {
-        method: 'POST',
+      const response = await fetch(`/api/dataroom/documents/${documentToMove._id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name,
-          roomId,
-          parentId: currentFolder
+          folderId: targetFolderId
         }),
       });
+
       if (response.ok) {
-        await fetchFolders(); // Refresh folder list
-        alert('Folder created successfully');
+        setDocumentToMove(null);
+        await fetchDocuments();
       } else {
         const error = await response.json();
-        alert(error.error || 'Failed to create folder');
+        alert(error.error || 'Failed to move document');
       }
     } catch (error) {
-      console.error('Failed to create folder:', error);
-      alert('Failed to create folder: ' + error.message);
+      console.error('Move document error:', error);
+      alert('An error occurred while moving the document.');
+    } finally {
+      setIsMoving(false);
     }
   }
 
   const filteredDocuments = documents.filter(doc =>
     doc.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -175,6 +206,14 @@ export default function RoomPage() {
                 <span>NDA</span>
               </button>
               <button
+                onClick={handleCreateFolder}
+                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors flex items-center space-x-1"
+                title="New Folder"
+              >
+                <FolderPlus className="w-5 h-5 text-blue-600" />
+                <span className="hidden sm:inline text-sm font-medium">New Folder</span>
+              </button>
+              <button
                 onClick={() => router.push(`/dataroom/rooms/${roomId}/upload`)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
               >
@@ -190,42 +229,77 @@ export default function RoomPage() {
             </div>
           </div>
 
-          {/* Breadcrumbs */}
-          <div className="flex items-center space-x-2 mt-3 text-sm">
+          {/* View Tabs */}
+          <div className="flex items-center space-x-1 mt-4 border-b border-slate-200">
             <button
-              onClick={() => setCurrentFolder(null)}
-              className="text-blue-600 hover:underline"
+              onClick={() => setActiveView('documents')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeView === 'documents'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
             >
-              Root
-            </button>
-            {breadcrumbs.map((crumb, index) => (
-              <div key={index} className="flex items-center space-x-2">
-                <ChevronRight className="w-4 h-4 text-slate-400" />
-                <button
-                  onClick={() => setCurrentFolder(crumb.id)}
-                  className="text-blue-600 hover:underline"
-                >
-                  {crumb.name}
-                </button>
+              <div className="flex items-center space-x-2">
+                <FileText className="w-4 h-4" />
+                <span>Documents</span>
               </div>
-            ))}
+            </button>
+            <button
+              onClick={() => setActiveView('users')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeView === 'users'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Users className="w-4 h-4" />
+                <span>Users</span>
+              </div>
+            </button>
           </div>
+
+          {/* Breadcrumbs - Only show for documents view */}
+          {activeView === 'documents' && (
+            <div className="flex items-center space-x-2 mt-3 text-sm">
+              <button
+                onClick={() => setCurrentFolder(null)}
+                className="text-blue-600 hover:underline"
+              >
+                Root
+              </button>
+              {breadcrumbs.map((crumb, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <button
+                    onClick={() => setCurrentFolder(crumb.id)}
+                    className="text-blue-600 hover:underline"
+                  >
+                    {crumb.name}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Sidebar - Folder Tree */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sticky top-24">
-              <h3 className="text-sm font-semibold text-slate-700 mb-3">Folders</h3>
-              <FolderTree
-                roomId={roomId}
-                currentFolder={currentFolder}
-                onFolderClick={handleFolderClick}
-              />
+        {activeView === 'users' ? (
+          <RoomUsersList roomId={roomId} />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Sidebar - Folder Tree */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sticky top-24">
+                <h3 className="text-sm font-semibold text-slate-700 mb-3">Folders</h3>
+                <FolderTree
+                  roomId={roomId}
+                  currentFolder={currentFolder}
+                  onFolderClick={handleFolderClick}
+                />
+              </div>
             </div>
-          </div>
 
           {/* Main Content */}
           <div className="lg:col-span-3">
@@ -310,11 +384,13 @@ export default function RoomPage() {
                   documents={filteredDocuments}
                   viewMode={viewMode}
                   onDocumentClick={handleDocumentClick}
+                  onMoveDocument={(doc) => setDocumentToMove({ ...doc, targetFolder: null })}
                 />
               )}
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Document Detail Panel */}
@@ -323,6 +399,91 @@ export default function RoomPage() {
           document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
         />
+      )}
+
+      {/* Create Folder Modal */}
+      {showCreateFolder && (
+        <CreateFolderModal
+          roomId={roomId}
+          parentId={currentFolder}
+          onClose={() => setShowCreateFolder(false)}
+          onSuccess={handleFolderCreated}
+        />
+      )}
+
+      {/* Move Document Modal */}
+      {documentToMove && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h2 className="text-xl font-bold text-slate-900">Move Document</h2>
+              <button
+                onClick={() => setDocumentToMove(null)}
+                className="text-slate-500 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
+              <p className="text-sm text-slate-600 mb-4">
+                Select a destination folder for <span className="font-semibold text-slate-900">{documentToMove.name}</span>:
+              </p>
+
+              <div className="space-y-2">
+                {/* Root Option */}
+                <button
+                  onClick={() => setDocumentToMove({ ...documentToMove, targetFolder: null })}
+                  className={`w-full text-left px-4 py-3 rounded-lg border transition-colors flex items-center justify-between ${documentToMove.targetFolder === null
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white hover:border-blue-300'
+                    }`}
+                >
+                  <div className="flex items-center">
+                    <Grid className="w-5 h-5 mr-3 text-slate-400" />
+                    <span className="font-medium">Root Directory</span>
+                  </div>
+                  {documentToMove.targetFolder === null && <Check className="w-5 h-5 text-blue-600" />}
+                </button>
+
+                {/* Folder Options */}
+                {folders.filter(f => f.name !== 'Root').map((folder) => (
+                  <button
+                    key={folder._id}
+                    onClick={() => setDocumentToMove({ ...documentToMove, targetFolder: folder._id })}
+                    className={`w-full text-left px-4 py-3 rounded-lg border transition-colors flex items-center justify-between ${documentToMove.targetFolder === folder._id
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white hover:border-blue-300'
+                      }`}
+                  >
+                    <div className="flex items-center">
+                      <Folder className="w-5 h-5 mr-3 text-slate-400" />
+                      <span className="font-medium">{folder.name}</span>
+                    </div>
+                    {documentToMove.targetFolder === folder._id && <Check className="w-5 h-5 text-blue-600" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 bg-white flex justify-end space-x-3">
+              <button
+                onClick={() => setDocumentToMove(null)}
+                className="px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                disabled={isMoving}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMoveDocumentSubmit}
+                disabled={isMoving}
+                className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+              >
+                {isMoving ? 'Moving...' : 'Move Document'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

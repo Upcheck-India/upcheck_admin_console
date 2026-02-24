@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, CheckSquare, Clock, AlertCircle } from 'lucide-react';
 
 export default function TasksPage() {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState([]);
   const [filter, setFilter] = useState('all');
@@ -88,6 +91,14 @@ export default function TasksPage() {
     { value: 'in_progress', label: 'In Progress', count: tasks.filter(t => t.status === 'in_progress').length },
     { value: 'completed', label: 'Completed', count: tasks.filter(t => t.status === 'completed').length },
   ];
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">

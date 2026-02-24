@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Users, Mail, UserPlus, Shield } from 'lucide-react';
 
 export default function UsersPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [groups, setGroups] = useState([]);
   const [externalUsers, setExternalUsers] = useState([]);
   const [activeTab, setActiveTab] = useState('groups');
@@ -19,6 +22,14 @@ export default function UsersPage() {
     fetchGroups();
     fetchExternalUsers();
   }, []);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   async function fetchGroups() {
     try {

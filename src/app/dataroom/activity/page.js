@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Activity, Eye, User, FileText, RefreshCw } from 'lucide-react';
+import { Activity, Eye, User, FileText, RefreshCw, Monitor, MapPin, Clock, Globe } from 'lucide-react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 
 export default function LiveActivityPage() {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -48,6 +51,14 @@ export default function LiveActivityPage() {
     if (diff < 60) return 'Just now';
     if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
     return `${Math.floor(diff / 3600)}h ago`;
+  }
+
+  function formatDuration(seconds) {
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${mins}m`;
   }
 
   return (
@@ -174,6 +185,42 @@ export default function LiveActivityPage() {
                       <span className="text-xs text-slate-500">
                         {formatTime(user.lastActivity)}
                       </span>
+                    </div>
+                  </div>
+
+                  {/* Session & Device Info */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 p-3 bg-slate-50 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <Monitor className="w-4 h-4 text-slate-500" />
+                      <div>
+                        <p className="text-xs text-slate-500">Device</p>
+                        <p className="text-sm font-medium text-slate-900">{user.device}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Globe className="w-4 h-4 text-slate-500" />
+                      <div>
+                        <p className="text-xs text-slate-500">Browser</p>
+                        <p className="text-sm font-medium text-slate-900">{user.browser}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-4 h-4 text-slate-500" />
+                      <div>
+                        <p className="text-xs text-slate-500">Location</p>
+                        <p className="text-sm font-medium text-slate-900">
+                          {user.location?.city}, {user.location?.country}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-slate-500" />
+                      <div>
+                        <p className="text-xs text-slate-500">Session</p>
+                        <p className="text-sm font-medium text-slate-900">
+                          {formatDuration(user.sessionDuration || 0)}
+                        </p>
+                      </div>
                     </div>
                   </div>
 

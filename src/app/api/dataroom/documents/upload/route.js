@@ -79,7 +79,7 @@ export async function POST(request) {
 
     // SECURITY: Virus scan before upload
     const scanResult = await scanFile(file, file.name);
-    
+
     if (!scanResult.safe) {
       await logAudit({
         action: 'VIRUS_SCAN_BLOCKED',
@@ -191,7 +191,7 @@ export async function POST(request) {
       mimeType: file.type,
       metadata: { tags },
       currentVersion: 1,
-      state: 'draft',
+      state: 'published',
       isLocked: false,
       lockedBy: null,
       lockedAt: null,
@@ -220,6 +220,24 @@ export async function POST(request) {
       changeNote: 'Initial upload',
     });
 
+    // Auto-grant the creator 'admin' access to the document
+    await db.collection('dataroom_permissions').insertOne({
+      resourceType: 'document',
+      resourceId: result.insertedId.toString(),
+      roomId: roomId.toString(),
+      userId: user._id.toString(),
+      userEmail: user.email,
+      groupId: null,
+      permissions: ['admin'],
+      expiresAt: null,
+      grantedBy: {
+        id: user._id.toString(),
+        email: user.email,
+      },
+      grantedAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     await logAudit({
       action: AUDIT_ACTIONS.DOCUMENT_UPLOAD,
       resourceType: 'document',
@@ -238,8 +256,8 @@ export async function POST(request) {
       request,
     });
 
-    return NextResponse.json({ 
-      ...newDocument, 
+    return NextResponse.json({
+      ...newDocument,
       _id: result.insertedId,
       security: {
         scanned: !scanResult.scanSkipped,

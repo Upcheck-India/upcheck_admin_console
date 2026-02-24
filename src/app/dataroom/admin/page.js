@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import { 
@@ -15,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export default function AdminPage() {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +93,14 @@ export default function AdminPage() {
     { label: 'View Analytics', path: '/dataroom/analytics', icon: Activity },
     { label: 'System Settings', path: '/dataroom/admin/settings', icon: Settings },
   ];
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">

@@ -2,17 +2,23 @@
 
 import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Upload, X, FileText, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
+import { useAuth } from '../../../../../hooks/useAuth';
+import SecureLoading from '../../../../components/SecureLoading';
+import { Upload, X, FileText, AlertCircle, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
+import PermissionManager from '../../../components/dataroom/PermissionManager';
 
 export default function UploadPage() {
   const router = useRouter();
   const params = useParams();
   const roomId = params.id;
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
 
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [uploadResults, setUploadResults] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [uploadedDocuments, setUploadedDocuments] = useState([]);
 
   function handleDrag(e) {
     e.preventDefault();
@@ -64,6 +70,14 @@ export default function UploadPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   }
 
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   async function handleUpload() {
     if (files.length === 0) return;
 
@@ -90,6 +104,7 @@ export default function UploadPage() {
             successful: [{ fileName: files[0].name, documentId: data._id }],
             failed: [],
           });
+          setUploadedDocuments([data._id]);
         } else {
           const error = await response.json();
           setUploadResults({
@@ -115,6 +130,8 @@ export default function UploadPage() {
         if (response.ok) {
           const data = await response.json();
           setUploadResults(data.results);
+          const successfulDocs = data.results.successful.map(s => s.documentId).filter(Boolean);
+          setUploadedDocuments(successfulDocs);
         } else {
           const error = await response.json();
           setUploadResults({
@@ -189,16 +206,26 @@ export default function UploadPage() {
               </div>
             )}
 
-            <button
-              onClick={() => {
-                // Force refresh and navigate back
-                router.refresh();
-                router.push(`/dataroom/rooms/${roomId}`);
-              }}
-              className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Back to Room
-            </button>
+            <div className="mt-4 flex space-x-3">
+              {uploadedDocuments.length > 0 && (
+                <button
+                  onClick={() => setShowPermissions(true)}
+                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center justify-center space-x-2"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span>Set Permissions</span>
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  router.refresh();
+                  router.push(`/dataroom/rooms/${roomId}`);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Back to Room
+              </button>
+            </div>
           </div>
         )}
 
@@ -303,6 +330,64 @@ export default function UploadPage() {
           </>
         )}
       </div>
+
+      {/* Permission Manager Modal */}
+      {showPermissions && uploadedDocuments.length > 0 && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-600 to-pink-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <Shield className="w-6 h-6 text-white" />
+                <h2 className="text-xl font-bold text-white">Set Document Permissions</h2>
+              </div>
+              <button
+                onClick={() => setShowPermissions(false)}
+                className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 max-h-[calc(90vh-80px)] overflow-y-auto">
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900">
+                  Set permissions for {uploadedDocuments.length} uploaded {uploadedDocuments.length === 1 ? 'document' : 'documents'}.
+                  You can manage individual document permissions later from the document details panel.
+                </p>
+              </div>
+              {uploadedDocuments.map((docId, index) => (
+                <div key={docId} className="mb-6 last:mb-0">
+                  {uploadedDocuments.length > 1 && (
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">
+                      Document {index + 1} of {uploadedDocuments.length}
+                    </h3>
+                  )}
+                  <PermissionManager
+                    resourceType="document"
+                    resourceId={docId}
+                    roomId={roomId}
+                    onClose={() => {}}
+                  />
+                  {index < uploadedDocuments.length - 1 && (
+                    <div className="border-b border-slate-200 my-4"></div>
+                  )}
+                </div>
+              ))}
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowPermissions(false);
+                    router.refresh();
+                    router.push(`/dataroom/rooms/${roomId}`);
+                  }}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  Done & Return to Room
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

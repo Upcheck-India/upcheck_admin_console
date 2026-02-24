@@ -6,16 +6,40 @@ import { validateFolderName, generateFolderPath } from '../../../../lib/dataroom
 
 async function getUserFromToken(request) {
   try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
+    const adminToken = request.cookies.get('admin_token')?.value;
     const client = await clientPromise;
     const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
+
+    if (adminToken) {
+      const user = await db.collection('admin_users').findOne(
+        { sessionToken: adminToken },
+        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
+      );
+      if (user) return user;
+    }
+
+    // Check external user authentication
+    const externalToken = request.cookies.get('external_user_token')?.value;
+    if (externalToken) {
+      const externalUser = await db.collection('dataroom_external_users').findOne(
+        { sessionToken: externalToken },
+        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
+      );
+      if (externalUser) {
+        return {
+          _id: externalUser._id,
+          id: externalUser._id.toString(),
+          email: externalUser.email,
+          username: externalUser.name,
+          role: externalUser.role || 'External User',
+          isExternal: true
+        };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching user from token:', error);
     return null;
   }
 }
@@ -57,7 +81,7 @@ export async function GET(request) {
     }
 
     const folders = await db.collection('dataroom_folders').find(filter).limit(200).toArray();
-    
+
     // Add document counts to each folder
     const folderIds = folders.map(f => f._id);
     const documentCounts = await db.collection('dataroom_documents').aggregate([
@@ -74,19 +98,19 @@ export async function GET(request) {
         }
       }
     ]).toArray();
-    
+
     // Create a map for quick lookup
     const countMap = {};
     documentCounts.forEach(item => {
       countMap[item._id.toString()] = item.count;
     });
-    
+
     // Attach counts to folders
     const foldersWithCounts = folders.map(folder => ({
       ...folder,
       documentCount: countMap[folder._id.toString()] || 0
     }));
-    
+
     return NextResponse.json({ count: foldersWithCounts.length, items: foldersWithCounts });
   } catch (e) {
     console.error('GET /api/dataroom/folders error', e);
@@ -104,7 +128,7 @@ export async function POST(request) {
     const { roomId, name, parentId } = body;
 
     if (!roomId || !ObjectId.isValid(roomId)) {
-      return NextResponse.json({ error: 'Valid roomId is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Folder creation is only allowed within a valid Data Room. Global folders are not permitted.' }, { status: 400 });
     }
 
     const validation = validateFolderName(name);
@@ -126,12 +150,12 @@ export async function POST(request) {
         return NextResponse.json({ error: 'Invalid parentId' }, { status: 400 });
       }
       targetParentId = new ObjectId(parentId);
-      
+
       const parentFolder = await foldersColl.findOne({ _id: targetParentId, roomId: targetRoomId });
       if (!parentFolder) {
         return NextResponse.json({ error: 'Parent folder not found in this room' }, { status: 404 });
       }
-      
+
       path = generateFolderPath(parentFolder.path, cleanName);
     } else {
       path = `/${cleanName}`;
@@ -158,7 +182,25 @@ export async function POST(request) {
     };
 
     const result = await foldersColl.insertOne(newFolder);
-    
+
+    // Auto-grant the creator 'admin' access to the folder
+    await db.collection('dataroom_permissions').insertOne({
+      resourceType: 'folder',
+      resourceId: result.insertedId.toString(),
+      roomId: roomId.toString(),
+      userId: user._id.toString(),
+      userEmail: user.email,
+      groupId: null,
+      permissions: ['admin'],
+      expiresAt: null,
+      grantedBy: {
+        id: user._id.toString(),
+        email: user.email,
+      },
+      grantedAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     await logAudit({
       action: AUDIT_ACTIONS.FOLDER_CREATE,
       resourceType: 'folder',

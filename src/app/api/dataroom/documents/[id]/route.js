@@ -5,16 +5,41 @@ import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logge
 
 async function getUserFromToken(request) {
   try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
+    const adminToken = request.cookies.get('admin_token')?.value;
     const client = await clientPromise;
     const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
+
+    if (adminToken) {
+      const user = await db.collection('admin_users').findOne(
+        { sessionToken: adminToken },
+        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
+      );
+      if (user) return user;
+    }
+
+    // Check external user authentication
+    const externalToken = request.cookies.get('external_user_token')?.value;
+    if (externalToken) {
+      const externalUser = await db.collection('dataroom_external_users').findOne(
+        { sessionToken: externalToken },
+        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
+      );
+      if (externalUser) {
+        // Map external user to unified format
+        return {
+          _id: externalUser._id,
+          id: externalUser._id.toString(),
+          email: externalUser.email,
+          username: externalUser.name,
+          role: externalUser.role || 'External User',
+          isExternal: true
+        };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching user from token:', error);
     return null;
   }
 }
@@ -46,6 +71,20 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
+    // Enforce permissions for view access
+    const { hasPermission } = await import('../../../../../lib/dataroom/permission-checker');
+    const canView = await hasPermission({
+      user,
+      resourceType: 'document',
+      resourceId: id,
+      permission: 'view',
+      roomId: document.roomId
+    });
+
+    if (!canView) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
+    }
+
     // Log document view
     await logAudit({
       action: AUDIT_ACTIONS.DOCUMENT_VIEW,
@@ -53,7 +92,7 @@ export async function GET(request, { params }) {
       resourceId: id,
       roomId: document.roomId,
       user,
-      details: { name: document.name },
+      details: { name: document.name, method: 'api_get' },
       request,
     });
 

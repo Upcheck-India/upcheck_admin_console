@@ -51,64 +51,87 @@ export async function GET(request) {
     const client = await clientPromise;
     const db = client.db('resources');
 
-    // Get recent view events (last 5 minutes = active viewers)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    // Get recent heartbeats (last 2 minutes = active viewers with 10s heartbeat)
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
     
     const query = {
-      action: 'DOCUMENT_VIEW',
-      timestamp: { $gte: fiveMinutesAgo },
+      timestamp: { $gte: twoMinutesAgo },
     };
 
     if (roomId && ObjectId.isValid(roomId)) {
       query.roomId = new ObjectId(roomId);
     }
 
-    const recentViews = await db.collection('dataroom_audit_log')
+    const recentHeartbeats = await db.collection('dataroom_activity_heartbeat')
       .find(query)
       .sort({ timestamp: -1 })
-      .limit(100)
       .toArray();
 
-    // Group by user and document
+    // Group by user
     const activeUsers = {};
-    const viewingMap = new Map();
 
-    for (const view of recentViews) {
-      const userId = view.user?.id || view.user?.email;
-      const docId = view.resourceId?.toString();
+    for (const hb of recentHeartbeats) {
+      const userId = hb.userId;
       
-      if (!userId || !docId) continue;
+      if (!userId) continue;
 
-      const key = `${userId}_${docId}`;
-      
-      if (!viewingMap.has(key)) {
-        viewingMap.set(key, true);
-        
-        if (!activeUsers[userId]) {
-          activeUsers[userId] = {
-            userId,
-            userName: view.user?.username || view.user?.name || view.user?.email,
-            userEmail: view.user?.email,
-            isExternal: view.details?.isExternal || false,
-            viewing: [],
-            lastActivity: view.timestamp,
-          };
-        }
+      if (!activeUsers[userId]) {
+        activeUsers[userId] = {
+          userId,
+          userName: hb.userName,
+          userEmail: hb.userEmail,
+          isExternal: hb.isExternal || false,
+          device: hb.device || 'Unknown',
+          browser: hb.browser || 'Unknown',
+          os: hb.os || 'Unknown',
+          location: {
+            city: hb.location?.city || 'Unknown',
+            country: hb.location?.country || 'Unknown',
+          },
+          ipAddress: hb.ipAddress || 'Unknown',
+          viewing: new Map(),
+          firstSeen: hb.timestamp,
+          lastActivity: hb.timestamp,
+        };
+      }
 
-        activeUsers[userId].viewing.push({
+      // Update last activity time
+      if (new Date(hb.timestamp) > new Date(activeUsers[userId].lastActivity)) {
+        activeUsers[userId].lastActivity = hb.timestamp;
+      }
+
+      // Track earliest seen time
+      if (new Date(hb.timestamp) < new Date(activeUsers[userId].firstSeen)) {
+        activeUsers[userId].firstSeen = hb.timestamp;
+      }
+
+      // Track documents being viewed
+      const docId = hb.documentId?.toString();
+      if (docId && !activeUsers[userId].viewing.has(docId)) {
+        // Fetch document details
+        const doc = await db.collection('dataroom_documents').findOne(
+          { _id: hb.documentId },
+          { projection: { name: 1 } }
+        );
+
+        activeUsers[userId].viewing.set(docId, {
           documentId: docId,
-          documentName: view.details?.name || 'Unknown',
-          roomId: view.roomId?.toString(),
-          viewedAt: view.timestamp,
+          documentName: doc?.name || 'Unknown',
+          roomId: hb.roomId?.toString(),
+          viewedAt: hb.timestamp,
         });
-
-        if (new Date(view.timestamp) > new Date(activeUsers[userId].lastActivity)) {
-          activeUsers[userId].lastActivity = view.timestamp;
-        }
       }
     }
 
-    const activity = Object.values(activeUsers).sort((a, b) => 
+    // Convert viewing map to array and calculate session duration
+    const activity = Object.values(activeUsers).map(user => {
+      const sessionDuration = Math.floor((new Date(user.lastActivity) - new Date(user.firstSeen)) / 1000);
+      return {
+        ...user,
+        viewing: Array.from(user.viewing.values()),
+        sessionDuration, // in seconds
+      };
+    }).sort((a, b) => 
       new Date(b.lastActivity) - new Date(a.lastActivity)
     );
 

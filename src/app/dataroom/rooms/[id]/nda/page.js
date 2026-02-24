@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '../../../../../hooks/useAuth';
+import SecureLoading from '../../../../components/SecureLoading';
 import { ArrowLeft, FileSignature, CheckCircle, Shield } from 'lucide-react';
 
 export default function NDAPage() {
   const router = useRouter();
   const params = useParams();
   const roomId = params.id;
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
 
   const [room, setRoom] = useState(null);
   const [signed, setSigned] = useState(false);
@@ -17,7 +20,15 @@ export default function NDAPage() {
   useEffect(() => {
     fetchRoom();
     checkSignature();
-  }, []);
+  }, [roomId]);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   async function fetchRoom() {
     try {

@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Shield, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 export default function PermissionsPage() {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [accessRequests, setAccessRequests] = useState([]);
   const [filter, setFilter] = useState('pending');
@@ -65,6 +68,14 @@ export default function PermissionsPage() {
     { value: 'rejected', label: 'Rejected' },
     { value: 'all', label: 'All' },
   ];
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">

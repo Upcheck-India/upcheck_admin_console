@@ -1,8 +1,8 @@
 'use client';
 
-import { FileText, Download, Eye, Lock, MoreVertical, Clock } from 'lucide-react';
+import { FileText, Download, Eye, Lock, MoreVertical, Clock, FolderInput } from 'lucide-react';
 
-export default function DocumentList({ documents, viewMode, onDocumentClick }) {
+export default function DocumentList({ documents, viewMode, onDocumentClick, onMoveDocument }) {
   function formatFileSize(bytes) {
     if (!bytes) return '0 B';
     const k = 1024;
@@ -43,7 +43,20 @@ export default function DocumentList({ documents, viewMode, onDocumentClick }) {
               </div>
               <div className="flex items-center space-x-1">
                 <button
-                  onClick={() => window.location.href = `/dataroom/documents/${doc._id}/view`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onMoveDocument) onMoveDocument(doc);
+                  }}
+                  className="p-1.5 text-slate-600 hover:bg-slate-100 rounded"
+                  title="Move to Folder"
+                >
+                  <FolderInput className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/dataroom/documents/${doc._id}/view`;
+                  }}
                   className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
                   title="View"
                 >
@@ -135,11 +148,10 @@ export default function DocumentList({ documents, viewMode, onDocumentClick }) {
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                  doc.state === 'published' ? 'bg-green-100 text-green-800' :
-                  doc.state === 'draft' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
+                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${doc.state === 'published' ? 'bg-green-100 text-green-800' :
+                    doc.state === 'draft' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                  }`}>
                   {doc.state}
                 </span>
                 {doc.isLocked && (
@@ -156,6 +168,16 @@ export default function DocumentList({ documents, viewMode, onDocumentClick }) {
                   title="View Document"
                 >
                   <Eye className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onMoveDocument) onMoveDocument(doc);
+                  }}
+                  className="text-slate-600 hover:text-slate-900 mr-3"
+                  title="Move to Folder"
+                >
+                  <FolderInput className="w-4 h-4" />
                 </button>
                 <button
                   onClick={(e) => {

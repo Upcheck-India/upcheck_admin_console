@@ -2,10 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check } from 'lucide-react';
+import { useAuth } from '../../../../hooks/useAuth';
+import SecureLoading from '../../../components/SecureLoading';
+import { ArrowLeft, Check, Users } from 'lucide-react';
+import PermissionManager from '../../components/dataroom/PermissionManager';
 
 export default function CreateRoomPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
     name: '',
@@ -21,6 +25,8 @@ export default function CreateRoomPage() {
   });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [createdRoomId, setCreatedRoomId] = useState(null);
+  const [skipPermissions, setSkipPermissions] = useState(false);
 
   const roomTypes = [
     { value: 'general', label: 'General', description: 'Standard document repository' },
@@ -35,7 +41,7 @@ export default function CreateRoomPage() {
     setError('');
   }
 
-  async function handleSubmit() {
+  async function handleCreateRoom() {
     if (!formData.name.trim()) {
       setError('Room name is required');
       return;
@@ -66,7 +72,8 @@ export default function CreateRoomPage() {
 
       if (response.ok) {
         const data = await response.json();
-        router.push(`/dataroom/rooms/${data._id}`);
+        setCreatedRoomId(data._id);
+        setStep(4); // Move to permissions step
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to create room');
@@ -79,10 +86,25 @@ export default function CreateRoomPage() {
     }
   }
 
+  function handleFinish() {
+    if (createdRoomId) {
+      router.push(`/dataroom/rooms/${createdRoomId}`);
+    }
+  }
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
+
   const steps = [
     { number: 1, title: 'Basic Info', description: 'Name and type' },
     { number: 2, title: 'Settings', description: 'Configure room' },
     { number: 3, title: 'Security', description: 'Access controls' },
+    { number: 4, title: 'Permissions', description: 'Manage access' },
   ];
 
   return (
@@ -306,11 +328,33 @@ export default function CreateRoomPage() {
             </div>
           )}
 
+          {step === 4 && createdRoomId && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <div className="flex items-start space-x-3">
+                  <Users className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-blue-900">Set Initial Permissions (Optional)</p>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Grant team members access to this room. You can skip this and add permissions later.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <PermissionManager
+                resourceType="room"
+                resourceId={createdRoomId}
+                onClose={() => {}}
+              />
+            </div>
+          )}
+
           {/* Navigation Buttons */}
           <div className="flex items-center justify-between mt-8 pt-6 border-t border-slate-200">
             <button
               onClick={() => setStep(Math.max(1, step - 1))}
-              disabled={step === 1}
+              disabled={step === 1 || step === 4}
               className="px-4 py-2 text-slate-700 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Back
@@ -322,9 +366,9 @@ export default function CreateRoomPage() {
               >
                 Next
               </button>
-            ) : (
+            ) : step === 3 ? (
               <button
-                onClick={handleSubmit}
+                onClick={handleCreateRoom}
                 disabled={creating}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
               >
@@ -334,8 +378,15 @@ export default function CreateRoomPage() {
                     <span>Creating...</span>
                   </>
                 ) : (
-                  <span>Create Room</span>
+                  <span>Create & Continue</span>
                 )}
+              </button>
+            ) : (
+              <button
+                onClick={handleFinish}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Finish
               </button>
             )}
           </div>

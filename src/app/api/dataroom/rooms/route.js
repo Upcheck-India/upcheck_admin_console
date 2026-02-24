@@ -101,13 +101,13 @@ export async function GET(request) {
         }
       }
     ]).toArray();
-    
+
     // Create a map for quick lookup
     const countMap = {};
     documentCounts.forEach(item => {
       countMap[item._id.toString()] = item.count;
     });
-    
+
     // Attach counts to rooms
     const roomsWithCounts = rooms.map(room => ({
       ...room,
@@ -212,6 +212,24 @@ export async function POST(request) {
       },
       meta: {},
       isDeleted: false,
+    });
+
+    // Auto-grant the creator 'admin' access to the room
+    await db.collection('dataroom_permissions').insertOne({
+      resourceType: 'room',
+      resourceId: roomId.toString(),
+      roomId: roomId.toString(),
+      userId: user._id.toString(),
+      userEmail: user.email,
+      groupId: null,
+      permissions: ['admin'],
+      expiresAt: null,
+      grantedBy: {
+        id: user._id.toString(),
+        email: user.email,
+      },
+      grantedAt: new Date(),
+      updatedAt: new Date(),
     });
 
     await logAudit({

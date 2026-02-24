@@ -128,7 +128,7 @@ export async function POST(request) {
 
         // Virus scan
         const scanResult = await scanFile(file, file.name);
-        
+
         if (!scanResult.safe) {
           results.failed.push({
             fileName: file.name,
@@ -217,6 +217,24 @@ export async function POST(request) {
           createdAt: new Date(),
           createdBy: newDocument.createdBy,
           changeNote: 'Bulk upload',
+        });
+
+        // Auto-grant the creator 'admin' access to the document
+        await db.collection('dataroom_permissions').insertOne({
+          resourceType: 'document',
+          resourceId: result.insertedId.toString(),
+          roomId: roomId.toString(),
+          userId: user._id.toString(),
+          userEmail: user.email,
+          groupId: null,
+          permissions: ['admin'],
+          expiresAt: null,
+          grantedBy: {
+            id: user._id.toString(),
+            email: user.email,
+          },
+          grantedAt: new Date(),
+          updatedAt: new Date(),
         });
 
         results.successful.push({

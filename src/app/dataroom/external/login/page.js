@@ -47,16 +47,13 @@ function ExternalLoginContent() {
       <div className="w-full max-w-md">
         {/* Logo/Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4">
-            <Shield className="w-8 h-8 text-white" />
-          </div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">External User Portal</h1>
-          <p className="text-slate-600">Access shared documents and data rooms</p>
+          <p className="text-slate-600">Login for limited access to Upcheck</p>
         </div>
 
         {/* Login Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
-          <h2 className="text-xl font-semibold text-slate-900 mb-6">Login to Data Room</h2>
+          <h2 className="text-xl font-semibold text-slate-900 mb-6">Login</h2>
 
           {error && (
             <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import {
@@ -17,6 +19,7 @@ import {
 
 export default function AnalyticsPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [analytics, setAnalytics] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [timeRange, setTimeRange] = useState('7d');
@@ -26,6 +29,14 @@ export default function AnalyticsPage() {
     fetchAnalytics();
     fetchAuditLogs();
   }, [timeRange]);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   async function fetchAnalytics() {
     try {

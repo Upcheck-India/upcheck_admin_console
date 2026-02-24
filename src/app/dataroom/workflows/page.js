@@ -1,11 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, GitBranch, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 export default function WorkflowsPage() {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [workflows, setWorkflows] = useState([]);
   const [showModal, setShowModal] = useState(false);

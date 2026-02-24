@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '../../../../../hooks/useAuth';
+import SecureLoading from '../../../../components/SecureLoading';
 import { ArrowLeft, Download, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, FileText, Share2 } from 'lucide-react';
 
 export default function DocumentViewerPage() {
   const router = useRouter();
   const params = useParams();
   const documentId = params.id;
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
 
   const [document, setDocument] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,6 +25,14 @@ export default function DocumentViewerPage() {
       initViewer();
     }
   }, [documentId]);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   async function fetchDocument() {
     try {

@@ -2,9 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { FileText, Download, Filter, Search, Calendar, User, Activity } from 'lucide-react';
+import { useAuth } from '../../../hooks/useAuth';
+import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 
 export default function AuditLogPage() {
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -20,6 +23,14 @@ export default function AuditLogPage() {
   useEffect(() => {
     fetchLogs();
   }, [page, filters]);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   async function fetchLogs() {
     setLoading(true);

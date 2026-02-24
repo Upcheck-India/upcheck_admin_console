@@ -6,16 +6,40 @@ import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-lo
 
 async function getUserFromToken(request) {
   try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
+    const adminToken = request.cookies.get('admin_token')?.value;
     const client = await clientPromise;
     const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
+
+    if (adminToken) {
+      const user = await db.collection('admin_users').findOne(
+        { sessionToken: adminToken },
+        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
+      );
+      if (user) return user;
+    }
+
+    // Check external user authentication
+    const externalToken = request.cookies.get('external_user_token')?.value;
+    if (externalToken) {
+      const externalUser = await db.collection('dataroom_external_users').findOne(
+        { sessionToken: externalToken },
+        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
+      );
+      if (externalUser) {
+        return {
+          _id: externalUser._id,
+          id: externalUser._id.toString(),
+          email: externalUser.email,
+          username: externalUser.name,
+          role: externalUser.role || 'External User',
+          isExternal: true
+        };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error fetching user from token:', error);
     return null;
   }
 }
@@ -70,7 +94,7 @@ export async function GET(request, { params }) {
     // Track view
     await db.collection('dataroom_documents').updateOne(
       { _id: new ObjectId(id) },
-      { 
+      {
         $inc: { viewCount: 1 },
         $set: { lastViewedAt: new Date() }
       }
@@ -113,16 +137,16 @@ export async function GET(request, { params }) {
 
     // Stream file from GridFS
     const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-    
+
     try {
       const downloadStream = bucket.openDownloadStream(document.fileId);
-      
+
       // For chunk-based streaming (security feature)
       if (chunk) {
         const chunkSize = 1024 * 1024; // 1MB chunks
         const chunkNumber = parseInt(chunk);
         const skipBytes = chunkNumber * chunkSize;
-        
+
         const chunks = [];
         let bytesRead = 0;
         let bytesSkipped = 0;
@@ -132,17 +156,17 @@ export async function GET(request, { params }) {
             bytesSkipped += data.length;
             continue;
           }
-          
+
           chunks.push(data);
           bytesRead += data.length;
-          
+
           if (bytesRead >= chunkSize) {
             break;
           }
         }
-        
+
         const chunkBuffer = Buffer.concat(chunks);
-        
+
         return new NextResponse(chunkBuffer, {
           headers: {
             'Content-Type': document.mimeType || 'application/octet-stream',
@@ -158,9 +182,9 @@ export async function GET(request, { params }) {
       for await (const chunk of downloadStream) {
         chunks.push(chunk);
       }
-      
+
       const fileBuffer = Buffer.concat(chunks);
-      
+
       return new NextResponse(fileBuffer, {
         headers: {
           'Content-Type': document.mimeType || 'application/octet-stream',

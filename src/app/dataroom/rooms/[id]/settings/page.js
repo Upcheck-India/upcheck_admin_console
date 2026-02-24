@@ -2,12 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useAuth } from '../../../../../hooks/useAuth';
+import SecureLoading from '../../../../components/SecureLoading';
 import { ArrowLeft, Save, Palette } from 'lucide-react';
 
 export default function RoomSettingsPage() {
   const router = useRouter();
   const params = useParams();
   const roomId = params.id;
+  const { isLoading: authLoading, isAuthenticated } = useAuth();
 
   const [room, setRoom] = useState(null);
   const [settings, setSettings] = useState({
@@ -31,7 +34,15 @@ export default function RoomSettingsPage() {
   useEffect(() => {
     fetchRoom();
     fetchBranding();
-  }, []);
+  }, [roomId]);
+
+  if (authLoading) {
+    return <SecureLoading />;
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   async function fetchRoom() {
     try {
