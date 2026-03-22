@@ -61,11 +61,15 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Forbidden: Interns cannot create projects' }, { status: 403 });
     }
 
-    const { name, description, logo, members: newMembers = [] } = await req.json();
+    const { name, description, logo, members: newMembers = [], status = 'active' } = await req.json();
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
     }
+
+    // Validate status
+    const validStatuses = ['active', 'ideation', 'paused', 'shelved', 'dismissed'];
+    const projectStatus = validStatuses.includes(status) ? status : 'active';
 
     const projectsCollection = db.collection('projects');
     const existingProject = await projectsCollection.findOne({ name: { $regex: `^${name.trim()}$`, $options: 'i' } });
@@ -83,6 +87,7 @@ export async function POST(req) {
       name: name.trim(),
       description: description?.trim() || '',
       logo: logo || '',
+      status: projectStatus,
       superManager: user.username,
       members: finalMembers,
       createdAt: new Date(),

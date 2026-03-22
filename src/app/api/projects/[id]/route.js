@@ -38,18 +38,26 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can edit this project.' }, { status: 403 });
     }
 
-    const { name, description, logo, members, githubRepoUrl } = await req.json();
+    const { name, description, logo, members, githubRepoUrl, status } = await req.json();
 
-    const updateData = {
-      $set: {
-        name: name.trim(),
-        description: description?.trim() || '',
-        logo: logo || '',
-        members,
-        githubRepoUrl: githubRepoUrl || '',
-        updatedAt: new Date(),
-      },
-    };
+    // Build update object dynamically to only update provided fields
+    const updateFields = { updatedAt: new Date() };
+    
+    if (name !== undefined) updateFields.name = name.trim();
+    if (description !== undefined) updateFields.description = description?.trim() || '';
+    if (logo !== undefined) updateFields.logo = logo || '';
+    if (members !== undefined) updateFields.members = members;
+    if (githubRepoUrl !== undefined) updateFields.githubRepoUrl = githubRepoUrl || '';
+    
+    // Validate and set status if provided
+    if (status !== undefined) {
+      const validStatuses = ['active', 'ideation', 'paused', 'shelved', 'dismissed'];
+      if (validStatuses.includes(status)) {
+        updateFields.status = status;
+      }
+    }
+
+    const updateData = { $set: updateFields };
 
     await projectsCollection.updateOne({ _id: new ObjectId(id) }, updateData);
 
