@@ -181,7 +181,7 @@ export default function DocumentationPage() {
           <div className="flex items-center justify-between">
             {/* Left - Branding */}
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="flex items-center gap-2">
+              <Link href="/console" className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-white" />
                 </div>
@@ -237,11 +237,11 @@ export default function DocumentationPage() {
                       </span>
                     </div>
                     <Link
-                      href="/dashboard"
+                      href="/console"
                       className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                     >
                       <Home className="w-4 h-4" />
-                      Dashboard
+                      Console
                     </Link>
                     <Link
                       href="/settings"

@@ -30,21 +30,24 @@ export async function GET(request) {
     // Process dataroom activities
     dataroomActivity.forEach(log => {
       let action = 'Activity';
-      let module = 'Data Room';
+      const moduleName = 'Data Room';
+
+      // Safely get action string, default to empty if null/undefined
+      const actionStr = log.action || '';
 
       // Map action types to readable strings
-      if (log.action.includes('UPLOAD')) action = 'Document uploaded';
-      else if (log.action.includes('DOWNLOAD')) action = 'Document downloaded';
-      else if (log.action.includes('VIEW')) action = 'Document viewed';
-      else if (log.action.includes('DELETE')) action = 'Document deleted';
-      else if (log.action.includes('PERMISSION')) action = 'Permission granted';
-      else if (log.action.includes('CREATE')) action = 'Item created';
-      else if (log.action.includes('UPDATE')) action = 'Item updated';
-      else action = log.action.toLowerCase().replace('_', ' ');
+      if (actionStr.includes('UPLOAD')) action = 'Document uploaded';
+      else if (actionStr.includes('DOWNLOAD')) action = 'Document downloaded';
+      else if (actionStr.includes('VIEW')) action = 'Document viewed';
+      else if (actionStr.includes('DELETE')) action = 'Document deleted';
+      else if (actionStr.includes('PERMISSION')) action = 'Permission granted';
+      else if (actionStr.includes('CREATE')) action = 'Item created';
+      else if (actionStr.includes('UPDATE')) action = 'Item updated';
+      else if (actionStr) action = actionStr.toLowerCase().replace('_', ' ');
 
       activities.push({
         action,
-        module,
+        module: moduleName,
         time: log.timestamp,
         user: log.user?.email || log.user?.username || 'System',
         _timestamp: new Date(log.timestamp).getTime()

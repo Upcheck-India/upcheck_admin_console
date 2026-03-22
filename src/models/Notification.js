@@ -3,8 +3,8 @@ import mongoose from 'mongoose';
 const NotificationTrackingSchema = new mongoose.Schema({
   token: {
     type: String,
-    required: true,
-    unique: true
+    required: true
+    // Note: unique index is defined at parent schema level as 'tracking.token'
   },
   opened: {
     type: Boolean,
