@@ -3,20 +3,38 @@ import { NextResponse } from 'next/server';
 import clientPromise from "../../../lib/mongodb";
 import { GridFSBucket } from 'mongodb';
 
-export async function GET() {
+export async function GET(req) {
   try {
     const client = await clientPromise;
     const db = client.db("resources");
     
+    // Get query parameters
+    const { searchParams } = new URL(req.url);
+    const projectId = searchParams.get('projectId');
+    
+    // Build query filter
+    const query = {};
+    if (projectId) {
+      query.projectId = projectId;
+    }
+    
+    // Filter by folderId if provided
+    const folderId = searchParams.get('folderId');
+    if (folderId) {
+      query.folderId = folderId;
+    }
+    
     // Fetch resources from the collection
-    const resourcesCollection = await db.collection('resources').find({}).toArray();
+    const resourcesCollection = await db.collection('resources').find(query).toArray();
     
     // Also fetch files from GridFS that may not be in the resources collection
     // but are marked as documentation resources
     const bucket = new GridFSBucket(db);
-    const filesCursor = bucket.find({ 
-      "metadata.isDocumentationResource": true 
-    });
+    const gridFSQuery = { "metadata.isDocumentationResource": true };
+    if (projectId) {
+      gridFSQuery["metadata.projectId"] = projectId;
+    }
+    const filesCursor = bucket.find(gridFSQuery);
     
     const filesFromGridFS = await filesCursor.toArray();
     

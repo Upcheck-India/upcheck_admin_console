@@ -42,7 +42,7 @@ export async function GET(request, { params }) {
       seriesId: seriesId,
       $or: [
         { 'recurrenceInstance.isCancelled': true },
-        { 'recurrenceInstance.isModified': true }
+        { 'recurrenceInstance.wasModified': true }
       ]
     }).lean();
     
@@ -132,7 +132,7 @@ export async function POST(request, { params }) {
       seriesId: seriesId,
       $or: [
         { 'recurrenceInstance.isCancelled': true },
-        { 'recurrenceInstance.isModified': true }
+        { 'recurrenceInstance.wasModified': true }
       ]
     }).lean();
     
