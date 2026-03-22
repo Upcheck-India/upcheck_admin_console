@@ -1,47 +1,386 @@
 'use client';
 
-import React, { useState } from 'react';
-import { 
-  File, Folder, Download, MoreVertical, Edit2, Trash2, 
-  Copy, Move, Lock, Unlock, History, Eye, Grid, List,
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  File, Folder, Download, MoreVertical, Edit2, Trash2,
+  Copy, Move, Lock, Unlock, History, Grid, List,
   FileText, FileImage, FileVideo, FileArchive, FileCode,
-  ChevronRight, Share2
+  ChevronRight, Share2, Music, Home
 } from 'lucide-react';
-import Image from 'next/image';
 
-const FILE_ICONS = {
-  pdf: FileText,
-  doc: FileText,
-  docx: FileText,
-  txt: FileText,
-  jpg: FileImage,
-  jpeg: FileImage,
-  png: FileImage,
-  gif: FileImage,
-  svg: FileImage,
-  mp4: FileVideo,
-  mov: FileVideo,
-  avi: FileVideo,
-  zip: FileArchive,
-  rar: FileArchive,
-  '7z': FileArchive,
-  js: FileCode,
-  jsx: FileCode,
-  ts: FileCode,
-  tsx: FileCode,
-  py: FileCode,
-  json: FileCode,
-  html: FileCode,
-  css: FileCode,
+// ─── File type → icon map ────────────────────────────────────────────────────
+
+const EXT_MAP = {
+  pdf:  FileText,  doc:  FileText,  docx: FileText,  txt: FileText,  md: FileText,
+  jpg:  FileImage, jpeg: FileImage, png:  FileImage,  gif: FileImage, svg: FileImage, webp: FileImage,
+  mp4:  FileVideo, mov:  FileVideo, avi:  FileVideo,  webm: FileVideo,
+  mp3:  Music,     wav:  Music,     flac: Music,      ogg: Music,
+  zip:  FileArchive, rar: FileArchive, '7z': FileArchive, tar: FileArchive, gz: FileArchive,
+  js:   FileCode,  jsx: FileCode,   ts:   FileCode,   tsx: FileCode,
+  py:   FileCode,  json: FileCode,  html: FileCode,   css: FileCode,  go: FileCode, rs: FileCode,
 };
 
-const getFileIcon = (fileName) => {
+const EXT_COLORS = {
+  pdf:  'text-red-500',   doc:  'text-blue-600',  docx: 'text-blue-600',  txt: 'text-gray-500', md: 'text-gray-600',
+  jpg:  'text-pink-500',  jpeg: 'text-pink-500',  png:  'text-pink-500',  gif: 'text-purple-500', svg: 'text-orange-500', webp: 'text-pink-400',
+  mp4:  'text-violet-500', mov: 'text-violet-500', avi: 'text-violet-500', webm: 'text-violet-500',
+  mp3:  'text-indigo-500', wav: 'text-indigo-500', flac: 'text-indigo-500', ogg: 'text-indigo-500',
+  zip:  'text-amber-500', rar: 'text-amber-500', '7z': 'text-amber-500', tar: 'text-amber-500', gz: 'text-amber-500',
+  js:   'text-yellow-500', jsx: 'text-cyan-500',  ts:   'text-blue-500',  tsx: 'text-blue-500',
+  py:   'text-green-500',  json:'text-orange-400', html:'text-orange-500', css:'text-blue-400',
+};
+
+function getFileIcon(fileName) {
   const ext = fileName?.split('.').pop()?.toLowerCase();
-  return FILE_ICONS[ext] || File;
-};
+  return { Icon: EXT_MAP[ext] || File, colorClass: EXT_COLORS[ext] || 'text-gray-400' };
+}
 
-export default function FileList({ 
-  items = [], 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatFileSize(bytes) {
+  if (typeof bytes === 'string') {
+    const num = parseFloat(bytes);
+    if (!isNaN(num)) bytes = num;
+    else return bytes.match(/^\d/) ? bytes : '—';
+  }
+  if (!bytes || bytes === 0) return '—';
+  if (bytes < 1024)           return `${bytes} B`;
+  if (bytes < 1024 * 1024)   return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3)     return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+}
+
+function formatDate(date) {
+  if (!date) return '—';
+  const d = new Date(date);
+  const now = new Date();
+  const diff = now - d;
+  const days = Math.floor(diff / 86400000);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7)  return `${days}d ago`;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: days > 300 ? 'numeric' : undefined });
+}
+
+// ─── Safe action caller ───────────────────────────────────────────────────────
+
+function safe(fn, ...args) {
+  return (e) => {
+    e?.stopPropagation();
+    if (typeof fn === 'function') fn(...args);
+  };
+}
+
+// ─── Checkbox ────────────────────────────────────────────────────────────────
+
+function Checkbox({ checked, onChange }) {
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onChange(); }}
+      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${
+        checked ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white hover:border-blue-400'
+      }`}
+    >
+      {checked && (
+        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 12 12">
+          <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+// ─── Dropdown menu (portal-safe, fixed position) ─────────────────────────────
+
+function ContextMenu({ item, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete }) {
+  const menuRef = useRef(null);
+
+  // Position the menu relative to the trigger button
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (triggerRef?.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const menuHeight = 220;
+      const menuWidth  = 180;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top  = spaceBelow > menuHeight ? rect.bottom + 4 : rect.top - menuHeight - 4;
+      const left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8);
+      setPos({ top, left });
+    }
+  }, [triggerRef]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  const actions = [
+    { icon: Edit2,   label: 'Rename',          fn: onRename,         cls: 'text-gray-700' },
+    { icon: Copy,    label: 'Duplicate',        fn: onDuplicate,      cls: 'text-gray-700' },
+    { icon: Move,    label: 'Move',             fn: onMove,           cls: 'text-gray-700' },
+    { icon: History, label: 'Version History',  fn: onVersionHistory, cls: 'text-gray-700' },
+    {
+      icon: item.isPasswordProtected ? Unlock : Lock,
+      label: item.isPasswordProtected ? 'Remove Password' : 'Add Password',
+      fn: onToggleLock,
+      cls: 'text-gray-700',
+    },
+  ];
+
+  return (
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, minWidth: 176 }}
+      className="bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 animate-menu-in"
+      onClick={e => e.stopPropagation()}
+    >
+      {actions.map(({ icon: Icon, label, fn, cls }) => (
+        <button
+          key={label}
+          onClick={() => { if (typeof fn === 'function') fn(item); onClose(); }}
+          className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm ${cls} hover:bg-gray-50 transition-colors`}
+        >
+          <Icon className="w-3.5 h-3.5 text-gray-400" />
+          {label}
+        </button>
+      ))}
+      <div className="border-t border-gray-100 my-1" />
+      <button
+        onClick={() => { if (typeof onDelete === 'function') onDelete(item); onClose(); }}
+        className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+        Delete
+      </button>
+    </div>
+  );
+}
+
+// ─── Grid Card ────────────────────────────────────────────────────────────────
+
+function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload, onShare, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, folderPath }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [hovered, setHovered]   = useState(false);
+  const moreRef = useRef(null);
+
+  const { Icon: FileIcon, colorClass } = isFolder ? { Icon: Folder, colorClass: 'text-amber-400' } : getFileIcon(item.name);
+
+  return (
+    <div
+      className={`relative group bg-white rounded-2xl border transition-all cursor-pointer select-none ${
+        selected
+          ? 'border-blue-400 ring-2 ring-blue-100 shadow-sm'
+          : 'border-gray-100 hover:border-gray-200 hover:shadow-md'
+      } ${item.isDisabled ? 'opacity-50' : ''}`}
+      onClick={() => onClick(item)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Selection checkbox */}
+      {selectionMode && (
+        <div className="absolute top-2.5 left-2.5 z-10">
+          <Checkbox checked={selected} onChange={() => onClick(item)} />
+        </div>
+      )}
+
+      {/* Status badges */}
+      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+        {item.isPasswordProtected && (
+          <span className="flex items-center justify-center w-5 h-5 bg-amber-50 border border-amber-200 rounded-md">
+            <Lock className="w-2.5 h-2.5 text-amber-600" />
+          </span>
+        )}
+        {item.currentVersion > 1 && (
+          <span className="px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-600 text-[10px] font-bold rounded-md">
+            v{item.currentVersion}
+          </span>
+        )}
+      </div>
+
+      {/* Main content */}
+      <div className="flex flex-col items-center text-center p-4 pt-5 pb-3">
+        <div className={`w-12 h-12 flex items-center justify-center rounded-xl mb-3 ${
+          isFolder ? 'bg-amber-50' : 'bg-gray-50'
+        }`}>
+          <FileIcon className={`w-7 h-7 ${colorClass}`} />
+        </div>
+        <span className="text-sm font-medium text-gray-900 truncate w-full leading-tight" title={item.name}>
+          {item.name}
+        </span>
+        {!isFolder && (
+          <span className="text-xs text-gray-400 mt-0.5">{formatFileSize(item.fileSize)}</span>
+        )}
+        {!isFolder && folderPath && (
+          <span className="text-[10px] text-gray-400 mt-0.5 truncate w-full flex items-center justify-center gap-1" title={folderPath}>
+            <Folder className="w-2.5 h-2.5 shrink-0" />
+            <span className="truncate">{folderPath}</span>
+          </span>
+        )}
+      </div>
+
+      {/* Hover action bar */}
+      {!selectionMode && !isFolder && hovered && (
+        <div
+          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 px-2 py-2 bg-gradient-to-t from-white via-white/95 to-transparent rounded-b-2xl"
+          onClick={e => e.stopPropagation()}
+        >
+          {typeof onShare === 'function' && (
+            <button
+              onClick={safe(onShare, item)}
+              title="Share"
+              className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors"
+            >
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            onClick={safe(onDownload, item)}
+            title="Download"
+            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+          <button
+            ref={moreRef}
+            onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
+            title="More options"
+            className={`p-1.5 rounded-lg text-gray-400 transition-colors ${menuOpen ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-100 hover:text-gray-700'}`}
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {menuOpen && (
+        <ContextMenu
+          item={item}
+          onClose={() => setMenuOpen(false)}
+          triggerRef={moreRef}
+          onRename={onRename}
+          onDuplicate={onDuplicate}
+          onMove={onMove}
+          onVersionHistory={onVersionHistory}
+          onToggleLock={onToggleLock}
+          onDelete={onDelete}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── List Row ─────────────────────────────────────────────────────────────────
+
+function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload, onShare, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, folderPath }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const moreRef = useRef(null);
+  const { Icon: FileIcon, colorClass } = isFolder ? { Icon: Folder, colorClass: 'text-amber-400' } : getFileIcon(item.name);
+
+  return (
+    <tr
+      className={`group cursor-pointer transition-colors ${
+        selected ? 'bg-blue-50' : 'hover:bg-gray-50/80'
+      } ${item.isDisabled ? 'opacity-50' : ''}`}
+      onClick={() => onClick(item)}
+    >
+      {selectionMode && (
+        <td className="pl-4 py-3 w-10">
+          <Checkbox checked={selected} onChange={() => onClick(item)} />
+        </td>
+      )}
+
+      {/* Name */}
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isFolder ? 'bg-amber-50' : 'bg-gray-50'}`}>
+            <FileIcon className={`w-4 h-4 ${colorClass}`} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium text-gray-900 truncate">{item.name}</span>
+              {item.isPasswordProtected && <Lock className="w-3 h-3 text-amber-500 shrink-0" />}
+              {!isFolder && item.currentVersion > 1 && (
+                <span className="px-1 py-px bg-blue-50 text-blue-600 text-[10px] font-bold rounded">
+                  v{item.currentVersion}
+                </span>
+              )}
+            </div>
+            {!isFolder && folderPath && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <Folder className="w-2.5 h-2.5 text-gray-300 shrink-0" />
+                <span className="text-[11px] text-gray-400 truncate">{folderPath}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </td>
+
+      {/* Size */}
+      <td className="px-4 py-3 text-sm text-gray-400 hidden md:table-cell tabular-nums whitespace-nowrap">
+        {isFolder ? '—' : formatFileSize(item.fileSize)}
+      </td>
+
+      {/* Modified */}
+      <td className="px-4 py-3 text-sm text-gray-400 hidden lg:table-cell whitespace-nowrap">
+        {formatDate(item.updatedAt || item.createdAt)}
+      </td>
+
+      {/* Version */}
+      <td className="px-4 py-3 text-sm text-gray-400 hidden lg:table-cell">
+        {isFolder ? '—' : `v${item.currentVersion || 1}`}
+      </td>
+
+      {/* Actions */}
+      <td className="px-4 py-3 w-28" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          {!isFolder && typeof onShare === 'function' && (
+            <button onClick={safe(onShare, item)} title="Share" className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors">
+              <Share2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {!isFolder && (
+            <button onClick={safe(onDownload, item)} title="Download" className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors">
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {!isFolder && (
+            <>
+              <button
+                ref={moreRef}
+                onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
+                className={`p-1.5 rounded-lg text-gray-400 transition-colors ${menuOpen ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-100 hover:text-gray-700'}`}
+              >
+                <MoreVertical className="w-3.5 h-3.5" />
+              </button>
+              {menuOpen && (
+                <ContextMenu
+                  item={item}
+                  onClose={() => setMenuOpen(false)}
+                  triggerRef={moreRef}
+                  onRename={onRename}
+                  onDuplicate={onDuplicate}
+                  onMove={onMove}
+                  onVersionHistory={onVersionHistory}
+                  onToggleLock={onToggleLock}
+                  onDelete={onDelete}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+// ─── Main FileList ────────────────────────────────────────────────────────────
+
+export default function FileList({
+  items = [],
   folders = [],
   viewMode = 'grid',
   onFolderClick,
@@ -58,352 +397,208 @@ export default function FileList({
   selectedItems = [],
   onToggleSelection,
   breadcrumbs = [],
-  onBreadcrumbClick
+  onBreadcrumbClick,
 }) {
-  const [activeDropdown, setActiveDropdown] = useState(null);
-  const [hoveredItem, setHoveredItem] = useState(null);
+  const [folderPaths, setFolderPaths] = useState({});
 
-  const formatFileSize = (bytes) => {
-    if (!bytes) return 'N/A';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
-  };
+  // Fetch folder paths in parallel (fixed: was sequential)
+  useEffect(() => {
+    const uniqueIds = [...new Set(items.filter(f => f.folderId).map(f => f.folderId))];
+    if (!uniqueIds.length) return;
 
-  const formatDate = (date) => {
-    if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
+    Promise.all(
+      uniqueIds.map(id =>
+        fetch(`/api/documentation/folders/${id}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => data ? [id, data.path || `/${data.name}`] : null)
+          .catch(() => null)
+      )
+    ).then(results => {
+      const paths = {};
+      results.forEach(r => { if (r) paths[r[0]] = r[1]; });
+      setFolderPaths(paths);
     });
-  };
+  }, [items]);
+
+  // Shared click handler: selection mode vs navigation
+  const handleItemClick = useCallback((item, isFolder) => {
+    if (selectionMode) {
+      if (typeof onToggleSelection === 'function') onToggleSelection(item._id);
+    } else {
+      if (isFolder && typeof onFolderClick === 'function') onFolderClick(item);
+      else if (!isFolder && typeof onFileClick === 'function') onFileClick(item);
+    }
+  }, [selectionMode, onToggleSelection, onFolderClick, onFileClick]);
+
+  const isEmpty = folders.length === 0 && items.length === 0;
+
+  // ── Breadcrumbs ──────────────────────────────────────────────────────────────
 
   const renderBreadcrumbs = () => (
-    <div className="flex items-center text-sm text-gray-600 mb-4 overflow-x-auto">
-      <button 
-        onClick={() => onBreadcrumbClick(null)}
-        className="hover:text-blue-600 whitespace-nowrap"
+    <nav className="flex items-center gap-1 text-sm mb-5 flex-wrap">
+      <button
+        onClick={() => typeof onBreadcrumbClick === 'function' && onBreadcrumbClick(null)}
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors font-medium"
       >
-        Root
+        <Home className="w-3.5 h-3.5" />
+        <span>All Files</span>
       </button>
-      {breadcrumbs.map((crumb, index) => (
-        <React.Fragment key={crumb.id || index}>
-          <ChevronRight className="w-4 h-4 mx-1 text-gray-400 flex-shrink-0" />
-          <button 
-            onClick={() => onBreadcrumbClick(crumb.id)}
-            className={`hover:text-blue-600 whitespace-nowrap ${
-              index === breadcrumbs.length - 1 ? 'text-gray-900 font-medium' : ''
-            }`}
-          >
-            {crumb.name}
-          </button>
-        </React.Fragment>
-      ))}
-    </div>
-  );
-
-  const renderGridView = () => (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-      {/* Folders */}
-      {folders.map(folder => (
-        <div
-          key={folder._id}
-          className={`relative group bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer ${
-            selectionMode && selectedItems.includes(folder._id) ? 'ring-2 ring-blue-500' : ''
-          }`}
-          onClick={() => selectionMode ? onToggleSelection(folder._id) : onFolderClick(folder)}
-          onMouseEnter={() => setHoveredItem(folder._id)}
-          onMouseLeave={() => setHoveredItem(null)}
-        >
-          {selectionMode && (
-            <div className={`absolute top-2 left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-              selectedItems.includes(folder._id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'
-            }`}>
-              {selectedItems.includes(folder._id) && (
-                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                </svg>
-              )}
-            </div>
-          )}
-          <div className="flex flex-col items-center text-center">
-            <Folder className="w-12 h-12 text-yellow-500 mb-2" />
-            <span className="text-sm font-medium text-gray-900 truncate w-full">{folder.name}</span>
-            <span className="text-xs text-gray-500 mt-1">Folder</span>
-          </div>
-        </div>
-      ))}
-
-      {/* Files */}
-      {items.map(item => {
-        const FileIcon = getFileIcon(item.name);
+      {breadcrumbs.map((crumb, index) => {
+        const isLast = index === breadcrumbs.length - 1;
         return (
-          <div
-            key={item._id}
-            className={`relative group bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer ${
-              selectionMode && selectedItems.includes(item._id) ? 'ring-2 ring-blue-500' : ''
-            } ${item.isDisabled ? 'opacity-60' : ''}`}
-            onClick={() => selectionMode ? onToggleSelection(item._id) : onFileClick(item)}
-            onMouseEnter={() => setHoveredItem(item._id)}
-            onMouseLeave={() => setHoveredItem(null)}
-          >
-            {/* Selection checkbox */}
-            {selectionMode && (
-              <div className={`absolute top-2 left-2 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                selectedItems.includes(item._id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'
-              }`}>
-                {selectedItems.includes(item._id) && (
-                  <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </div>
-            )}
-
-            {/* Status badges */}
-            <div className="absolute top-2 right-2 flex flex-col gap-1">
-              {item.isPasswordProtected && (
-                <span className="bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs">
-                  <Lock className="w-3 h-3" />
-                </span>
-              )}
-              {item.currentVersion > 1 && (
-                <span className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded text-xs">
-                  v{item.currentVersion}
-                </span>
-              )}
-            </div>
-
-            <div className="flex flex-col items-center text-center">
-              <FileIcon className="w-12 h-12 text-gray-400 mb-2" />
-              <span className="text-sm font-medium text-gray-900 truncate w-full" title={item.name}>
-                {item.name}
-              </span>
-              <span className="text-xs text-gray-500 mt-1">{formatFileSize(item.fileSize)}</span>
-            </div>
-
-            {/* Hover actions */}
-            {!selectionMode && hoveredItem === item._id && (
-              <div className="absolute inset-0 bg-black/5 rounded-lg flex items-center justify-center gap-2">
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onShare && onShare(item); }}
-                  className="p-2 bg-white rounded-full shadow hover:bg-green-50"
-                  title="Share"
-                >
-                  <Share2 className="w-4 h-4 text-green-600" />
-                </button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); onDownload(item); }}
-                  className="p-2 bg-white rounded-full shadow hover:bg-blue-50"
-                  title="Download"
-                >
-                  <Download className="w-4 h-4 text-gray-600" />
-                </button>
-                <button 
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    setActiveDropdown(activeDropdown === item._id ? null : item._id);
-                  }}
-                  className="p-2 bg-white rounded-full shadow hover:bg-gray-50"
-                  title="More options"
-                >
-                  <MoreVertical className="w-4 h-4 text-gray-600" />
-                </button>
-              </div>
-            )}
-
-            {/* Dropdown menu */}
-            {activeDropdown === item._id && (
-              <div 
-                className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-40"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button onClick={() => { onRename(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                  <Edit2 className="w-4 h-4 mr-2" /> Rename
-                </button>
-                <button onClick={() => { onDuplicate(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                  <Copy className="w-4 h-4 mr-2" /> Duplicate
-                </button>
-                <button onClick={() => { onMove(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                  <Move className="w-4 h-4 mr-2" /> Move
-                </button>
-                <button onClick={() => { onVersionHistory(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                  <History className="w-4 h-4 mr-2" /> Version History
-                </button>
-                <button onClick={() => { onToggleLock(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                  {item.isPasswordProtected ? <Unlock className="w-4 h-4 mr-2" /> : <Lock className="w-4 h-4 mr-2" />}
-                  {item.isPasswordProtected ? 'Remove Password' : 'Add Password'}
-                </button>
-                <div className="border-t border-gray-100 my-1"></div>
-                <button onClick={() => { onDelete(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50">
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete
-                </button>
-              </div>
-            )}
-          </div>
+          <React.Fragment key={crumb.id || index}>
+            <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+            <button
+              onClick={() => !isLast && typeof onBreadcrumbClick === 'function' && onBreadcrumbClick(crumb.id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors font-medium ${
+                isLast
+                  ? 'text-gray-900 bg-gray-100 cursor-default'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <Folder className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              {crumb.name}
+            </button>
+          </React.Fragment>
         );
       })}
+    </nav>
+  );
+
+  // ── Empty state ──────────────────────────────────────────────────────────────
+
+  const renderEmpty = () => (
+    <div className="flex flex-col items-center justify-center py-20 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-100 flex items-center justify-center mb-4">
+        <Folder className="w-7 h-7 text-gray-300" />
+      </div>
+      <h3 className="text-sm font-semibold text-gray-700">This folder is empty</h3>
+      <p className="text-xs text-gray-400 mt-1.5 max-w-xs">Upload files or create a new folder to get started.</p>
     </div>
   );
 
-  const renderListView = () => (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <table className="w-full">
-        <thead className="bg-gray-50 border-b border-gray-200">
-          <tr>
-            {selectionMode && <th className="w-10 px-4 py-3"></th>}
-            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600">Name</th>
-            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 hidden md:table-cell">Size</th>
-            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 hidden lg:table-cell">Modified</th>
-            <th className="text-left px-4 py-3 text-sm font-medium text-gray-600 hidden lg:table-cell">Version</th>
-            <th className="w-20 px-4 py-3"></th>
+  // ── Grid view ────────────────────────────────────────────────────────────────
+
+  const renderGrid = () => {
+    if (isEmpty) return renderEmpty();
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+        {folders.map(folder => (
+          <GridCard
+            key={folder._id}
+            item={folder}
+            isFolder
+            selected={selectedItems.includes(folder._id)}
+            selectionMode={selectionMode}
+            onClick={() => handleItemClick(folder, true)}
+            onDownload={onDownload}
+            onShare={onShare}
+            onRename={onRename}
+            onDuplicate={onDuplicate}
+            onMove={onMove}
+            onVersionHistory={onVersionHistory}
+            onToggleLock={onToggleLock}
+            onDelete={onDelete}
+          />
+        ))}
+        {items.map(item => (
+          <GridCard
+            key={item._id}
+            item={item}
+            isFolder={false}
+            selected={selectedItems.includes(item._id)}
+            selectionMode={selectionMode}
+            onClick={() => handleItemClick(item, false)}
+            onDownload={onDownload}
+            onShare={onShare}
+            onRename={onRename}
+            onDuplicate={onDuplicate}
+            onMove={onMove}
+            onVersionHistory={onVersionHistory}
+            onToggleLock={onToggleLock}
+            onDelete={onDelete}
+            folderPath={item.folderId ? folderPaths[item.folderId] : null}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  // ── List view ────────────────────────────────────────────────────────────────
+
+  const renderList = () => (
+    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+      <table className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-gray-100">
+            {selectionMode && <th className="w-10 pl-4 py-3" />}
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide">Name</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide hidden md:table-cell">Size</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide hidden lg:table-cell">Modified</th>
+            <th className="text-left px-4 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wide hidden lg:table-cell">Version</th>
+            <th className="w-28 px-4 py-3" />
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-100">
-          {/* Folders */}
+        <tbody className="divide-y divide-gray-50">
           {folders.map(folder => (
-            <tr 
-              key={folder._id} 
-              className={`hover:bg-gray-50 cursor-pointer ${
-                selectionMode && selectedItems.includes(folder._id) ? 'bg-blue-50' : ''
-              }`}
-              onClick={() => selectionMode ? onToggleSelection(folder._id) : onFolderClick(folder)}
-            >
-              {selectionMode && (
-                <td className="px-4 py-3">
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                    selectedItems.includes(folder._id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                  }`}>
-                    {selectedItems.includes(folder._id) && (
-                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </div>
-                </td>
-              )}
-              <td className="px-4 py-3">
-                <div className="flex items-center">
-                  <Folder className="w-5 h-5 text-yellow-500 mr-3" />
-                  <span className="text-sm font-medium text-gray-900">{folder.name}</span>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">—</td>
-              <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">{formatDate(folder.updatedAt)}</td>
-              <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">—</td>
-              <td className="px-4 py-3"></td>
-            </tr>
+            <ListRow
+              key={folder._id}
+              item={folder}
+              isFolder
+              selected={selectedItems.includes(folder._id)}
+              selectionMode={selectionMode}
+              onClick={() => handleItemClick(folder, true)}
+              onDownload={onDownload}
+              onShare={onShare}
+              onRename={onRename}
+              onDuplicate={onDuplicate}
+              onMove={onMove}
+              onVersionHistory={onVersionHistory}
+              onToggleLock={onToggleLock}
+              onDelete={onDelete}
+            />
           ))}
-
-          {/* Files */}
-          {items.map(item => {
-            const FileIcon = getFileIcon(item.name);
-            return (
-              <tr 
-                key={item._id} 
-                className={`hover:bg-gray-50 cursor-pointer ${
-                  selectionMode && selectedItems.includes(item._id) ? 'bg-blue-50' : ''
-                } ${item.isDisabled ? 'opacity-60' : ''}`}
-                onClick={() => selectionMode ? onToggleSelection(item._id) : onFileClick(item)}
-              >
-                {selectionMode && (
-                  <td className="px-4 py-3">
-                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
-                      selectedItems.includes(item._id) ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                    }`}>
-                      {selectedItems.includes(item._id) && (
-                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                  </td>
-                )}
-                <td className="px-4 py-3">
-                  <div className="flex items-center">
-                    <FileIcon className="w-5 h-5 text-gray-400 mr-3" />
-                    <span className="text-sm font-medium text-gray-900">{item.name}</span>
-                    {item.isPasswordProtected && <Lock className="w-3.5 h-3.5 text-amber-500 ml-2" />}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">{formatFileSize(item.fileSize)}</td>
-                <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">{formatDate(item.updatedAt)}</td>
-                <td className="px-4 py-3 text-sm text-gray-500 hidden lg:table-cell">
-                  {item.currentVersion ? `v${item.currentVersion}` : 'v1'}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onShare && onShare(item); }}
-                      className="p-1.5 rounded hover:bg-gray-100"
-                      title="Share"
-                    >
-                      <Share2 className="w-4 h-4 text-green-600" />
-                    </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); onDownload(item); }}
-                      className="p-1.5 rounded hover:bg-gray-100"
-                      title="Download"
-                    >
-                      <Download className="w-4 h-4 text-gray-500" />
-                    </button>
-                    <div className="relative">
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          setActiveDropdown(activeDropdown === item._id ? null : item._id);
-                        }}
-                        className="p-1.5 rounded hover:bg-gray-100"
-                      >
-                        <MoreVertical className="w-4 h-4 text-gray-500" />
-                      </button>
-                      {activeDropdown === item._id && (
-                        <div 
-                          className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-40"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button onClick={() => { onRename(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <Edit2 className="w-4 h-4 mr-2" /> Rename
-                          </button>
-                          <button onClick={() => { onDuplicate(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <Copy className="w-4 h-4 mr-2" /> Duplicate
-                          </button>
-                          <button onClick={() => { onMove(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <Move className="w-4 h-4 mr-2" /> Move
-                          </button>
-                          <button onClick={() => { onVersionHistory(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100">
-                            <History className="w-4 h-4 mr-2" /> Version History
-                          </button>
-                          <div className="border-t border-gray-100 my-1"></div>
-                          <button onClick={() => { onDelete(item); setActiveDropdown(null); }} className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50">
-                            <Trash2 className="w-4 h-4 mr-2" /> Delete
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
+          {items.map(item => (
+            <ListRow
+              key={item._id}
+              item={item}
+              isFolder={false}
+              selected={selectedItems.includes(item._id)}
+              selectionMode={selectionMode}
+              onClick={() => handleItemClick(item, false)}
+              onDownload={onDownload}
+              onShare={onShare}
+              onRename={onRename}
+              onDuplicate={onDuplicate}
+              onMove={onMove}
+              onVersionHistory={onVersionHistory}
+              onToggleLock={onToggleLock}
+              onDelete={onDelete}
+              folderPath={item.folderId ? folderPaths[item.folderId] : null}
+            />
+          ))}
         </tbody>
       </table>
-
-      {folders.length === 0 && items.length === 0 && (
-        <div className="text-center py-12">
-          <File className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">No files or folders here</p>
-        </div>
-      )}
+      {isEmpty && renderEmpty()}
     </div>
   );
 
+  // ── Render ───────────────────────────────────────────────────────────────────
+
   return (
-    <div>
-      {breadcrumbs.length > 0 && renderBreadcrumbs()}
-      {viewMode === 'grid' ? renderGridView() : renderListView()}
-    </div>
+    <>
+      <style>{`
+        @keyframes menu-in {
+          from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .animate-menu-in { animation: menu-in 0.13s cubic-bezier(0.16, 1, 0.3, 1); }
+      `}</style>
+
+      <div>
+        {renderBreadcrumbs()}
+        {viewMode === 'grid' ? renderGrid() : renderList()}
+      </div>
+    </>
   );
 }

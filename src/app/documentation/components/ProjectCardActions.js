@@ -1,10 +1,29 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Settings, Trash2, Lock, Info, Edit } from 'lucide-react';
+import { Settings, Trash2, Lock, Info, Edit, ChevronDown, Play, Lightbulb, Pause, Archive, XCircle } from 'lucide-react';
 
-export default function ProjectCardActions({ project, onEdit, onDelete, onPermissions, onDetails }) {
+const STATUS_CONFIG = {
+  active: { label: 'Active', icon: Play, color: 'text-emerald-600' },
+  ideation: { label: 'Ideation', icon: Lightbulb, color: 'text-violet-600' },
+  paused: { label: 'Paused', icon: Pause, color: 'text-amber-600' },
+  shelved: { label: 'Shelved', icon: Archive, color: 'text-slate-500' },
+  archived: { label: 'Archived', icon: Archive, color: 'text-gray-500' },
+  dismissed: { label: 'Dismissed', icon: XCircle, color: 'text-red-600' },
+};
+
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'ideation', label: 'Ideation' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'shelved', label: 'Shelved' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'dismissed', label: 'Dismissed' },
+];
+
+export default function ProjectCardActions({ project, onEdit, onDelete, onPermissions, onDetails, onStatusChange }) {
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description || '');
   const [status, setStatus] = useState(project.status || 'active');
@@ -20,18 +39,63 @@ export default function ProjectCardActions({ project, onEdit, onDelete, onPermis
     }
   };
 
-  const statuses = [
-    <option value="active">Active</option>,
-    <option value="ideation">Ideation</option>,
-    <option value="paused">Paused</option>,
-    <option value="shelved">Shelved</option>,
-    <option value="archived">Archived</option>,
-    <option value="dismissed">Dismissed</option>,
-  ];
+  const handleStatusSelect = (newStatus) => {
+    if (onStatusChange) {
+      onStatusChange(project, newStatus);
+    }
+    setShowStatusMenu(false);
+  };
+
+  const currentStatus = STATUS_CONFIG[status] || STATUS_CONFIG.active;
+  const StatusIcon = currentStatus.icon;
 
   return (
     <>
       <div className="flex items-center gap-1">
+        {/* Quick Status Change Button - Icon style */}
+        <div className="relative">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowStatusMenu(v => !v);
+            }}
+            className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+            title="Change Status"
+          >
+            <StatusIcon className={`w-4 h-4 ${currentStatus.color}`} />
+          </button>
+
+          {showStatusMenu && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setShowStatusMenu(false)} />
+              <div className="absolute left-0 top-full mt-1.5 bg-white rounded-xl shadow-lg border border-gray-100 py-1.5 z-40 min-w-48">
+                {STATUS_OPTIONS.map(opt => {
+                  const config = STATUS_CONFIG[opt.value];
+                  const Icon = config.icon;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => handleStatusSelect(opt.value)}
+                      className={`flex items-center gap-2.5 w-full px-3.5 py-2 text-sm transition-colors ${
+                        status === opt.value
+                          ? 'bg-gray-50 font-medium text-gray-900'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Icon className={`w-4 h-4 ${config.color}`} />
+                      {opt.label}
+                      {status === opt.value && (
+                        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
         <button
           onClick={(e) => {
             e.preventDefault();
@@ -115,8 +179,8 @@ export default function ProjectCardActions({ project, onEdit, onDelete, onPermis
                   onChange={(e) => setStatus(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  {statuses.map(s => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
+                  {STATUS_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
               </div>

@@ -42,7 +42,7 @@ export async function GET(req) {
     const resourcesFromGridFS = filesFromGridFS
     .filter(file => {
       // Only include files that don't have a corresponding entry in resources collection
-      return !resourcesCollection.some(r => 
+      return !resourcesCollection.some(r =>
         r.fileId && r.fileId.toString() === file._id.toString()
       );
     })
@@ -55,6 +55,8 @@ export async function GET(req) {
       fileSizeBytes: file.length,
       category: file.metadata?.category || 'documents',
       description: file.metadata?.description || '',
+      projectId: file.metadata?.projectId,
+      folderId: file.metadata?.folderId || null,
       downloads: 0,
       createdAt: file.uploadDate,
       updatedAt: file.uploadDate,

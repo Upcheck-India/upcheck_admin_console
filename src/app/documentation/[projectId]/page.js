@@ -82,16 +82,19 @@ export default function ProjectDocumentationPage() {
     const loadContents = async () => {
       try {
         setLoading(true);
-        
-        // Fetch folders
-        const foldersResponse = await fetch(`/api/documentation/folders?projectId=${projectId}`);
+
+        // Fetch folders - only children of current folder (or root if none)
+        const foldersQuery = currentFolderId
+          ? `/api/documentation/folders?projectId=${projectId}&parentId=${currentFolderId}`
+          : `/api/documentation/folders?projectId=${projectId}&parentId=`;
+        const foldersResponse = await fetch(foldersQuery);
         if (foldersResponse.ok) {
           const foldersData = await foldersResponse.json();
           setFolders(foldersData);
         }
 
         // Fetch files
-        const filesQuery = currentFolderId 
+        const filesQuery = currentFolderId
           ? `/api/resources?projectId=${projectId}&folderId=${currentFolderId}`
           : `/api/resources?projectId=${projectId}`;
         const filesResponse = await fetch(filesQuery);
@@ -166,24 +169,39 @@ export default function ProjectDocumentationPage() {
     }
   };
 
-  const handleFolderSelect = (folderId, folderName, path) => {
+  const handleFolderSelect = async (folderId, folderName, path) => {
     setCurrentFolderId(folderId);
     setCurrentPath(path || '/');
-    
-    // Update breadcrumbs
+
+    // Update breadcrumbs by fetching the full folder hierarchy
     if (!folderId) {
       setBreadcrumbs([]);
     } else {
-      // Build breadcrumbs from path
-      const pathParts = path?.split('/').filter(Boolean) || [];
-      const newBreadcrumbs = pathParts.map((part, index) => ({
-        id: index === pathParts.length - 1 ? folderId : null,
-        name: part
-      }));
-      if (folderName && !pathParts.includes(folderName)) {
-        newBreadcrumbs.push({ id: folderId, name: folderName });
-      }
-      setBreadcrumbs(newBreadcrumbs);
+      // Build breadcrumbs by traversing up the folder tree
+      const buildBreadcrumbs = async (fid) => {
+        const crumbs = [];
+        let currentId = fid;
+
+        while (currentId) {
+          try {
+            const res = await fetch(`/api/documentation/folders/${currentId}`);
+            if (res.ok) {
+              const folder = await res.json();
+              crumbs.unshift({ id: folder._id, name: folder.name });
+              currentId = folder.parentId;
+            } else {
+              break;
+            }
+          } catch (err) {
+            console.error('Error fetching folder:', err);
+            break;
+          }
+        }
+
+        setBreadcrumbs(crumbs);
+      };
+
+      buildBreadcrumbs(folderId);
     }
   };
 
@@ -211,8 +229,10 @@ export default function ProjectDocumentationPage() {
     }
   };
 
-  const openCreateFolderModal = (parentId = null) => {
-    setParentFolderIdForNew(parentId || currentFolderId);
+  const openCreateFolderModal = (folder = null) => {
+    // If folder object is passed, extract its _id; otherwise use currentFolderId
+    const parentId = folder?._id || currentFolderId;
+    setParentFolderIdForNew(parentId);
     setNewFolderName('');
     setShowCreateFolderModal(true);
   };
@@ -296,6 +316,66 @@ export default function ProjectDocumentationPage() {
       alert('Share link copied to clipboard!');
     } catch (err) {
       prompt('Copy this link:', shareUrl);
+    }
+  };
+
+  const [lockModal, setLockModal] = useState({ show: false, file: null, mode: 'add', password: '', confirmPassword: '' });
+
+  const handleToggleLock = (file) => {
+    if (file.isPasswordProtected) {
+      // Remove password - prompt for confirmation
+      if (confirm(`Remove password protection from "${file.name}"?`)) {
+        handleRemovePassword(file);
+      }
+    } else {
+      // Add password - show modal
+      setLockModal({ show: true, file, mode: 'add' });
+    }
+  };
+
+  const handleRemovePassword = async (file) => {
+    try {
+      const response = await fetch(`/api/resources/${file._id}/protect`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ removePassword: true })
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+        alert('Password protection removed');
+      } else {
+        alert('Failed to remove password protection');
+      }
+    } catch (error) {
+      console.error('Error removing password:', error);
+      alert('Failed to remove password protection');
+    }
+  };
+
+  const handleSetPassword = async () => {
+    const { file, mode } = lockModal;
+    if (!file) return;
+
+    try {
+      const response = await fetch(`/api/resources/${file._id}/protect`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: lockModal.password,
+          confirmPassword: lockModal.confirmPassword
+        })
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+        setLockModal({ show: false, file: null, mode: 'add' });
+        alert('Password protection added successfully');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to add password protection');
+      }
+    } catch (error) {
+      console.error('Error setting password:', error);
+      alert('Failed to add password protection');
     }
   };
 
@@ -568,7 +648,7 @@ export default function ProjectDocumentationPage() {
                 onDuplicate={() => {}}
                 onMove={() => {}}
                 onVersionHistory={handleVersionHistory}
-                onToggleLock={() => {}}
+                onToggleLock={handleToggleLock}
                 onShare={handleFileShare}
                 selectionMode={selectionMode}
                 selectedItems={selectedItems}
@@ -738,6 +818,56 @@ export default function ProjectDocumentationPage() {
               <div><strong>Created:</strong> {selectedFolder.createdAt ? new Date(selectedFolder.createdAt).toLocaleString() : 'N/A'}</div>
             </div>
             <button onClick={() => setShowFolderDetails(false)} className="mt-6 px-4 py-2 bg-gray-600 text-white rounded-lg">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Lock/Unlock Password Modal */}
+      {lockModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setLockModal({ show: false, file: null, mode: 'add' })}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-2">Add Password Protection</h3>
+            <p className="text-sm text-gray-500 mb-4">"{lockModal.file?.name}"</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={lockModal.password || ''}
+                  onChange={(e) => setLockModal(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Enter password"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+                <input
+                  type="password"
+                  value={lockModal.confirmPassword || ''}
+                  onChange={(e) => setLockModal(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  placeholder="Confirm password"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setLockModal({ show: false, file: null, mode: 'add' })}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetPassword}
+                disabled={!lockModal.password || lockModal.password !== lockModal.confirmPassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Set Password
+              </button>
+            </div>
           </div>
         </div>
       )}
