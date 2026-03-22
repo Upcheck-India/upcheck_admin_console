@@ -22,8 +22,22 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
     const tab = searchParams.get('tab');
 
+    // Always filter projects by user permissions unless Admin/Console admin
+    const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
+    
     let query = {};
-    if (tab === 'my') {
+    if (!isAdmin) {
+      // Non-admins can only see projects they're part of
+      query = {
+        $or: [
+          { superManager: user.username },
+          { 'members.user': user.username }
+        ]
+      };
+    }
+    
+    // Further filter if 'my' tab specified
+    if (tab === 'my' && isAdmin) {
       query = {
         $or: [
           { superManager: user.username },

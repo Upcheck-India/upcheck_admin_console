@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { 
   Folder, Plus, Search, Grid, List, Filter, Settings, LogOut,
   User, Bell, ChevronDown, Play, Pause, Lightbulb, Archive, XCircle,
-  FileText, Clock, Activity, RefreshCw, Home, FolderOpen
+  FileText, Clock, Activity, RefreshCw, Home, FolderOpen, Upload
 } from 'lucide-react';
 import ProjectSpaceCard from './components/ProjectSpaceCard';
 import CreateProjectModal from './components/CreateProjectModal';
+import UploadModal from './components/UploadModal';
+import ProjectCardActions from './components/ProjectCardActions';
 
 const STATUS_FILTERS = [
   { value: 'all', label: 'All Projects' },
@@ -17,6 +19,7 @@ const STATUS_FILTERS = [
   { value: 'ideation', label: 'Ideation' },
   { value: 'paused', label: 'Paused' },
   { value: 'shelved', label: 'Shelved' },
+  { value: 'archived', label: 'Archived' },
   { value: 'dismissed', label: 'Dismissed' },
 ];
 
@@ -33,6 +36,10 @@ export default function DocumentationPage() {
   const [viewMode, setViewMode] = useState('grid');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showPermissionsModal, setShowPermissionsModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   // Fetch user
   useEffect(() => {
@@ -206,6 +213,35 @@ export default function DocumentationPage() {
     }
   };
 
+  const handleEditProject = async (project, updates) => {
+    try {
+      const response = await fetch(`/api/projects/${project._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      
+      if (response.ok) {
+        fetchProjects();
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to update project');
+      }
+    } catch (error) {
+      console.error('Error updating project:', error);
+    }
+  };
+
+  const handlePermissions = (project) => {
+    setSelectedProject(project);
+    setShowPermissionsModal(true);
+  };
+
+  const handleDetails = (project) => {
+    setSelectedProject(project);
+    setShowDetailsModal(true);
+  };
+
   // Filter projects
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -249,6 +285,14 @@ export default function DocumentationPage() {
 
             {/* Right - Actions */}
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                <span className="hidden sm:inline">Upload</span>
+              </button>
+              
               {canCreateProject && (
                 <button
                   onClick={() => setShowCreateModal(true)}
@@ -407,14 +451,24 @@ export default function DocumentationPage() {
 
             {/* Project Spaces */}
             {filteredProjects.map(project => (
-              <ProjectSpaceCard
-                key={project._id}
-                project={project}
-                stats={projectStats[project._id] || { fileCount: 0, folderCount: 0 }}
-                onStatusChange={handleStatusChange}
-                onSettings={(p) => router.push(`/project_management/${p._id}`)}
-                onDelete={handleDeleteProject}
-              />
+              <div key={project._id} className="relative">
+                <ProjectSpaceCard
+                  project={project}
+                  stats={projectStats[project._id] || { fileCount: 0, folderCount: 0 }}
+                  onStatusChange={handleStatusChange}
+                  onSettings={(p) => router.push(`/project_management/${p._id}`)}
+                  onDelete={handleDeleteProject}
+                />
+                <div className="absolute top-4 right-4 z-10">
+                  <ProjectCardActions
+                    project={project}
+                    onEdit={handleEditProject}
+                    onDelete={handleDeleteProject}
+                    onPermissions={handlePermissions}
+                    onDetails={handleDetails}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -438,6 +492,45 @@ export default function DocumentationPage() {
           router.push(`/documentation/${newProject._id || newProject.insertedId}`);
         }}
       />
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onUpload={() => {
+          fetchProjects();
+          setShowUploadModal(false);
+        }}
+        userProjects={projects}
+      />
+
+      {/* Permissions Modal */}
+      {showPermissionsModal && selectedProject && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowPermissionsModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4">Manage Permissions - {selectedProject.name}</h3>
+            <p className="text-gray-600 mb-4">Permission management coming soon...</p>
+            <button onClick={() => setShowPermissionsModal(false)} className="px-4 py-2 bg-gray-600 text-white rounded-lg">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Details Modal */}
+      {showDetailsModal && selectedProject && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDetailsModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4">Project Details - {selectedProject.name}</h3>
+            <div className="space-y-3">
+              <div><strong>Description:</strong> {selectedProject.description || 'N/A'}</div>
+              <div><strong>Status:</strong> {selectedProject.status}</div>
+              <div><strong>Super Manager:</strong> {selectedProject.superManager}</div>
+              <div><strong>Members:</strong> {selectedProject.members?.length || 0}</div>
+              <div><strong>Created:</strong> {new Date(selectedProject.createdAt).toLocaleString()}</div>
+            </div>
+            <button onClick={() => setShowDetailsModal(false)} className="mt-6 px-4 py-2 bg-gray-600 text-white rounded-lg">Close</button>
+          </div>
+        </div>
+      )}
 
       {/* Click outside to close dropdowns */}
       {showUserDropdown && (

@@ -5,7 +5,7 @@ import {
   File, Folder, Download, MoreVertical, Edit2, Trash2, 
   Copy, Move, Lock, Unlock, History, Eye, Grid, List,
   FileText, FileImage, FileVideo, FileArchive, FileCode,
-  ChevronRight
+  ChevronRight, Share2
 } from 'lucide-react';
 import Image from 'next/image';
 
@@ -53,6 +53,7 @@ export default function FileList({
   onMove,
   onVersionHistory,
   onToggleLock,
+  onShare,
   selectionMode = false,
   selectedItems = [],
   onToggleSelection,
@@ -187,11 +188,18 @@ export default function FileList({
             {!selectionMode && hoveredItem === item._id && (
               <div className="absolute inset-0 bg-black/5 rounded-lg flex items-center justify-center gap-2">
                 <button 
+                  onClick={(e) => { e.stopPropagation(); onShare && onShare(item); }}
+                  className="p-2 bg-white rounded-full shadow hover:bg-green-50"
+                  title="Share"
+                >
+                  <Share2 className="w-4 h-4 text-green-600" />
+                </button>
+                <button 
                   onClick={(e) => { e.stopPropagation(); onDownload(item); }}
                   className="p-2 bg-white rounded-full shadow hover:bg-blue-50"
                   title="Download"
                 >
-                  <Download className="w-4 h-4 text-blue-600" />
+                  <Download className="w-4 h-4 text-gray-600" />
                 </button>
                 <button 
                   onClick={(e) => { 
@@ -327,6 +335,13 @@ export default function FileList({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-1">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); onShare && onShare(item); }}
+                      className="p-1.5 rounded hover:bg-gray-100"
+                      title="Share"
+                    >
+                      <Share2 className="w-4 h-4 text-green-600" />
+                    </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); onDownload(item); }}
                       className="p-1.5 rounded hover:bg-gray-100"

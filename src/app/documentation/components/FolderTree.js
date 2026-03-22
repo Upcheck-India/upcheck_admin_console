@@ -2,12 +2,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Folder, FolderOpen, File, Plus, MoreVertical, Edit2, Trash2, FolderPlus } from 'lucide-react';
+import FolderContextMenu from './FolderContextMenu';
 
 export default function FolderTree({ 
   projectId, 
   currentFolderId, 
   onFolderSelect, 
   onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onFolderPermissions,
+  onFolderDetails,
   refreshTrigger 
 }) {
   const [folders, setFolders] = useState([]);
@@ -120,12 +125,16 @@ export default function FolderTree({
                 <span className="text-sm truncate flex-1">{folder.name}</span>
 
                 {/* Actions */}
-                <button
-                  onClick={(e) => handleContextMenu(e, folder._id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-gray-200 transition-opacity"
-                >
-                  <MoreVertical className="w-3.5 h-3.5 text-gray-500" />
-                </button>
+                <div className="opacity-0 group-hover:opacity-100">
+                  <FolderContextMenu
+                    folder={folder}
+                    onRename={onRenameFolder}
+                    onDelete={onDeleteFolder}
+                    onPermissions={onFolderPermissions}
+                    onDetails={onFolderDetails}
+                    onCreateSubfolder={(f) => onCreateFolder(f._id)}
+                  />
+                </div>
               </div>
 
               {/* Children */}
@@ -176,45 +185,6 @@ export default function FolderTree({
         New Folder
       </button>
 
-      {/* Context Menu */}
-      {contextMenu.show && (
-        <div 
-          className="fixed bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-40"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
-          <button
-            onClick={() => {
-              onCreateFolder(contextMenu.folderId);
-              closeContextMenu();
-            }}
-            className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            <FolderPlus className="w-4 h-4 mr-2" />
-            New Subfolder
-          </button>
-          <button
-            onClick={() => {
-              // TODO: Implement rename
-              closeContextMenu();
-            }}
-            className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-          >
-            <Edit2 className="w-4 h-4 mr-2" />
-            Rename
-          </button>
-          <div className="border-t border-gray-100 my-1"></div>
-          <button
-            onClick={() => {
-              // TODO: Implement delete
-              closeContextMenu();
-            }}
-            className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </button>
-        </div>
-      )}
     </div>
   );
 }

@@ -15,10 +15,18 @@ export default function Login() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
+  const [redirectUrl, setRedirectUrl] = useState('');
+
   useEffect(() => {
     setMounted(true);
     
+    // Check for redirect URL in query params
     if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const redirect = params.get('redirect');
+      if (redirect) {
+        setRedirectUrl(decodeURIComponent(redirect));
+      }
       initParticlesAndShrimps();
     }
     
@@ -282,7 +290,9 @@ export default function Login() {
         localStorage.setItem('username', username);
         const checkAuth = await fetch('/api/auth/check', { credentials: 'include' });
         if (checkAuth.ok) {
-          router.push('/console');
+          // Redirect to original URL if exists, otherwise go to console
+          const destination = redirectUrl || '/console';
+          router.push(destination);
           router.refresh();
         } else {
           throw new Error('Authentication failed');

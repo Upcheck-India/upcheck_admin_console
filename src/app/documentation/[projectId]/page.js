@@ -13,12 +13,15 @@ import FolderTree from '../components/FolderTree';
 import FileList from '../components/FileList';
 import ActivityLog from '../components/ActivityLog';
 import VersionHistory from '../components/VersionHistory';
+import UploadModal from '../components/UploadModal';
+import FolderContextMenu from '../components/FolderContextMenu';
 
 const STATUS_CONFIG = {
   active: { label: 'Active', color: 'bg-green-100 text-green-700', icon: Play },
   ideation: { label: 'Ideation', color: 'bg-purple-100 text-purple-700', icon: Lightbulb },
   paused: { label: 'Paused', color: 'bg-yellow-100 text-yellow-700', icon: Pause },
   shelved: { label: 'Shelved', color: 'bg-gray-100 text-gray-700', icon: Archive },
+  archived: { label: 'Archived', color: 'bg-slate-100 text-slate-700', icon: Archive },
   dismissed: { label: 'Dismissed', color: 'bg-red-100 text-red-700', icon: XCircle }
 };
 
@@ -46,21 +49,68 @@ export default function ProjectDocumentationPage() {
   // Modals
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showFolderDetails, setShowFolderDetails] = useState(false);
+  const [showFolderPermissions, setShowFolderPermissions] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
+  const [selectedFolder, setSelectedFolder] = useState(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [parentFolderIdForNew, setParentFolderIdForNew] = useState(null);
 
   // Fetch project details
   useEffect(() => {
-    fetchProject();
+    const loadProject = async () => {
+      try {
+        const response = await fetch(`/api/projects/${projectId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setProject(data);
+        }
+      } catch (error) {
+        console.error('Error fetching project:', error);
+      }
+    };
+    
+    if (projectId) {
+      loadProject();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   // Fetch files and folders when folder changes
   useEffect(() => {
-    if (project) {
-      fetchContents();
+    const loadContents = async () => {
+      try {
+        setLoading(true);
+        
+        // Fetch folders
+        const foldersResponse = await fetch(`/api/documentation/folders?projectId=${projectId}`);
+        if (foldersResponse.ok) {
+          const foldersData = await foldersResponse.json();
+          setFolders(foldersData);
+        }
+
+        // Fetch files
+        const filesQuery = currentFolderId 
+          ? `/api/resources?projectId=${projectId}&folderId=${currentFolderId}`
+          : `/api/resources?projectId=${projectId}`;
+        const filesResponse = await fetch(filesQuery);
+        if (filesResponse.ok) {
+          const filesData = await filesResponse.json();
+          setFiles(filesData.filter(f => !currentFolderId || f.folderId === currentFolderId));
+        }
+      } catch (error) {
+        console.error('Error fetching contents:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (projectId) {
+      loadContents();
     }
-  }, [project, currentFolderId, refreshTrigger]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, currentFolderId, refreshTrigger]);
 
   const fetchProject = async () => {
     try {
@@ -197,6 +247,58 @@ export default function ProjectDocumentationPage() {
     }
   };
 
+  const handleFolderRename = async (folder, newName) => {
+    try {
+      const response = await fetch(`/api/documentation/folders/${folder._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error('Error renaming folder:', error);
+    }
+  };
+
+  const handleFolderDelete = async (folder) => {
+    try {
+      const response = await fetch(`/api/documentation/folders/${folder._id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+        if (currentFolderId === folder._id) {
+          setCurrentFolderId(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+    }
+  };
+
+  const handleFolderPermissions = (folder) => {
+    setSelectedFolder(folder);
+    setShowFolderPermissions(true);
+  };
+
+  const handleFolderDetails = (folder) => {
+    setSelectedFolder(folder);
+    setShowFolderDetails(true);
+  };
+
+  const handleFileShare = async (file) => {
+    // Generate shareable link
+    const shareUrl = `${window.location.origin}/shared/${file._id}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      alert('Share link copied to clipboard!');
+    } catch (err) {
+      prompt('Copy this link:', shareUrl);
+    }
+  };
+
   const handleVersionHistory = (item) => {
     setSelectedResource(item);
     setShowVersionHistory(true);
@@ -283,13 +385,13 @@ export default function ProjectDocumentationPage() {
 
             {/* Right */}
             <div className="flex items-center gap-2">
-              <Link
-                href={`/documentation/upload?projectId=${projectId}${currentFolderId ? `&folderId=${currentFolderId}` : ''}`}
+              <button
+                onClick={() => setShowUploadModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Upload className="w-4 h-4" />
                 <span className="hidden sm:inline">Upload</span>
-              </Link>
+              </button>
             </div>
           </div>
 
@@ -348,6 +450,10 @@ export default function ProjectDocumentationPage() {
                 currentFolderId={currentFolderId}
                 onFolderSelect={handleFolderSelect}
                 onCreateFolder={openCreateFolderModal}
+                onRenameFolder={handleFolderRename}
+                onDeleteFolder={handleFolderDelete}
+                onFolderPermissions={handleFolderPermissions}
+                onFolderDetails={handleFolderDetails}
                 refreshTrigger={refreshTrigger}
               />
             </div>
@@ -463,6 +569,7 @@ export default function ProjectDocumentationPage() {
                 onMove={() => {}}
                 onVersionHistory={handleVersionHistory}
                 onToggleLock={() => {}}
+                onShare={handleFileShare}
                 selectionMode={selectionMode}
                 selectedItems={selectedItems}
                 onToggleSelection={toggleSelection}
@@ -595,6 +702,45 @@ export default function ProjectDocumentationPage() {
           window.open(`/api/download/${version.fileId}`, '_blank');
         }}
       />
+
+      {/* Upload Modal */}
+      <UploadModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onUpload={() => {
+          setRefreshTrigger(prev => prev + 1);
+          setShowUploadModal(false);
+        }}
+        defaultProjectId={projectId}
+        defaultFolderId={currentFolderId}
+        userProjects={[]}
+      />
+
+      {/* Folder Permissions Modal */}
+      {showFolderPermissions && selectedFolder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFolderPermissions(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4">Folder Permissions - {selectedFolder.name}</h3>
+            <p className="text-gray-600 mb-4">Folder permission management coming soon...</p>
+            <button onClick={() => setShowFolderPermissions(false)} className="px-4 py-2 bg-gray-600 text-white rounded-lg">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Folder Details Modal */}
+      {showFolderDetails && selectedFolder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowFolderDetails(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-4">Folder Details - {selectedFolder.name}</h3>
+            <div className="space-y-3">
+              <div><strong>Path:</strong> {selectedFolder.path || '/'}</div>
+              <div><strong>Parent:</strong> {selectedFolder.parentId || 'Root'}</div>
+              <div><strong>Created:</strong> {selectedFolder.createdAt ? new Date(selectedFolder.createdAt).toLocaleString() : 'N/A'}</div>
+            </div>
+            <button onClick={() => setShowFolderDetails(false)} className="mt-6 px-4 py-2 bg-gray-600 text-white rounded-lg">Close</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
