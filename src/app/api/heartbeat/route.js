@@ -4,19 +4,38 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../lib/mongodb';
-import { startJobProcessing } from '../../../lib/jobHandlers.js';
+import { connectToDatabase } from '../../../lib/mongodb';
 
-// Initialize job processing system once
+// Initialize job processing system once - ASYNC
 let jobSystemInitialized = false;
-if (!jobSystemInitialized) {
-  try {
-    startJobProcessing();
-    jobSystemInitialized = true;
-    console.log('Job processing system initialized via heartbeat');
-  } catch (error) {
-    console.error('Failed to initialize job processing system:', error);
-  }
+let initializationPromise = null;
+
+async function initializeJobSystemAsync() {
+  if (jobSystemInitialized) return;
+  if (initializationPromise) return initializationPromise;
+  
+  initializationPromise = (async () => {
+    try {
+      // Wait for database connection first
+      await connectToDatabase();
+      
+      // Then start job processing
+      const { startJobProcessing } = await import('../../../lib/jobHandlers.js');
+      startJobProcessing();
+      
+      jobSystemInitialized = true;
+      console.log('Job processing system initialized via heartbeat');
+    } catch (error) {
+      console.error('Failed to initialize job processing system:', error);
+      initializationPromise = null; // Reset so we can retry
+    }
+  })();
+  
+  return initializationPromise;
 }
+
+// Initialize in background (non-blocking)
+initializeJobSystemAsync();
 
 // POST  /api/heartbeat
 // Updates the lastHeartbeat timestamp for the currently authenticated user.

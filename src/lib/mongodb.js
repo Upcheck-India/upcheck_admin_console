@@ -24,24 +24,32 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 // Mongoose connection management
-let isConnected = false;
-
 export async function connectToDatabase() {
-  if (isConnected) {
+  // Check if already connected
+  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+  if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
 
+  // If currently connecting, wait for it to complete
+  if (mongoose.connection.readyState === 2) {
+    return new Promise((resolve, reject) => {
+      mongoose.connection.once('connected', () => resolve(mongoose.connection));
+      mongoose.connection.once('error', reject);
+    });
+  }
+
   try {
-    const connection = await mongoose.connect(uri, {
+    await mongoose.connect(uri, {
       bufferCommands: false,
       maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
+      connectTimeoutMS: 10000,
     });
     
-    isConnected = true;
     console.log('Connected to MongoDB with Mongoose');
-    return connection;
+    return mongoose.connection;
   } catch (error) {
     console.error('MongoDB connection error:', error);
     throw error;
@@ -51,17 +59,14 @@ export async function connectToDatabase() {
 // Handle connection events
 mongoose.connection.on('connected', () => {
   console.log('Mongoose connected to MongoDB');
-  isConnected = true;
 });
 
 mongoose.connection.on('error', (err) => {
   console.error('Mongoose connection error:', err);
-  isConnected = false;
 });
 
 mongoose.connection.on('disconnected', () => {
   console.log('Mongoose disconnected from MongoDB');
-  isConnected = false;
 });
 
 export default clientPromise;
