@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../../../../hooks/useAuth';
 import SecureLoading from '../../../../components/SecureLoading';
 import { Upload, X, FileText, AlertCircle, CheckCircle, ArrowLeft, Shield } from 'lucide-react';
-import PermissionManager from '../../../components/dataroom/PermissionManager';
+import PermissionManager from '../../../../components/dataroom/PermissionManager';
 
 export default function UploadPage() {
   const router = useRouter();

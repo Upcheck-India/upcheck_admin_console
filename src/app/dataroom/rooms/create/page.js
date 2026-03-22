@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../../hooks/useAuth';
 import SecureLoading from '../../../components/SecureLoading';
 import { ArrowLeft, Check, Users } from 'lucide-react';
-import PermissionManager from '../../components/dataroom/PermissionManager';
+import PermissionManager from '../../../components/dataroom/PermissionManager';
 
 export default function CreateRoomPage() {
   const router = useRouter();
