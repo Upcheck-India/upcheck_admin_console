@@ -68,52 +68,96 @@ export default function DocumentationPage() {
       if (response.ok) {
         const data = await response.json();
         setProjects(data);
+        // Set loading to false immediately so UI shows
+        setLoading(false);
         
-        // Fetch stats for each project
-        const stats = {};
-        for (const project of data) {
-          try {
-            const resourcesRes = await fetch(`/api/resources?projectId=${project._id}`);
-            const foldersRes = await fetch(`/api/documentation/folders?projectId=${project._id}`);
-            
-            const resources = resourcesRes.ok ? await resourcesRes.json() : [];
-            const folders = foldersRes.ok ? await foldersRes.json() : [];
-            
-            stats[project._id] = {
-              fileCount: resources.length,
-              folderCount: folders.length,
-              recentActivity: resources.some(r => {
-                const updated = new Date(r.updatedAt || r.createdAt);
-                const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                return updated > dayAgo;
-              })
-            };
-          } catch (e) {
-            stats[project._id] = { fileCount: 0, folderCount: 0 };
-          }
-        }
-        
-        // Also get General stats
-        try {
-          const generalRes = await fetch('/api/resources?projectId=general');
-          const generalFolders = await fetch('/api/documentation/folders?projectId=general');
-          const generalResources = generalRes.ok ? await generalRes.json() : [];
-          const generalFolderData = generalFolders.ok ? await generalFolders.json() : [];
-          stats['general'] = {
-            fileCount: generalResources.length,
-            folderCount: generalFolderData.length
-          };
-        } catch (e) {
-          stats['general'] = { fileCount: 0, folderCount: 0 };
-        }
-        
-        setProjectStats(stats);
+        // Fetch stats in the background (non-blocking)
+        fetchProjectStats(data);
+      } else {
+        setLoading(false);
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-    } finally {
       setLoading(false);
     }
+  };
+
+  // Separate function to fetch stats without blocking UI
+  const fetchProjectStats = async (projectsData) => {
+    const stats = { general: { fileCount: 0, folderCount: 0 } };
+    
+    // Helper to fetch with timeout
+    const fetchWithTimeout = async (url, timeoutMs = 5000) => {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        return res;
+      } catch (e) {
+        clearTimeout(timeoutId);
+        return null;
+      }
+    };
+
+    // Fetch stats for all projects in parallel
+    const fetchPromises = projectsData.map(async (project) => {
+      try {
+        const [resourcesRes, foldersRes] = await Promise.all([
+          fetchWithTimeout(`/api/resources?projectId=${project._id}`),
+          fetchWithTimeout(`/api/documentation/folders?projectId=${project._id}`)
+        ]);
+        
+        const resources = resourcesRes?.ok ? await resourcesRes.json() : [];
+        const folders = foldersRes?.ok ? await foldersRes.json() : [];
+        
+        return {
+          projectId: project._id,
+          stats: {
+            fileCount: Array.isArray(resources) ? resources.length : 0,
+            folderCount: Array.isArray(folders) ? folders.length : 0,
+            recentActivity: Array.isArray(resources) && resources.some(r => {
+              const updated = new Date(r.updatedAt || r.createdAt);
+              const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+              return updated > dayAgo;
+            })
+          }
+        };
+      } catch (e) {
+        return { projectId: project._id, stats: { fileCount: 0, folderCount: 0 } };
+      }
+    });
+
+    // Also fetch General stats
+    const generalPromise = (async () => {
+      try {
+        const [generalRes, generalFolders] = await Promise.all([
+          fetchWithTimeout('/api/resources?projectId=general'),
+          fetchWithTimeout('/api/documentation/folders?projectId=general')
+        ]);
+        const generalResources = generalRes?.ok ? await generalRes.json() : [];
+        const generalFolderData = generalFolders?.ok ? await generalFolders.json() : [];
+        return {
+          projectId: 'general',
+          stats: {
+            fileCount: Array.isArray(generalResources) ? generalResources.length : 0,
+            folderCount: Array.isArray(generalFolderData) ? generalFolderData.length : 0
+          }
+        };
+      } catch (e) {
+        return { projectId: 'general', stats: { fileCount: 0, folderCount: 0 } };
+      }
+    })();
+
+    // Wait for all stats to be fetched
+    const results = await Promise.all([...fetchPromises, generalPromise]);
+    
+    // Build stats object
+    results.forEach(result => {
+      stats[result.projectId] = result.stats;
+    });
+    
+    setProjectStats(stats);
   };
 
   const handleLogout = async () => {

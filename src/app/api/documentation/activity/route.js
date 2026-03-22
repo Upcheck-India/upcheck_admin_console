@@ -28,8 +28,8 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    // Check project access
-    if (projectId !== 'general') {
+    // Check project access (skip DB lookup for general project)
+    if (projectId && projectId !== 'general') {
       const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
       
       if (project) {

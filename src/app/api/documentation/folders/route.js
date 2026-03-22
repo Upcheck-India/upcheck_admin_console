@@ -26,18 +26,20 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    // Check project access
-    const project = await db.collection('projects').findOne({ 
-      _id: projectId === 'general' ? 'general' : new ObjectId(projectId) 
-    });
+    // Check project access (skip for 'general' project)
+    if (projectId !== 'general') {
+      const project = await db.collection('projects').findOne({ 
+        _id: new ObjectId(projectId) 
+      });
 
-    if (project && project._id !== 'general') {
-      const isMember = project.members?.some(m => m.user === user.username);
-      const isSuperManager = project.superManager === user.username;
-      const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-      
-      if (!isMember && !isSuperManager && !isAdmin) {
-        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
+      if (project) {
+        const isMember = project.members?.some(m => m.user === user.username);
+        const isSuperManager = project.superManager === user.username;
+        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
+        
+        if (!isMember && !isSuperManager && !isAdmin) {
+          return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
+        }
       }
     }
 
