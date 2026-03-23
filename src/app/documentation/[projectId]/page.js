@@ -24,6 +24,8 @@ import ProjectSettings from '../components/ProjectSettings';
 import ProjectMembers from '../components/ProjectMembers';
 import MoveModal from '../components/MoveModal';
 import ShareLinksModal from '../components/ShareLinksModal';
+import CreateFileModal from '../components/CreateFileModal';
+import FileEditor from '../components/FileEditor';
 
 const STATUS_CONFIG = {
   active: { label: 'Active', color: 'bg-green-100 text-green-700', icon: Play },
@@ -62,13 +64,18 @@ export default function ProjectDocumentationPage() {
   const [showShareLinksModal, setShowShareLinksModal] = useState(false);
   const [showFolderDetails, setShowFolderDetails] = useState(false);
   const [showFolderPermissions, setShowFolderPermissions] = useState(false);
+  const [showCreateFileModal, setShowCreateFileModal] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [parentFolderIdForNew, setParentFolderIdForNew] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
+  const [editingFile, setEditingFile] = useState(null);
   const [sharingFile, setSharingFile] = useState(null);
   const [projectError, setProjectError] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [memberRole, setMemberRole] = useState(null);
 
   // Delete confirmation modals
   const [folderDeleteConfirm, setFolderDeleteConfirm] = useState({ show: false, folder: null });
@@ -115,6 +122,33 @@ export default function ProjectDocumentationPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const response = await fetch('/api/auth/me');
+        if (response.ok) {
+          const data = await response.json();
+          setCurrentUser(data.user);
+          setUserRole(data.user?.role);
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  // Fetch member role when project loads
+  useEffect(() => {
+    if (project?.members && currentUser?.username) {
+      const memberRecord = project.members.find(m => m.user === currentUser.username);
+      setMemberRole(memberRecord?.role || null);
+    } else {
+      setMemberRole(null);
+    }
+  }, [project?.members, currentUser?.username]);
 
   // Fetch files and folders when folder changes
   useEffect(() => {
@@ -238,6 +272,48 @@ export default function ProjectDocumentationPage() {
     } catch (error) {
       console.error('Error creating folder:', error);
     }
+  };
+
+  const handleCreateFile = async (file) => {
+    setRefreshTrigger(prev => prev + 1);
+    setShowCreateFileModal(false);
+  };
+
+  const handleFileViewOrEdit = (file) => {
+    // Check if it's a created inline file (txt or docx)
+    const isInlineFile = file.fileType === 'txt' || file.fileType === 'docx' ||
+                         file.mimeType === 'text/plain' ||
+                         file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    if (isInlineFile) {
+      // For DOCX files, always use DocumentViewer (which has mammoth.js viewer)
+      // For TXT files, use FileEditor for editing
+      const isDocx = file.fileType === 'docx' ||
+                     file.mimeType?.includes('wordprocessingml');
+
+      if (isDocx) {
+        // Use DocumentViewer for DOCX files
+        setViewingFile(file);
+      } else {
+        // For TXT files, check if user can edit
+        const canEdit = userRole === 'Admin' || userRole === 'Console admin' ||
+                        memberRole === 'Project Manager' || memberRole === 'Contributor';
+
+        if (canEdit) {
+          setEditingFile(file);
+        } else {
+          setViewingFile(file);
+        }
+      }
+    } else {
+      // Use default document viewer for other file types
+      setViewingFile(file);
+    }
+  };
+
+  const handleFileSave = () => {
+    setRefreshTrigger(prev => prev + 1);
+    setEditingFile(null);
   };
 
   const openCreateFolderModal = (folder = null) => {
@@ -638,6 +714,17 @@ export default function ProjectDocumentationPage() {
 
             {/* Right */}
             <div className="flex items-center gap-2">
+              {/* Check if user can create files */}
+              {(userRole === 'Admin' || userRole === 'Console admin' ||
+                memberRole === 'Project Manager' || memberRole === 'Contributor') && (
+                <button
+                  onClick={() => setShowCreateFileModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Create File</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowShareLinksModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
@@ -834,7 +921,7 @@ export default function ProjectDocumentationPage() {
                 folders={filteredFolders}
                 viewMode={viewMode}
                 onFolderClick={handleFolderClick}
-                onFileClick={handleFileClick}
+                onFileClick={handleFileViewOrEdit}
                 onDownload={handleDownload}
                 onDelete={handleDelete}
                 onRename={handleFileRename}
@@ -1086,6 +1173,26 @@ export default function ProjectDocumentationPage() {
         <DocumentViewer
           file={viewingFile}
           onClose={() => setViewingFile(null)}
+        />
+      )}
+
+      {/* Create File Modal */}
+      <CreateFileModal
+        isOpen={showCreateFileModal}
+        onClose={() => setShowCreateFileModal(false)}
+        onCreate={handleCreateFile}
+        defaultProjectId={projectId}
+        defaultFolderId={currentFolderId}
+        userProjects={[]}
+      />
+
+      {/* File Editor Modal */}
+      {editingFile && (
+        <FileEditor
+          file={editingFile}
+          onClose={() => setEditingFile(null)}
+          canEdit={true}
+          onSaved={handleFileSave}
         />
       )}
 

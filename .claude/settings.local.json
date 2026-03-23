@@ -3,7 +3,8 @@
     "allow": [
       "Bash(node -e \"require\\(''fs''\\).readFileSync\\(''src/app/documentation/components/ProjectSettings.js'', ''utf8''\\)\")",
       "Bash(npx next:*)",
-      "Bash(node --check /d/Projects/upcheck_admin/upcheck_admin/src/app/documentation/[projectId]/page.js)"
+      "Bash(node --check /d/Projects/upcheck_admin/upcheck_admin/src/app/documentation/[projectId]/page.js)",
+      "Bash(powershell -Command \"Remove-Item -Path ''.next'' -Recurse -Force\")"
     ]
   }
 }

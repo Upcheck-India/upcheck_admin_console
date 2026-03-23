@@ -195,9 +195,9 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
         </div>
       )}
 
-      {/* More menu button - top right, always visible on hover */}
+      {/* More menu button - always visible, positioned below version badge */}
       {!selectionMode && (
-        <div className="absolute top-2.5 right-2.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-2 right-2.5 z-30">
           <button
             ref={moreRef}
             onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
@@ -209,7 +209,7 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
       )}
 
       {/* Status badges */}
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-20 pointer-events-none">
+      <div className="absolute top-2 right-8 flex items-center gap-1 z-20 pointer-events-none">
         {item.isPasswordProtected && (
           <span className="flex items-center justify-center w-5 h-5 bg-amber-50 border border-amber-200 rounded-md">
             <Lock className="w-2.5 h-2.5 text-amber-600" />
@@ -324,7 +324,7 @@ function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload,
 
       {/* Actions */}
       <td className="px-4 py-3 w-28" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-0.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 justify-end">
           {!isFolder && typeof onShare === 'function' && (
             <button onClick={safe(onShare, item)} title="Share" className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors">
               <Share2 className="w-3.5 h-3.5" />
