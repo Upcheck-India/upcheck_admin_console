@@ -25,7 +25,7 @@ const ROLE_COLORS = {
 
 // ─── User Search Dropdown ─────────────────────────────────────────────────────
 
-function UserPicker({ allUsers, addedUsernames, currentUserEmail, onSelect, selectedUser, setSelectedUser }) {
+function UserPicker({ allUsers, addedUsernames, currentUserEmail, currentUsername, onSelect, selectedUser, setSelectedUser }) {
   const [query, setQuery]     = useState('');
   const [open, setOpen]       = useState(false);
   const ref                   = useRef(null);
@@ -461,6 +461,7 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess, current
                     allUsers={allUsers}
                     addedUsernames={addedUsernames}
                     currentUserEmail={currentUserEmail}
+                    currentUsername={currentUsername}
                     onSelect={setSelectedUser}
                     selectedUser={selectedUser}
                     setSelectedUser={setSelectedUser}

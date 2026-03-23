@@ -1,8 +1,13 @@
+// src/app/api/documentation/activity/route.js
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
+import { cookies } from 'next/headers';
 import { ObjectId } from 'mongodb';
 
-// GET - Fetch activity logs for a project
+/**
+ * GET /api/documentation/activity
+ * Get all activity logs across projects (for authorized users)
+ */
 export async function GET(req) {
   try {
     const token = req.cookies.get('admin_token')?.value;
@@ -11,101 +16,66 @@ export async function GET(req) {
     }
 
     const client = await clientPromise;
-    const db = client.db("resources");
+    const db = client.db('resources');
     const user = await db.collection('admin_users').findOne({ sessionToken: token });
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const projectId = searchParams.get('projectId');
-    const limit = parseInt(searchParams.get('limit') || '50');
-    const skip = parseInt(searchParams.get('skip') || '0');
-    const action = searchParams.get('action'); // Optional filter by action type
+    // Admins can see all activity
+    // Other users can only see activity from projects they're member of
+    let query = {};
 
-    if (!projectId) {
-      return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
+    if (user.role !== 'Admin' && user.role !== 'Console admin') {
+      // Get all project IDs the user is a member of
+      const projects = await db.collection('projects')
+        .find({
+          $or: [
+            { superManager: user.username },
+            { 'members.user': user.username }
+          ]
+        })
+        .toArray();
+
+      const projectIds = projects.map(p => p._id.toString());
+
+      // Also include general project logs
+      query = {
+        $or: [
+          { projectId: { $in: [...projectIds, 'general'] } },
+          { userId: user._id },
+          { 'user.username': user.username }
+        ]
+      };
     }
 
-    // Check project access (skip DB lookup for general project)
-    if (projectId && projectId !== 'general') {
-      const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
-      
-      if (project) {
-        const isMember = project.members?.some(m => m.user === user.username);
-        const isSuperManager = project.superManager === user.username;
-        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-        
-        if (!isMember && !isSuperManager && !isAdmin) {
-          return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
-        }
-      }
-    }
-
-    const query = { projectId };
-    if (action) {
-      query.action = action;
-    }
-
+    // Fetch activity logs
     const logs = await db.collection('doc_activity_logs')
       .find(query)
       .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(limit)
+      .limit(1000)
       .toArray();
 
-    const total = await db.collection('doc_activity_logs').countDocuments(query);
+    // Format logs for response
+    const formattedLogs = logs.map(log => ({
+      _id: log._id?.toString(),
+      projectId: log.projectId,
+      resourceId: log.resourceId?.toString(),
+      action: log.action,
+      resourceType: log.resourceType,
+      resourceName: log.resourceName,
+      userId: log.userId?.toString(),
+      username: log.username,
+      timestamp: log.timestamp,
+      details: log.details,
+      metadata: log.metadata,
+    }));
 
-    return NextResponse.json({ logs, total, limit, skip });
+    return NextResponse.json(formattedLogs);
+
   } catch (error) {
     console.error('Error fetching activity logs:', error);
     return NextResponse.json({ error: 'Failed to fetch activity logs' }, { status: 500 });
-  }
-}
-
-// POST - Log an activity (internal use)
-export async function POST(req) {
-  try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { projectId, action, targetType, targetId, targetName, details } = await req.json();
-
-    if (!projectId || !action) {
-      return NextResponse.json({ error: 'Project ID and action are required' }, { status: 400 });
-    }
-
-    const logEntry = {
-      projectId,
-      action,
-      targetType: targetType || 'unknown',
-      targetId: targetId ? new ObjectId(targetId) : null,
-      targetName: targetName || '',
-      user: {
-        userId: user._id,
-        username: user.username,
-        email: user.email
-      },
-      details: details || {},
-      timestamp: new Date()
-    };
-
-    const result = await db.collection('doc_activity_logs').insertOne(logEntry);
-
-    return NextResponse.json({ _id: result.insertedId, ...logEntry }, { status: 201 });
-  } catch (error) {
-    console.error('Error logging activity:', error);
-    return NextResponse.json({ error: 'Failed to log activity' }, { status: 500 });
   }
 }

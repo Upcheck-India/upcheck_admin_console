@@ -6,6 +6,7 @@ import {
   FolderPlus, Search, X, MoreHorizontal,
   Edit2, Trash2, Info, Shield, FolderInput, Home
 } from 'lucide-react';
+import FolderDeleteConfirmModal from './FolderDeleteConfirmModal';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,24 @@ function FolderNode({
   matchesSearch,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const folderId = toStr(folder._id);
+
+  const handleDeleteClick = () => {
+    setMenuOpen(false);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = (f) => {
+    onDelete(f);
+    setShowDeleteConfirm(false);
+  };
+
+  const handleMassMove = (f, preview) => {
+    // Pass to parent handler - can be implemented if needed
+    console.log('Mass move requested for folder:', f.name, preview);
+    setShowDeleteConfirm(false);
+  };
 
   // Don't render if there's an active search and this node doesn't match
   if (matchesSearch === false) return null;
@@ -213,7 +231,7 @@ function FolderNode({
             <FolderMenu
               folder={folder}
               onRename={onRename}
-              onDelete={onDelete}
+              onDelete={handleDeleteClick}
               onPermissions={onPermissions}
               onDetails={onDetails}
               onCreateSubfolder={onCreateSubfolder}
@@ -222,6 +240,16 @@ function FolderNode({
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <FolderDeleteConfirmModal
+          folder={folder}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleConfirmDelete}
+          onMassMove={handleMassMove}
+        />
+      )}
 
       {/* Children — animated slide */}
       {isExpanded && children && (
@@ -259,7 +287,7 @@ export default function FolderTree({
     if (!projectId) return;
     try {
       setLoading(true);
-      const res = await fetch(`/api/documentation/folders?projectId=${projectId}`);
+      const res = await fetch(`/api/documentation/folders?projectId=${projectId}&all=true`);
       if (res.ok) {
         const data = await res.json();
         setFolders(data);
@@ -502,7 +530,7 @@ export default function FolderTree({
           ) : (
             <ul className="space-y-0.5">
 
-              {/* All Files root item */}
+              {/* Home root item */}
               <li>
                 <div
                   className={`flex items-center gap-2 py-1.5 px-2 rounded-xl cursor-pointer transition-colors mb-1 ${
@@ -510,11 +538,11 @@ export default function FolderTree({
                       ? 'bg-blue-50 text-blue-700 font-semibold'
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
-                  onClick={() => typeof onFolderSelect === 'function' && onFolderSelect(null, 'All Files', '/')}
+                  onClick={() => typeof onFolderSelect === 'function' && onFolderSelect(null, 'Home', '/')}
                 >
                   <span className="w-4 h-4 shrink-0" /> {/* indent placeholder */}
                   <Home className={`w-4 h-4 shrink-0 ${!currentFolderId ? 'text-blue-500' : 'text-gray-400'}`} />
-                  <span className="text-sm">All Files</span>
+                  <span className="text-sm">Home</span>
                 </div>
               </li>
 

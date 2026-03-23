@@ -7,7 +7,7 @@ import {
   Folder, Plus, Search, Grid, List, LogOut,
   Settings, ChevronDown, FileText, RefreshCw, Home,
   FolderOpen, Upload, SortAsc, X, CheckCircle2,
-  AlertCircle, Info, ArrowUpDown, Filter
+  AlertCircle, Info, ArrowUpDown, Filter, Link2, Activity
 } from 'lucide-react';
 import ProjectSpaceCard from './components/ProjectSpaceCard';
 import CreateProjectModal from './components/CreateProjectModal';
@@ -376,6 +376,24 @@ export default function DocumentationPage() {
               </div>
 
               <div className="flex items-center gap-2 ml-auto">
+                {/* Share Links */}
+                <Link
+                  href="/documentation/shares"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all"
+                >
+                  <Link2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Share Links</span>
+                </Link>
+
+                {/* Activity */}
+                <Link
+                  href="/documentation/activity"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all"
+                >
+                  <Activity className="w-4 h-4" />
+                  <span className="hidden sm:inline">Activity</span>
+                </Link>
+
                 {/* Upload */}
                 <button
                   onClick={() => setShowUploadModal(true)}

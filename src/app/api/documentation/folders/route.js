@@ -20,7 +20,8 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const projectId = searchParams.get('projectId');
-    const parentId = searchParams.get('parentId') || null;
+    const parentId = searchParams.get('parentId');
+    const getAll = searchParams.get('all') === 'true';
 
     if (!projectId) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
@@ -28,15 +29,15 @@ export async function GET(req) {
 
     // Check project access (skip for 'general' project)
     if (projectId !== 'general') {
-      const project = await db.collection('projects').findOne({ 
-        _id: new ObjectId(projectId) 
+      const project = await db.collection('projects').findOne({
+        _id: new ObjectId(projectId)
       });
 
       if (project) {
         const isMember = project.members?.some(m => m.user === user.username);
         const isSuperManager = project.superManager === user.username;
         const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-        
+
         if (!isMember && !isSuperManager && !isAdmin) {
           return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
         }
@@ -44,11 +45,19 @@ export async function GET(req) {
     }
 
     const foldersCollection = db.collection('doc_folders');
-    
-    const query = { 
-      projectId,
-      parentId: parentId ? new ObjectId(parentId) : null
-    };
+
+    // Determine query based on parameters
+    let query;
+    if (getAll) {
+      // Return all folders for tree building
+      query = { projectId };
+    } else if (parentId !== null && parentId !== undefined && parentId !== '') {
+      // Return folders with specific parent
+      query = { projectId, parentId: new ObjectId(parentId) };
+    } else {
+      // Return root-level folders (no parent)
+      query = { projectId, parentId: null };
+    }
 
     const folders = await foldersCollection.find(query).sort({ name: 1 }).toArray();
     

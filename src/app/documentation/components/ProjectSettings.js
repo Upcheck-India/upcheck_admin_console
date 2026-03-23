@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Save, Settings, UploadCloud, Loader2, CheckCircle2,
-  XCircle, AlertCircle, Trash2, Github, Image as ImageIcon
+  XCircle, AlertCircle, Trash2, Github, Image as ImageIcon,
+  Folder, FileText, Code, PieChart, Database, Globe, Shield, Zap
 } from 'lucide-react';
 import { uploadFile } from '../../../lib/upload';
 
@@ -18,9 +19,22 @@ const STATUS_OPTIONS = [
   { value: 'dismissed', label: 'Dismissed', dot: 'bg-red-400',     badge: 'bg-red-50 text-red-600 ring-red-200'            },
 ];
 
+// ─── Preset Logos ─────────────────────────────────────────────────────────────
+
+const PRESET_LOGOS = [
+  { id: 'folder',  icon: Folder,  color: 'text-amber-500',  bg: 'bg-amber-50',  label: 'Folder' },
+  { id: 'file',    icon: FileText, color: 'text-blue-500',  bg: 'bg-blue-50',   label: 'Document' },
+  { id: 'code',    icon: Code,     color: 'text-purple-500', bg: 'bg-purple-50', label: 'Code' },
+  { id: 'chart',   icon: PieChart, color: 'text-emerald-500', bg: 'bg-emerald-50', label: 'Analytics' },
+  { id: 'database', icon: Database, color: 'text-cyan-500', bg: 'bg-cyan-50',   label: 'Database' },
+  { id: 'globe',   icon: Globe,    color: 'text-indigo-500', bg: 'bg-indigo-50', label: 'Global' },
+  { id: 'shield',  icon: Shield,   color: 'text-slate-500', bg: 'bg-slate-50',  label: 'Security' },
+  { id: 'zap',     icon: Zap,      color: 'text-yellow-500', bg: 'bg-yellow-50', label: 'Fast' },
+];
+
 // ─── LogoUploader ─────────────────────────────────────────────────────────────
 
-function LogoUploader({ currentLogoUrl, logoFile, onFileChange, onUrlChange, onClear }) {
+function LogoUploader({ currentLogoUrl, logoFile, onFileChange, onUrlChange, onClear, onPresetSelect }) {
   const inputRef     = useRef(null);
   const objectUrlRef = useRef(null);
   const [dragging, setDragging]   = useState(false);
@@ -42,6 +56,7 @@ function LogoUploader({ currentLogoUrl, logoFile, onFileChange, onUrlChange, onC
   }, [logoFile]);
 
   const displaySrc = previewSrc || (imgError ? null : currentLogoUrl);
+  const currentPreset = PRESET_LOGOS.find(p => `preset:${p.id}` === currentLogoUrl);
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -53,19 +68,23 @@ function LogoUploader({ currentLogoUrl, logoFile, onFileChange, onUrlChange, onC
   return (
     <div className="space-y-3">
       {/* Preview + clear */}
-      {displaySrc && (
+      {(displaySrc || currentPreset) && (
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden shrink-0 shadow-sm bg-gray-50">
-            <img
-              src={displaySrc}
-              alt="Logo"
-              className="w-full h-full object-cover"
-              onError={() => setImgError(true)}
-            />
+          <div className="w-16 h-16 rounded-xl border border-gray-200 overflow-hidden shrink-0 shadow-sm bg-gray-50 flex items-center justify-center">
+            {currentPreset ? (
+              <currentPreset.icon className={`w-8 h-8 ${currentPreset.color}`} />
+            ) : (
+              <img
+                src={displaySrc}
+                alt="Logo"
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            )}
           </div>
           <div>
             <p className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
-              {logoFile ? logoFile.name : 'Current logo'}
+              {logoFile ? logoFile.name : currentPreset ? `Preset: ${currentPreset.label}` : 'Current logo'}
             </p>
             <button
               type="button"
@@ -78,8 +97,40 @@ function LogoUploader({ currentLogoUrl, logoFile, onFileChange, onUrlChange, onC
         </div>
       )}
 
+      {/* Preset logos */}
+      {!displaySrc && !currentPreset && (
+        <>
+          <div className="grid grid-cols-4 gap-2">
+            {PRESET_LOGOS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => onPresetSelect(`preset:${preset.id}`)}
+                className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all hover:shadow-sm ${
+                  currentPreset?.id === preset.id
+                    ? 'border-blue-400 bg-blue-50'
+                    : 'border-gray-200 bg-gray-50 hover:border-gray-300'
+                }`}
+              >
+                <preset.icon className={`w-5 h-5 ${preset.color}`} />
+                <span className="text-[10px] text-gray-600">{preset.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-2 text-xs text-gray-400 bg-white">or</span>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Drop zone */}
-      {!displaySrc && (
+      {(!displaySrc && !currentPreset) && (
         <div
           onDragEnter={() => setDragging(true)}
           onDragLeave={() => setDragging(false)}
@@ -328,6 +379,7 @@ export default function ProjectSettings({ project, onProjectUpdate }) {
               onFileChange={f => { setLogoFile(f); }}
               onUrlChange={url => { setLogoUrl(url); setLogoFile(null); }}
               onClear={() => { setLogoFile(null); setLogoUrl(''); }}
+              onPresetSelect={(presetId) => { setLogoUrl(presetId); setLogoFile(null); }}
             />
           </div>
         </div>

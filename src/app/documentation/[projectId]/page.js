@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ChevronLeft, Upload, Search, Grid, List, Plus, Filter, Link2,
   Folder, FolderPlus, Settings, Users, Activity, Clock,
-  MoreVertical, Download, Trash2, CheckSquare, X, RefreshCw,
+  MoreVertical, AlertTriangle, Download, Trash2, CheckSquare, X, RefreshCw,
   Play, Pause, Lightbulb, Archive, XCircle, FileText
 } from 'lucide-react';
 import FolderTree from '../components/FolderTree';
@@ -15,6 +15,9 @@ import ActivityLog from '../components/ActivityLog';
 import VersionHistory from '../components/VersionHistory';
 import UploadModal from '../components/UploadModal';
 import FolderContextMenu from '../components/FolderContextMenu';
+import FolderDeleteConfirmModal from '../components/FolderDeleteConfirmModal';
+import FileDeleteConfirmModal from '../components/FileDeleteConfirmModal';
+import ProjectDeleteConfirmModal from '../components/ProjectDeleteConfirmModal';
 import DocumentViewer from '../components/DocumentViewer';
 import ShareModal from '../components/ShareModal';
 import ProjectSettings from '../components/ProjectSettings';
@@ -67,6 +70,12 @@ export default function ProjectDocumentationPage() {
   const [sharingFile, setSharingFile] = useState(null);
   const [projectError, setProjectError] = useState('');
 
+  // Delete confirmation modals
+  const [folderDeleteConfirm, setFolderDeleteConfirm] = useState({ show: false, folder: null });
+  const [projectDeleteConfirm, setProjectDeleteConfirm] = useState({ show: false, project: null });
+  const [fileDeleteConfirm, setFileDeleteConfirm] = useState({ show: false, file: null });
+  const [massMoveModal, setMassMoveModal] = useState({ show: false, items: [], stats: null });
+
   // Fetch project details
   useEffect(() => {
     const loadProject = async () => {
@@ -116,7 +125,7 @@ export default function ProjectDocumentationPage() {
         // Fetch folders - only children of current folder (or root if none)
         const foldersQuery = currentFolderId
           ? `/api/documentation/folders?projectId=${projectId}&parentId=${currentFolderId}`
-          : `/api/documentation/folders?projectId=${projectId}&parentId=`;
+          : `/api/documentation/folders?projectId=${projectId}`;
         const foldersResponse = await fetch(foldersQuery);
         if (foldersResponse.ok) {
           const foldersData = await foldersResponse.json();
@@ -165,37 +174,6 @@ export default function ProjectDocumentationPage() {
       router.push('/documentation');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchContents = async () => {
-    try {
-      // Fetch folders
-      const foldersRes = await fetch(`/api/documentation/folders?projectId=${projectId}&parentId=${currentFolderId || ''}`);
-      if (foldersRes.ok) {
-        const foldersData = await foldersRes.json();
-        setFolders(foldersData);
-      }
-
-      // Fetch files (resources)
-      let url = `/api/resources?projectId=${projectId}`;
-      if (currentFolderId) {
-        url += `&folderId=${currentFolderId}`;
-      }
-      const filesRes = await fetch(url);
-      if (filesRes.ok) {
-        const filesData = await filesRes.json();
-        // Filter files that belong to current folder
-        const filteredFiles = filesData.filter(f => {
-          if (currentFolderId) {
-            return f.folderId === currentFolderId;
-          }
-          return !f.folderId;
-        });
-        setFiles(filteredFiles);
-      }
-    } catch (error) {
-      console.error('Error fetching contents:', error);
     }
   };
 
@@ -281,19 +259,30 @@ export default function ProjectDocumentationPage() {
     window.open(`/api/download/${item.fileId}`, '_blank');
   };
 
-  const handleDelete = async (item) => {
-    if (!confirm(`Are you sure you want to delete "${item.name}"?`)) return;
-    
+  const handleDelete = async (item, isFolder = false) => {
+    if (isFolder) {
+      setFolderDeleteConfirm({ show: true, folder: item });
+    } else {
+      setFileDeleteConfirm({ show: true, file: item });
+    }
+  };
+
+  const handleFileDeleteConfirm = async (file) => {
     try {
-      const response = await fetch(`/api/resources/${item._id}`, {
+      const response = await fetch(`/api/resources/${file._id}`, {
         method: 'DELETE'
       });
-      
+
       if (response.ok) {
         setRefreshTrigger(prev => prev + 1);
+        setFileDeleteConfirm({ show: false, file: null });
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to delete file');
       }
     } catch (error) {
-      console.error('Error deleting:', error);
+      console.error('Error deleting file:', error);
+      alert('Failed to delete file');
     }
   };
 
@@ -322,9 +311,85 @@ export default function ProjectDocumentationPage() {
         if (currentFolderId === folder._id) {
           setCurrentFolderId(null);
         }
+        setFolderDeleteConfirm({ show: false, folder: null });
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to delete folder');
       }
     } catch (error) {
       console.error('Error deleting folder:', error);
+      alert('Failed to delete folder');
+    }
+  };
+
+  const handleFolderDeleteClick = (folder) => {
+    setFolderDeleteConfirm({ show: true, folder });
+  };
+
+  const handleFolderMassMove = (folder, preview) => {
+    // Open mass move modal with folder contents
+    setMassMoveModal({
+      show: true,
+      type: 'folder',
+      item: folder,
+      stats: preview?.stats,
+      items: [...(preview?.subfolders || []), ...(preview?.files || [])],
+    });
+    setFolderDeleteConfirm({ show: false, folder: null });
+  };
+
+  const handleProjectDelete = async (project) => {
+    try {
+      const response = await fetch(`/api/projects/${project._id}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        setProjectDeleteConfirm({ show: false, project: null });
+        // Redirect to documentation page
+        router.push('/documentation');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to delete project');
+      }
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      alert('Failed to delete project');
+    }
+  };
+
+  const handleProjectDeleteClick = (project) => {
+    setProjectDeleteConfirm({ show: true, project });
+  };
+
+  const handleProjectMassMove = (project, preview) => {
+    // Open mass move modal with project contents
+    setMassMoveModal({
+      show: true,
+      type: 'project',
+      item: project,
+      stats: preview?.stats,
+      items: [...(preview?.folders || []), ...(preview?.files || [])],
+    });
+    setProjectDeleteConfirm({ show: false, project: null });
+  };
+
+  const handleProjectArchive = async (project) => {
+    try {
+      const response = await fetch(`/api/projects/${project._id}/archive`, {
+        method: 'PUT'
+      });
+      if (response.ok) {
+        setProjectDeleteConfirm({ show: false, project: null });
+        // Refresh project data
+        fetchProject();
+        alert('Project archived successfully');
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to archive project');
+      }
+    } catch (error) {
+      console.error('Error archiving project:', error);
+      alert('Failed to archive project');
     }
   };
 
@@ -770,6 +835,7 @@ export default function ProjectDocumentationPage() {
                 onDownload={handleDownload}
                 onDelete={handleDelete}
                 onRename={handleFileRename}
+                onRenameFolder={handleFolderRename}
                 onDuplicate={handleFileDuplicate}
                 onMove={(file) => setMoveModal({ show: true, file })}
                 onVersionHistory={handleVersionHistory}
@@ -779,14 +845,15 @@ export default function ProjectDocumentationPage() {
                 selectedItems={selectedItems}
                 onToggleSelection={toggleSelection}
                 breadcrumbs={breadcrumbs}
-                onBreadcrumbClick={(id) => {
+                onBreadcrumbClick={(id, name, index) => {
                   if (!id) {
-                    handleFolderSelect(null, 'All Files', '/');
+                    // Home clicked
+                    handleFolderSelect(null, 'Home', '/');
                   } else {
-                    const folder = folders.find(f => f._id === id);
-                    if (folder) {
-                      handleFolderClick(folder);
-                    }
+                    // Navigate to clicked folder and rebuild breadcrumbs up to that point
+                    const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+                    const path = '/' + newBreadcrumbs.map(b => b.name).join('/');
+                    handleFolderSelect(id, name, path);
                   }
                 }}
               />
@@ -811,22 +878,55 @@ export default function ProjectDocumentationPage() {
           )}
 
           {activeTab === 'settings' && projectId !== 'general' && (
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <ProjectSettings
-                project={project}
-                onProjectUpdate={async () => {
-                  // Refresh project data
-                  try {
-                    const response = await fetch(`/api/projects/${projectId}`);
-                    if (response.ok) {
-                      const data = await response.json();
-                      setProject(data);
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <ProjectSettings
+                  project={project}
+                  onProjectUpdate={async () => {
+                    // Refresh project data
+                    try {
+                      const response = await fetch(`/api/projects/${projectId}`);
+                      if (response.ok) {
+                        const data = await response.json();
+                        setProject(data);
+                      }
+                    } catch (error) {
+                      console.error('Error refreshing project:', error);
                     }
-                  } catch (error) {
-                    console.error('Error refreshing project:', error);
-                  }
-                }}
-              />
+                  }}
+                />
+              </div>
+
+              {/* Danger Zone */}
+              <div className="bg-white rounded-xl border border-red-200 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">Danger Zone</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Irreversible actions like archiving or deleting this project space. Consider archiving instead of deleting to preserve data.
+                    </p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleProjectArchive(project)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-colors"
+                      >
+                        <Archive className="w-4 h-4" />
+                        Archive Project
+                      </button>
+                      <button
+                        onClick={() => handleProjectDeleteClick(project)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Delete Project
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </main>
@@ -1002,6 +1102,56 @@ export default function ProjectDocumentationPage() {
         onClose={() => setShowShareLinksModal(false)}
         projectId={projectId}
       />
+
+      {/* Folder Delete Confirmation Modal */}
+      {folderDeleteConfirm.show && folderDeleteConfirm.folder && (
+        <FolderDeleteConfirmModal
+          folder={folderDeleteConfirm.folder}
+          onClose={() => setFolderDeleteConfirm({ show: false, folder: null })}
+          onConfirm={handleFolderDelete}
+          onMassMove={handleFolderMassMove}
+        />
+      )}
+
+      {/* File Delete Confirmation Modal */}
+      {fileDeleteConfirm.show && fileDeleteConfirm.file && (
+        <FileDeleteConfirmModal
+          file={fileDeleteConfirm.file}
+          onClose={() => setFileDeleteConfirm({ show: false, file: null })}
+          onConfirm={handleFileDeleteConfirm}
+        />
+      )}
+
+      {/* Project Delete Confirmation Modal */}
+      {projectDeleteConfirm.show && projectDeleteConfirm.project && (
+        <ProjectDeleteConfirmModal
+          project={projectDeleteConfirm.project}
+          onClose={() => setProjectDeleteConfirm({ show: false, project: null })}
+          onConfirm={handleProjectDelete}
+          onMassMove={handleProjectMassMove}
+          onArchive={handleProjectArchive}
+        />
+      )}
+
+      {/* Mass Move Modal */}
+      {massMoveModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setMassMoveModal({ show: false, items: [], stats: null })}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold mb-2">Move Contents</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Mass move functionality coming soon. This will allow you to move {massMoveModal.stats?.totalFiles || 0} files and {massMoveModal.stats?.totalFolders || 0} folders to another project or folder.
+            </p>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setMassMoveModal({ show: false, items: [], stats: null })}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

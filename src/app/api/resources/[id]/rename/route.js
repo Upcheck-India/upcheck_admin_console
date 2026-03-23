@@ -1,12 +1,12 @@
 // src/app/api/resources/[id]/rename/route.js
 import { NextResponse } from 'next/server';
 import clientPromise from "../../../../../lib/mongodb";
-import { ObjectId } from 'mongodb';
+import { ObjectId, GridFSBucket } from 'mongodb';
 import { cookies } from 'next/headers';
 
 export async function PUT(req, { params }) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const { name } = await req.json();
 
     if (!id || !ObjectId.isValid(id)) {

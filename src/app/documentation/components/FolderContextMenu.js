@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal, Edit2, Trash2, Shield, Info, FolderInput, X, Folder } from 'lucide-react';
+import FolderDeleteConfirmModal from './FolderDeleteConfirmModal';
 
 // ─── Folder Action Modal (Centered Dialog) ────────────────────────────────────
 
@@ -244,8 +245,10 @@ export default function FolderContextMenu({
   onPermissions,
   onDetails,
   onCreateSubfolder,
+  onMassMove,
 }) {
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleRename = (f) => {
     const newName = prompt('Enter new folder name:', f.name);
@@ -254,10 +257,18 @@ export default function FolderContextMenu({
     }
   };
 
-  const handleDelete = (f) => {
-    if (confirm(`Are you sure you want to delete "${f.name}" and all its contents?`)) {
-      onDelete(f);
-    }
+  const handleDeleteClick = (f) => {
+    setShowDeleteConfirm(true);
+    setShowModal(false);
+  };
+
+  const handleConfirmDelete = (f) => {
+    onDelete(f);
+  };
+
+  const handleMassMove = (f, preview) => {
+    onMassMove?.(f, preview);
+    setShowDeleteConfirm(false);
   };
 
   return (
@@ -290,10 +301,20 @@ export default function FolderContextMenu({
           folder={folder}
           onClose={() => setShowModal(false)}
           onRename={handleRename}
-          onDelete={handleDelete}
+          onDelete={handleDeleteClick}
           onPermissions={onPermissions}
           onDetails={onDetails}
           onCreateSubfolder={onCreateSubfolder}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <FolderDeleteConfirmModal
+          folder={folder}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={handleConfirmDelete}
+          onMassMove={handleMassMove}
         />
       )}
     </>

@@ -92,7 +92,7 @@ function Checkbox({ checked, onChange }) {
 
 // ─── Dropdown menu (portal-safe, fixed position) ─────────────────────────────
 
-function ContextMenu({ item, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete }) {
+function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete }) {
   const menuRef = useRef(null);
 
   // Position the menu relative to the trigger button
@@ -119,18 +119,25 @@ function ContextMenu({ item, onClose, triggerRef, onRename, onDuplicate, onMove,
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
+  // Build actions based on item type
   const actions = [
     { icon: Edit2,   label: 'Rename',          fn: onRename,         cls: 'text-gray-700' },
-    { icon: Copy,    label: 'Duplicate',        fn: onDuplicate,      cls: 'text-gray-700' },
-    { icon: Move,    label: 'Move',             fn: onMove,           cls: 'text-gray-700' },
-    { icon: History, label: 'Version History',  fn: onVersionHistory, cls: 'text-gray-700' },
-    {
-      icon: item.isPasswordProtected ? Unlock : Lock,
-      label: item.isPasswordProtected ? 'Remove Password' : 'Add Password',
-      fn: onToggleLock,
-      cls: 'text-gray-700',
-    },
+    { icon: Copy,    label: 'Duplicate',       fn: onDuplicate,      cls: 'text-gray-700' },
+    { icon: Move,    label: 'Move',            fn: onMove,           cls: 'text-gray-700' },
   ];
+
+  // Only show file-specific actions for files
+  if (!isFolder) {
+    actions.push(
+      { icon: History, label: 'Version History', fn: onVersionHistory, cls: 'text-gray-700' },
+      {
+        icon: item.isPasswordProtected ? Unlock : Lock,
+        label: item.isPasswordProtected ? 'Remove Password' : 'Add Password',
+        fn: onToggleLock,
+        cls: 'text-gray-700',
+      }
+    );
+  }
 
   return (
     <div
@@ -188,15 +195,28 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
         </div>
       )}
 
+      {/* More menu button - top right, always visible on hover */}
+      {!selectionMode && (
+        <div className="absolute top-2.5 right-2.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            ref={moreRef}
+            onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
+            className={`p-1.5 rounded-lg transition-colors ${menuOpen ? 'bg-gray-100 text-gray-700' : 'bg-white/90 hover:bg-gray-100 text-gray-500'}`}
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Status badges */}
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-10">
+      <div className="absolute top-2.5 right-2.5 flex items-center gap-1 z-20 pointer-events-none">
         {item.isPasswordProtected && (
           <span className="flex items-center justify-center w-5 h-5 bg-amber-50 border border-amber-200 rounded-md">
             <Lock className="w-2.5 h-2.5 text-amber-600" />
           </span>
         )}
         {item.currentVersion > 1 && (
-          <span className="px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-600 text-[10px] font-bold rounded-md">
+          <span className="px-1.5 py-0.5 bg-blue-50 border border-blue-200 text-blue-600 text-[10px] font-bold rounded-md pointer-events-auto">
             v{item.currentVersion}
           </span>
         )}
@@ -223,45 +243,13 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
         )}
       </div>
 
-      {/* Hover action bar */}
-      {!selectionMode && !isFolder && hovered && (
-        <div
-          className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-1 px-2 py-2 bg-gradient-to-t from-white via-white/95 to-transparent rounded-b-2xl"
-          onClick={e => e.stopPropagation()}
-        >
-          {typeof onShare === 'function' && (
-            <button
-              onClick={safe(onShare, item)}
-              title="Share"
-              className="p-1.5 rounded-lg hover:bg-emerald-50 text-gray-400 hover:text-emerald-600 transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button
-            onClick={safe(onDownload, item)}
-            title="Download"
-            className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-          <button
-            ref={moreRef}
-            onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
-            title="More options"
-            className={`p-1.5 rounded-lg text-gray-400 transition-colors ${menuOpen ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-100 hover:text-gray-700'}`}
-          >
-            <MoreVertical className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
       {menuOpen && (
         <ContextMenu
           item={item}
+          isFolder={isFolder}
           onClose={() => setMenuOpen(false)}
           triggerRef={moreRef}
-          onRename={handleRenameClick}
+          onRename={onRename}
           onDuplicate={onDuplicate}
           onMove={onMove}
           onVersionHistory={onVersionHistory}
@@ -347,29 +335,26 @@ function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload,
               <Download className="w-3.5 h-3.5" />
             </button>
           )}
-          {!isFolder && (
-            <>
-              <button
-                ref={moreRef}
-                onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
-                className={`p-1.5 rounded-lg text-gray-400 transition-colors ${menuOpen ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-100 hover:text-gray-700'}`}
-              >
-                <MoreVertical className="w-3.5 h-3.5" />
-              </button>
-              {menuOpen && (
-                <ContextMenu
-                  item={item}
-                  onClose={() => setMenuOpen(false)}
-                  triggerRef={moreRef}
-                  onRename={handleRenameClick}
-                  onDuplicate={onDuplicate}
-                  onMove={onMove}
-                  onVersionHistory={onVersionHistory}
-                  onToggleLock={onToggleLock}
-                  onDelete={onDelete}
-                />
-              )}
-            </>
+          <button
+            ref={moreRef}
+            onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); }}
+            className={`p-1.5 rounded-lg text-gray-400 transition-colors ${menuOpen ? 'bg-gray-100 text-gray-700' : 'hover:bg-gray-100 hover:text-gray-700'}`}
+          >
+            <MoreVertical className="w-3.5 h-3.5" />
+          </button>
+          {menuOpen && (
+            <ContextMenu
+              item={item}
+              isFolder={isFolder}
+              onClose={() => setMenuOpen(false)}
+              triggerRef={moreRef}
+              onRename={onRename}
+              onDuplicate={onDuplicate}
+              onMove={onMove}
+              onVersionHistory={onVersionHistory}
+              onToggleLock={onToggleLock}
+              onDelete={onDelete}
+            />
           )}
         </div>
       </td>
@@ -388,6 +373,7 @@ export default function FileList({
   onDownload,
   onDelete,
   onRename,
+  onRenameFolder,
   onDuplicate,
   onMove,
   onVersionHistory,
@@ -400,17 +386,18 @@ export default function FileList({
   onBreadcrumbClick,
 }) {
   const [folderPaths, setFolderPaths] = useState({});
-  const [renameModal, setRenameModal] = useState({ show: false, item: null, name: '' });
+  const [renameModal, setRenameModal] = useState({ show: false, item: null, name: '', isFolder: false });
 
   // Handle rename with modal
-  const handleRenameClick = useCallback((item) => {
-    setRenameModal({ show: true, item, name: item.name });
+  const handleRenameClick = useCallback((item, isFolder = false) => {
+    setRenameModal({ show: true, item, name: item.name, isFolder });
   }, []);
 
   const handleRenameSubmit = async () => {
     if (!renameModal.item || !renameModal.name.trim()) return;
-    await onRename(renameModal.item, renameModal.name.trim());
-    setRenameModal({ show: false, item: null, name: '' });
+    const callback = renameModal.isFolder && onRenameFolder ? onRenameFolder : onRename;
+    await callback(renameModal.item, renameModal.name.trim());
+    setRenameModal({ show: false, item: null, name: '', isFolder: false });
   };
 
   // Fetch folder paths in parallel (fixed: was sequential)
@@ -442,6 +429,13 @@ export default function FileList({
     }
   }, [selectionMode, onToggleSelection, onFolderClick, onFileClick]);
 
+  // Wrapper for onDelete that passes isFolder flag
+  const handleDelete = useCallback((item, isFolder) => {
+    if (typeof onDelete === 'function') {
+      onDelete(item, isFolder);
+    }
+  }, [onDelete]);
+
   const isEmpty = folders.length === 0 && items.length === 0;
 
   // ── Breadcrumbs ──────────────────────────────────────────────────────────────
@@ -449,11 +443,11 @@ export default function FileList({
   const renderBreadcrumbs = () => (
     <nav className="flex items-center gap-1 text-sm mb-5 flex-wrap">
       <button
-        onClick={() => typeof onBreadcrumbClick === 'function' && onBreadcrumbClick(null)}
+        onClick={() => typeof onBreadcrumbClick === 'function' && onBreadcrumbClick(null, 'Home', -1)}
         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-800 transition-colors font-medium"
       >
         <Home className="w-3.5 h-3.5" />
-        <span>All Files</span>
+        <span>Home</span>
       </button>
       {breadcrumbs.map((crumb, index) => {
         const isLast = index === breadcrumbs.length - 1;
@@ -461,7 +455,7 @@ export default function FileList({
           <React.Fragment key={crumb.id || index}>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300 shrink-0" />
             <button
-              onClick={() => !isLast && typeof onBreadcrumbClick === 'function' && onBreadcrumbClick(crumb.id)}
+              onClick={() => !isLast && typeof onBreadcrumbClick === 'function' && onBreadcrumbClick(crumb.id, crumb.name, index)}
               className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition-colors font-medium ${
                 isLast
                   ? 'text-gray-900 bg-gray-100 cursor-default'
@@ -505,12 +499,12 @@ export default function FileList({
             onClick={() => handleItemClick(folder, true)}
             onDownload={onDownload}
             onShare={onShare}
-            onRename={handleRenameClick}
+            onRename={() => handleRenameClick(folder, true)}
             onDuplicate={onDuplicate}
             onMove={onMove}
             onVersionHistory={onVersionHistory}
             onToggleLock={onToggleLock}
-            onDelete={onDelete}
+            onDelete={(item) => handleDelete(item, true)}
           />
         ))}
         {items.map(item => (
@@ -523,12 +517,12 @@ export default function FileList({
             onClick={() => handleItemClick(item, false)}
             onDownload={onDownload}
             onShare={onShare}
-            onRename={handleRenameClick}
+            onRename={() => handleRenameClick(item, false)}
             onDuplicate={onDuplicate}
             onMove={onMove}
             onVersionHistory={onVersionHistory}
             onToggleLock={onToggleLock}
-            onDelete={onDelete}
+            onDelete={(item) => handleDelete(item, false)}
             folderPath={item.folderId ? folderPaths[item.folderId] : null}
           />
         ))}
@@ -562,12 +556,12 @@ export default function FileList({
               onClick={() => handleItemClick(folder, true)}
               onDownload={onDownload}
               onShare={onShare}
-              onRename={handleRenameClick}
+              onRename={() => handleRenameClick(folder, true)}
               onDuplicate={onDuplicate}
               onMove={onMove}
               onVersionHistory={onVersionHistory}
               onToggleLock={onToggleLock}
-              onDelete={onDelete}
+              onDelete={(item) => handleDelete(item, true)}
             />
           ))}
           {items.map(item => (
@@ -580,12 +574,12 @@ export default function FileList({
               onClick={() => handleItemClick(item, false)}
               onDownload={onDownload}
               onShare={onShare}
-              onRename={handleRenameClick}
+              onRename={() => handleRenameClick(item, false)}
               onDuplicate={onDuplicate}
               onMove={onMove}
               onVersionHistory={onVersionHistory}
               onToggleLock={onToggleLock}
-              onDelete={onDelete}
+              onDelete={(item) => handleDelete(item, false)}
               folderPath={item.folderId ? folderPaths[item.folderId] : null}
             />
           ))}
@@ -614,11 +608,11 @@ export default function FileList({
 
       {/* Rename Modal */}
       {renameModal.show && renameModal.item && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRenameModal({ show: false, item: null, name: '' })}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setRenameModal({ show: false, item: null, name: '', isFolder: false })}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-lg font-bold text-gray-900">Rename File</h2>
-              <button onClick={() => setRenameModal({ show: false, item: null, name: '' })} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+              <h2 className="text-lg font-bold text-gray-900">{renameModal.isFolder ? 'Rename Folder' : 'Rename File'}</h2>
+              <button onClick={() => setRenameModal({ show: false, item: null, name: '', isFolder: false })} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>

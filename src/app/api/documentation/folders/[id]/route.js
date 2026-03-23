@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
-import { ObjectId } from 'mongodb';
+import { ObjectId, GridFSBucket } from 'mongodb';
 
 // GET - Fetch a single folder
 export async function GET(req, { params }) {
@@ -113,7 +113,7 @@ export async function PUT(req, { params }) {
   }
 }
 
-// DELETE - Delete a folder
+// DELETE - Delete a folder (with recursive deletion)
 export async function DELETE(req, { params }) {
   try {
     const token = req.cookies.get('admin_token')?.value;
@@ -143,37 +143,60 @@ export async function DELETE(req, { params }) {
     // Check project access
     if (folder.projectId !== 'general') {
       const project = await db.collection('projects').findOne({ _id: new ObjectId(folder.projectId) });
-      
+
       if (project) {
         const isMember = project.members?.some(m => m.user === user.username);
         const isSuperManager = project.superManager === user.username;
         const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-        
+
         if (!isMember && !isSuperManager && !isAdmin) {
           return NextResponse.json({ error: 'Access denied' }, { status: 403 });
         }
       }
     }
 
-    // Check for child folders
-    const childFolders = await db.collection('doc_folders').countDocuments({ parentId: new ObjectId(id) });
-    if (childFolders > 0) {
-      return NextResponse.json({ 
-        error: 'Cannot delete folder with subfolders. Please delete subfolders first.' 
-      }, { status: 400 });
+    // Recursively get all subfolder IDs
+    const getSubfolderIds = async (parentId) => {
+      const subfolders = await db.collection('doc_folders')
+        .find({ parentId: new ObjectId(parentId) })
+        .toArray();
+
+      const allIds = [parentId];
+      for (const sub of subfolders) {
+        const deeperIds = await getSubfolderIds(sub._id);
+        allIds.push(...deeperIds);
+      }
+      return allIds;
+    };
+
+    const allFolderIds = await getSubfolderIds(new ObjectId(id));
+    const allFolderIdStrings = allFolderIds.map(fid => fid.toString());
+
+    // Get all files in these folders before deletion (for activity log)
+    const filesToDelete = await db.collection('resources')
+      .find({
+        projectId: folder.projectId,
+        folderId: { $in: allFolderIdStrings }
+      })
+      .toArray();
+
+    // Delete all files (handles both GridFS and external files)
+    for (const file of filesToDelete) {
+      if (file.storageType === 'gridfs') {
+        try {
+          const bucket = new mongodb.GridFSBucket(client.db('resources'), { bucketName: 'files' });
+          await bucket.delete(new ObjectId(file.fileId));
+        } catch (err) {
+          console.error('Error deleting GridFS file:', err);
+        }
+      }
+      await db.collection('resources').deleteOne({ _id: file._id });
     }
 
-    // Check for files in folder
-    const filesInFolder = await db.collection('resources').countDocuments({ folderId: id });
-    if (filesInFolder > 0) {
-      return NextResponse.json({ 
-        error: 'Cannot delete folder with files. Please move or delete files first.' 
-      }, { status: 400 });
-    }
+    // Delete all subfolders (recursive)
+    await db.collection('doc_folders').deleteMany({ _id: { $in: allFolderIds.map(fid => new ObjectId(fid)) } });
 
-    await db.collection('doc_folders').deleteOne({ _id: new ObjectId(id) });
-
-    // Log activity
+    // Log activity for folder deletion
     await db.collection('doc_activity_logs').insertOne({
       projectId: folder.projectId,
       action: 'folder_deleted',
@@ -185,9 +208,28 @@ export async function DELETE(req, { params }) {
         username: user.username,
         email: user.email
       },
-      details: { path: folder.path },
+      details: {
+        path: folder.path,
+        deletedSubfolders: allFolderIds.length - 1,
+        deletedFiles: filesToDelete.length
+      },
       timestamp: new Date()
     });
+
+    // Log activity for each deleted file
+    for (const file of filesToDelete.slice(0, 100)) { // Limit to 100 to avoid excessive logging
+      await db.collection('doc_activity_logs').insertOne({
+        projectId: folder.projectId,
+        action: 'file_delete',
+        resourceType: 'file',
+        resourceId: file._id,
+        resourceName: file.name,
+        userId: user._id,
+        username: user.username,
+        timestamp: new Date(),
+        details: { reason: 'parent_folder_deleted', parentFolder: folder.name }
+      });
+    }
 
     return NextResponse.json({ message: 'Folder deleted successfully' });
   } catch (error) {
