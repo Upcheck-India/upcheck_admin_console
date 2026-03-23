@@ -139,7 +139,10 @@ export default function ProjectDocumentationPage() {
         const filesResponse = await fetch(filesQuery);
         if (filesResponse.ok) {
           const filesData = await filesResponse.json();
-          setFiles(filesData.filter(f => !currentFolderId || f.folderId === currentFolderId));
+          // Only show files that belong to current folder (or root files when at home)
+          setFiles(filesData.filter(f =>
+            currentFolderId ? f.folderId === currentFolderId : (!f.folderId || f.folderId === null)
+          ));
         }
       } catch (error) {
         console.error('Error fetching contents:', error);
