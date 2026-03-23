@@ -4,6 +4,45 @@ import { GridFSBucket, ObjectId } from 'mongodb';
 import clientPromise from '../../../../lib/mongodb';
 import { cookies } from 'next/headers';
 
+// Helper function to create a simple DOCX file
+// This creates a minimal valid DOCX with the content
+async function createSimpleDOCX(content) {
+  // For a proper implementation, install and use the 'docx' package:
+  // npm install docx
+  //
+  // For now, we'll create a simple HTML-based DOCX that Word can open
+  // This is a simplified approach - the content is wrapped in HTML that Word interprets
+
+  const htmlContent = `
+<!DOCTYPE html>
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+<head>
+  <meta charset='utf-8'>
+  <title>Document</title>
+</head>
+<body>
+  <div style='font-family: Calibri, Arial, sans-serif; font-size: 11pt;'>
+    ${escapeHtml(content)}
+  </div>
+</body>
+</html>
+  `.trim();
+
+  // Convert HTML to base64 for DOCX storage
+  return Buffer.from(htmlContent, 'utf-8').toString('base64');
+}
+
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, m => map[m]);
+}
+
 export async function POST(req) {
   try {
     const cookieStore = await cookies();
@@ -164,6 +203,23 @@ export async function POST(req) {
 
     const result = await db.collection('resources').insertOne(resourceDoc);
 
+    // Create initial version entry in doc_versions collection
+    await db.collection('doc_versions').insertOne({
+      resourceId: result.insertedId,
+      versionNumber: 1,
+      fileId: fileId,
+      fileName: fileName,
+      fileSize: fileContent.length,
+      changeNote: 'Initial creation',
+      createdBy: {
+        userId: user._id,
+        username: user.username,
+        email: user.email
+      },
+      createdAt: new Date(),
+      isCurrent: true
+    });
+
     // Log activity
     await db.collection('doc_activity_logs').insertOne({
       projectId: projectId,
@@ -203,44 +259,4 @@ export async function POST(req) {
       details: error.message
     }, { status: 500 });
   }
-}
-
-// Helper function to create a simple DOCX file
-// This creates a minimal valid DOCX with the content
-async function createSimpleDOCX(content) {
-  // For a proper implementation, install and use the 'docx' package:
-  // npm install docx
-  //
-  // For now, we'll create a simple HTML-based DOCX that Word can open
-  // This is a simplified approach - the content is wrapped in HTML that Word interprets
-
-  const htmlContent = `
-<!DOCTYPE html>
-<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
-<head>
-  <meta charset='utf-8'>
-  <title>Document</title>
-</head>
-<body>
-  <div style='font-family: Calibri, Arial, sans-serif; font-size: 11pt;'>
-    ${escapeHtml(content)}
-  </div>
-</body>
-</html>
-  `.trim();
-
-  // Convert HTML to base64 for DOCX storage
-  return Buffer.from(htmlContent, 'utf-8').toString('base64');
-}
-
-function escapeHtml(text) {
-  const div = { innerHTML: '' };
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, m => map[m]);
 }

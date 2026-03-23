@@ -92,7 +92,7 @@ function Checkbox({ checked, onChange }) {
 
 // ─── Dropdown menu (portal-safe, fixed position) ─────────────────────────────
 
-function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete }) {
+function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, onOpenExternally }) {
   const menuRef = useRef(null);
 
   // Position the menu relative to the trigger button
@@ -137,6 +137,21 @@ function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicat
         cls: 'text-gray-700',
       }
     );
+
+    // Add external viewer option for DOCX and other Office files
+    const isOfficeFile = item.fileType === 'docx' ||
+                         item.mimeType?.includes('wordprocessingml') ||
+                         item.mimeType?.includes('spreadsheetml') ||
+                         item.mimeType?.includes('presentationml');
+
+    if (isOfficeFile && typeof onOpenExternally === 'function') {
+      actions.push({
+        icon: FileText,
+        label: 'Open in Office Online',
+        fn: onOpenExternally,
+        cls: 'text-blue-600'
+      });
+    }
   }
 
   return (
@@ -170,7 +185,7 @@ function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicat
 
 // ─── Grid Card ────────────────────────────────────────────────────────────────
 
-function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload, onShare, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, folderPath }) {
+function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload, onShare, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, folderPath, onOpenExternally }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [hovered, setHovered]   = useState(false);
   const moreRef = useRef(null);
@@ -255,6 +270,7 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
           onVersionHistory={onVersionHistory}
           onToggleLock={onToggleLock}
           onDelete={onDelete}
+          onOpenExternally={onOpenExternally}
         />
       )}
     </div>
@@ -263,7 +279,7 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
 
 // ─── List Row ─────────────────────────────────────────────────────────────────
 
-function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload, onShare, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, folderPath }) {
+function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload, onShare, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, folderPath, onOpenExternally }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const moreRef = useRef(null);
   const { Icon: FileIcon, colorClass } = isFolder ? { Icon: Folder, colorClass: 'text-amber-400' } : getFileIcon(item.name);
@@ -354,6 +370,7 @@ function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload,
               onVersionHistory={onVersionHistory}
               onToggleLock={onToggleLock}
               onDelete={onDelete}
+              onOpenExternally={onOpenExternally}
             />
           )}
         </div>
@@ -379,6 +396,7 @@ export default function FileList({
   onVersionHistory,
   onToggleLock,
   onShare,
+  onOpenExternally,
   selectionMode = false,
   selectedItems = [],
   onToggleSelection,
@@ -505,6 +523,7 @@ export default function FileList({
             onVersionHistory={onVersionHistory}
             onToggleLock={onToggleLock}
             onDelete={(item) => handleDelete(item, true)}
+            onOpenExternally={onOpenExternally}
           />
         ))}
         {items.map(item => (
@@ -524,6 +543,7 @@ export default function FileList({
             onToggleLock={onToggleLock}
             onDelete={(item) => handleDelete(item, false)}
             folderPath={item.folderId ? folderPaths[item.folderId] : null}
+            onOpenExternally={onOpenExternally}
           />
         ))}
       </div>
@@ -562,6 +582,7 @@ export default function FileList({
               onVersionHistory={onVersionHistory}
               onToggleLock={onToggleLock}
               onDelete={(item) => handleDelete(item, true)}
+              onOpenExternally={onOpenExternally}
             />
           ))}
           {items.map(item => (
@@ -581,6 +602,7 @@ export default function FileList({
               onToggleLock={onToggleLock}
               onDelete={(item) => handleDelete(item, false)}
               folderPath={item.folderId ? folderPaths[item.folderId] : null}
+              onOpenExternally={onOpenExternally}
             />
           ))}
         </tbody>

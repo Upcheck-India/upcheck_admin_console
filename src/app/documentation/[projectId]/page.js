@@ -486,6 +486,21 @@ export default function ProjectDocumentationPage() {
     setSharingFile(file);
   };
 
+  const handleOpenExternally = (file) => {
+    // Open file in Microsoft Office Online Viewer
+    const isDocx = file.fileType === 'docx' || file.mimeType?.includes('wordprocessingml');
+    const isXlsx = file.fileType === 'xlsx' || file.mimeType?.includes('spreadsheetml');
+    const isPptx = file.fileType === 'pptx' || file.mimeType?.includes('presentationml');
+
+    if (isDocx || isXlsx || isPptx) {
+      // For Office Online, we need a publicly accessible URL
+      // Using the download endpoint with a public URL pattern
+      const fileUrl = `${window.location.origin}/api/download/${file.fileId}`;
+      const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`;
+      window.open(viewerUrl, '_blank');
+    }
+  };
+
   const [lockModal, setLockModal] = useState({ show: false, file: null, mode: 'add', password: '', confirmPassword: '' });
 
   const handleToggleLock = (file) => {
@@ -931,6 +946,7 @@ export default function ProjectDocumentationPage() {
                 onVersionHistory={handleVersionHistory}
                 onToggleLock={handleToggleLock}
                 onShare={handleFileShare}
+                onOpenExternally={handleOpenExternally}
                 selectionMode={selectionMode}
                 selectedItems={selectedItems}
                 onToggleSelection={toggleSelection}
