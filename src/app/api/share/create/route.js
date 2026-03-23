@@ -67,6 +67,27 @@ export async function POST(req) {
 
     const result = await db.collection('shared_resources').insertOne(shareDoc);
 
+    // Log activity
+    try {
+      await db.collection('doc_activity_logs').insertOne({
+        projectId: resource.projectId,
+        resourceId: resourceId,
+        action: 'share_create',
+        resourceType: 'file',
+        resourceName: resource.name,
+        userId: user._id,
+        username: user.username,
+        timestamp: new Date(),
+        metadata: {
+          shareToken: tokenValue,
+          isPublic,
+          allowedMembers,
+        }
+      });
+    } catch (logError) {
+      console.error('Failed to log activity:', logError);
+    }
+
     return NextResponse.json({
       _id: result.insertedId.toString(),
       token: tokenValue,

@@ -37,10 +37,15 @@ export default function SharedResourcePage() {
       } else {
         setShareData(data);
 
-        // Check if already verified or has access
-        if (data.hasAccess && !data.requiresPassword) {
+        // Check if user has access or needs password
+        if (!data.hasAccess && !data.requiresPassword) {
+          // No access and no password option - show error
+          setError('You do not have permission to access this shared file. Check your authentication or contact the owner for access.');
+        } else if (!data.requiresPassword) {
+          // No password required - grant access
           setVerified(true);
         }
+        // If requiresPassword is true, show password screen (handled below)
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -80,8 +85,8 @@ export default function SharedResourcePage() {
       if (resource.externalUrl) {
         window.open(resource.externalUrl, '_blank');
       } else {
-        // Download from server
-        window.location.href = `/api/resources/${resource._id}/download`;
+        // Download from server using the secure shared download endpoint
+        window.location.href = `/api/share/${token}/download`;
       }
     } catch (err) {
       console.error('Download error:', err);
@@ -108,7 +113,9 @@ export default function SharedResourcePage() {
           <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <AlertCircle className="w-8 h-8 text-red-500" />
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Unable to Access</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">
+            {shareData?.hasAccess === false ? 'Access Denied' : 'Unable to Access'}
+          </h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button
             onClick={() => window.history.back()}
@@ -121,7 +128,7 @@ export default function SharedResourcePage() {
     );
   }
 
-  if (!verified && shareData?.requiresPassword) {
+  if (!verified && shareData?.requiresPassword && shareData?.hasAccess) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">

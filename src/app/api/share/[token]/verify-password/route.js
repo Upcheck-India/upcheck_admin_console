@@ -10,7 +10,7 @@ import { cookies } from 'next/headers';
  */
 export async function POST(req, { params }) {
   try {
-    const { token } = params;
+    const { token } = await params;
     const { password } = await req.json();
 
     if (!token) {

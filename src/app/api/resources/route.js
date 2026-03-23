@@ -59,7 +59,7 @@ export async function GET(req) {
       name: file.metadata?.name || file.filename,
       originalName: file.filename,
       mimeType: file.contentType,
-      fileSize: file.metadata?.fileSize || formatFileSize(file.length),
+      fileSize: file.metadata?.fileSize || file.length,
       fileSizeBytes: file.length,
       category: file.metadata?.category || 'documents',
       description: file.metadata?.description || '',
@@ -70,7 +70,11 @@ export async function GET(req) {
       createdAt: file.uploadDate,
       updatedAt: file.uploadDate,
       isPasswordProtected: false,
-      alternativeLinks: {}
+      alternativeLinks: {},
+      uploadedBy: {
+        username: file.metadata?.uploadedByUsername || file.metadata?.uploadedBy || 'System',
+        email: file.metadata?.uploadedByEmail || '',
+      },
     }));
 
     // Combine both sources
@@ -119,11 +123,4 @@ export async function GET(req) {
       { status: 500 }
     );
   }
-}
-
-function formatFileSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-  else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
-  else return (bytes / 1073741824).toFixed(1) + ' GB';
 }

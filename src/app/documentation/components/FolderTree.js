@@ -21,54 +21,113 @@ function isRoot(folder) {
   return pid === null || pid === 'null' || pid === '';
 }
 
-// ─── Inline context menu (replaces the broken native contextMenu state) ───────
+// ─── Centered modal for folder actions (replaces dropdown) ──────────────────────
 
 function FolderMenu({ folder, onRename, onDelete, onPermissions, onDetails, onCreateSubfolder, onClose }) {
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const handler = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
-
-  const safe = (fn) => (e) => {
+  const handleAction = (fn) => (e) => {
     e.stopPropagation();
     if (typeof fn === 'function') fn(folder);
     onClose();
   };
 
-  const items = [
-    { icon: FolderInput, label: 'New subfolder', fn: onCreateSubfolder, cls: 'text-gray-700' },
-    { icon: Edit2,       label: 'Rename',        fn: onRename,          cls: 'text-gray-700' },
-    { icon: Info,        label: 'Details',        fn: onDetails,         cls: 'text-gray-700' },
-    { icon: Shield,      label: 'Permissions',    fn: onPermissions,     cls: 'text-gray-700' },
-    null, // divider
-    { icon: Trash2,      label: 'Delete',         fn: onDelete,          cls: 'text-red-600'  },
-  ];
-
   return (
     <div
-      ref={ref}
-      className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-menu-in"
-      onClick={e => e.stopPropagation()}
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
+      onClick={onClose}
     >
-      {items.map((item, i) =>
-        item === null ? (
-          <div key={`divider-${i}`} className="border-t border-gray-100 my-1" />
-        ) : (
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-modal-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Folder className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Folder Options</h3>
+              <p className="text-xs text-gray-500 truncate max-w-[200px]">{folder.name}</p>
+            </div>
+          </div>
           <button
-            key={item.label}
-            onClick={safe(item.fn)}
-            className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm ${item.cls} hover:bg-gray-50 transition-colors`}
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
           >
-            <item.icon className="w-3.5 h-3.5 opacity-60 shrink-0" />
-            {item.label}
+            <X className="w-5 h-5" />
           </button>
-        )
-      )}
+        </div>
+
+        {/* Actions */}
+        <div className="p-4 space-y-2">
+          <button
+            onClick={handleAction(onCreateSubfolder)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+              <FolderInput className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">New Subfolder</p>
+              <p className="text-xs text-gray-500">Create a new folder inside this one</p>
+            </div>
+          </button>
+
+          <button
+            onClick={handleAction(onRename)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+              <Edit2 className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Rename</p>
+              <p className="text-xs text-gray-500">Change the folder name</p>
+            </div>
+          </button>
+
+          <button
+            onClick={handleAction(onDetails)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+              <Info className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Details</p>
+              <p className="text-xs text-gray-500">View folder information</p>
+            </div>
+          </button>
+
+          <button
+            onClick={handleAction(onPermissions)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
+              <Shield className="w-4 h-4 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Permissions</p>
+              <p className="text-xs text-gray-500">Manage who can access this folder</p>
+            </div>
+          </button>
+
+          <div className="border-t border-gray-100 my-2" />
+
+          <button
+            onClick={handleAction(onDelete)}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 transition-colors text-left group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-100">
+              <Trash2 className="w-4 h-4 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-red-600">Delete</p>
+              <p className="text-xs text-gray-500">Permanently delete this folder</p>
+            </div>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

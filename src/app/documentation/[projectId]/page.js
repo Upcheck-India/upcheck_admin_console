@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  ChevronLeft, Upload, Search, Grid, List, Plus, Filter,
+  ChevronLeft, Upload, Search, Grid, List, Plus, Filter, Link2,
   Folder, FolderPlus, Settings, Users, Activity, Clock,
   MoreVertical, Download, Trash2, CheckSquare, X, RefreshCw,
   Play, Pause, Lightbulb, Archive, XCircle, FileText
@@ -19,6 +19,8 @@ import DocumentViewer from '../components/DocumentViewer';
 import ShareModal from '../components/ShareModal';
 import ProjectSettings from '../components/ProjectSettings';
 import ProjectMembers from '../components/ProjectMembers';
+import MoveModal from '../components/MoveModal';
+import ShareLinksModal from '../components/ShareLinksModal';
 
 const STATUS_CONFIG = {
   active: { label: 'Active', color: 'bg-green-100 text-green-700', icon: Play },
@@ -54,6 +56,7 @@ export default function ProjectDocumentationPage() {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showShareLinksModal, setShowShareLinksModal] = useState(false);
   const [showFolderDetails, setShowFolderDetails] = useState(false);
   const [showFolderPermissions, setShowFolderPermissions] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
@@ -62,21 +65,42 @@ export default function ProjectDocumentationPage() {
   const [parentFolderIdForNew, setParentFolderIdForNew] = useState(null);
   const [viewingFile, setViewingFile] = useState(null);
   const [sharingFile, setSharingFile] = useState(null);
+  const [projectError, setProjectError] = useState('');
 
   // Fetch project details
   useEffect(() => {
     const loadProject = async () => {
       try {
+        if (projectId === 'general') {
+          setProject({ _id: 'general', name: 'General', description: 'General documents' });
+          setLoading(false);
+          return;
+        }
+
         const response = await fetch(`/api/projects/${projectId}`);
-        if (response.ok) {
-          const data = await response.json();
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (response.status === 404) {
+            setProjectError('Project not found');
+          } else if (response.status === 403) {
+            setProjectError('You do not have access to this project');
+          } else if (response.status === 401) {
+            setProjectError('Please log in to access this project');
+          } else {
+            setProjectError(data.error || 'Failed to load project');
+          }
+        } else {
           setProject(data);
         }
       } catch (error) {
         console.error('Error fetching project:', error);
+        setProjectError('Failed to load project');
+      } finally {
+        setLoading(false);
       }
     };
-    
+
     if (projectId) {
       loadProject();
     }
@@ -383,6 +407,67 @@ export default function ProjectDocumentationPage() {
     setShowVersionHistory(true);
   };
 
+  const handleFileRename = async (file, newName) => {
+    try {
+      const response = await fetch(`/api/resources/${file._id}/rename`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName })
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to rename file');
+      }
+    } catch (error) {
+      console.error('Error renaming:', error);
+      alert('Failed to rename file');
+    }
+  };
+
+  const handleFileDuplicate = async (file) => {
+    try {
+      const response = await fetch(`/api/resources/${file._id}/duplicate`, {
+        method: 'POST'
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to duplicate file');
+      }
+    } catch (error) {
+      console.error('Error duplicating:', error);
+      alert('Failed to duplicate file');
+    }
+  };
+
+  const [moveModal, setMoveModal] = useState({ show: false, file: null });
+
+  const handleFileMove = async (file, targetProjectId, targetFolderId) => {
+    try {
+      const response = await fetch(`/api/resources/${file._id}/move`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: targetProjectId,
+          folderId: targetFolderId
+        })
+      });
+      if (response.ok) {
+        setRefreshTrigger(prev => prev + 1);
+        setMoveModal({ show: false, file: null });
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to move file');
+      }
+    } catch (error) {
+      console.error('Error moving:', error);
+      alert('Failed to move file');
+    }
+  };
+
   const toggleSelection = (itemId) => {
     setSelectedItems(prev => 
       prev.includes(itemId) 
@@ -420,6 +505,27 @@ export default function ProjectDocumentationPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  if (projectError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900 mb-2">Access Error</h2>
+          <p className="text-gray-600 mb-6">{projectError}</p>
+          <Link
+            href="/documentation"
+            className="inline-flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back to Documentation
+          </Link>
+        </div>
       </div>
     );
   }
@@ -464,6 +570,13 @@ export default function ProjectDocumentationPage() {
 
             {/* Right */}
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowShareLinksModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Link2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Share Links</span>
+              </button>
               <button
                 onClick={() => setShowUploadModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -656,9 +769,9 @@ export default function ProjectDocumentationPage() {
                 onFileClick={handleFileClick}
                 onDownload={handleDownload}
                 onDelete={handleDelete}
-                onRename={() => {}}
-                onDuplicate={() => {}}
-                onMove={() => {}}
+                onRename={handleFileRename}
+                onDuplicate={handleFileDuplicate}
+                onMove={(file) => setMoveModal({ show: true, file })}
                 onVersionHistory={handleVersionHistory}
                 onToggleLock={handleToggleLock}
                 onShare={handleFileShare}
@@ -853,6 +966,18 @@ export default function ProjectDocumentationPage() {
         </div>
       )}
 
+      {/* Move File Modal */}
+      {moveModal.show && (
+        <MoveModal
+          isOpen={moveModal.show}
+          file={moveModal.file}
+          currentProjectId={projectId}
+          currentFolderId={currentFolderId}
+          onClose={() => setMoveModal({ show: false, file: null })}
+          onMove={handleFileMove}
+        />
+      )}
+
       {/* Document Viewer Modal */}
       {viewingFile && (
         <DocumentViewer
@@ -870,6 +995,13 @@ export default function ProjectDocumentationPage() {
           projectId={projectId}
         />
       )}
+
+      {/* Share Links Management Modal */}
+      <ShareLinksModal
+        isOpen={showShareLinksModal}
+        onClose={() => setShowShareLinksModal(false)}
+        projectId={projectId}
+      />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   X, Download, ZoomIn, ZoomOut, Minimize2, Maximize2,
-  ChevronLeft, ChevronRight, ExternalLink, Lock, AlertCircle,
+  ChevronLeft, ChevronRight, Globe, Lock, AlertCircle,
   FileText, FileImage, FileVideo, Music, FileCode, FileArchive,
   Loader2, Eye, EyeOff
 } from 'lucide-react';
@@ -183,7 +183,7 @@ function ImageViewer({ file, onClose, canDownload = true }) {
 }
 
 // PDF Viewer Component
-function PDFViewer({ file, onClose }) {
+function PDFViewer({ file, onClose, canDownload = true }) {
   const [loading, setLoading] = useState(true);
   const [showInfo, setShowInfo] = useState(false);
   const iframeRef = useRef(null);
@@ -210,14 +210,12 @@ function PDFViewer({ file, onClose }) {
           >
             <FileText className="w-5 h-5" />
           </button>
-          <a href={pdfUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-            <ExternalLink className="w-4 h-4" />
-            Open in new tab
-          </a>
-          <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-            <Download className="w-4 h-4" />
-            Download
-          </a>
+          {canDownload && (
+            <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Download
+            </a>
+          )}
         </div>
       </div>
 
@@ -265,7 +263,7 @@ function PDFViewer({ file, onClose }) {
 }
 
 // Video Viewer Component
-function VideoViewer({ file, onClose }) {
+function VideoViewer({ file, onClose, canDownload = true }) {
   const videoRef = useRef(null);
 
   const videoUrl = file.externalUrl || `/api/resources/${file._id}/view`;
@@ -276,10 +274,12 @@ function VideoViewer({ file, onClose }) {
         <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors">
           <X className="w-5 h-5" />
         </button>
-        <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-          <Download className="w-4 h-4" />
-          Download
-        </a>
+        {canDownload && (
+          <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <Download className="w-4 h-4" />
+            Download
+          </a>
+        )}
       </div>
       <div className="w-full max-w-5xl aspect-video">
         <video
@@ -288,6 +288,7 @@ function VideoViewer({ file, onClose }) {
           controls
           autoPlay
           className="w-full h-full"
+          onContextMenu={(e) => e.preventDefault()}
         >
           Your browser does not support video playback.
         </video>
@@ -297,7 +298,7 @@ function VideoViewer({ file, onClose }) {
 }
 
 // Audio Viewer Component
-function AudioViewer({ file, onClose }) {
+function AudioViewer({ file, onClose, canDownload = true }) {
   const audioRef = useRef(null);
 
   const audioUrl = file.externalUrl || `/api/resources/${file._id}/view`;
@@ -317,20 +318,22 @@ function AudioViewer({ file, onClose }) {
           <h3 className="text-white text-lg font-semibold">{file.name}</h3>
           <p className="text-white/60 text-sm mt-1">{formatFileSize(file.fileSize)}</p>
         </div>
-        <audio ref={audioRef} src={audioUrl} controls autoPlay className="w-80">
+        <audio ref={audioRef} src={audioUrl} controls autoPlay className="w-80" onContextMenu={(e) => e.preventDefault()}>
           Your browser does not support audio playback.
         </audio>
-        <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-          <Download className="w-4 h-4" />
-          Download
-        </a>
+        {canDownload && (
+          <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+            <Download className="w-4 h-4" />
+            Download
+          </a>
+        )}
       </div>
     </div>
   );
 }
 
 // Code/Text Viewer Component
-function CodeViewer({ file, onClose }) {
+function CodeViewer({ file, onClose, canDownload = true }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -367,10 +370,12 @@ function CodeViewer({ file, onClose }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-            <Download className="w-4 h-4" />
-            Download
-          </a>
+          {canDownload && (
+            <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Download
+            </a>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-auto bg-gray-900">
@@ -394,15 +399,22 @@ function CodeViewer({ file, onClose }) {
 }
 
 // Unknown/Archive Viewer (fallback)
-function UnknownViewer({ file, onClose }) {
+function UnknownViewer({ file, onClose, canDownload = true }) {
   const fileType = getFileType(file.name, file.mimeType);
 
   const getIcon = () => {
     switch (fileType) {
       case 'archive': return <FileArchive className="w-16 h-16 text-amber-500" />;
       case 'document': return <FileText className="w-16 h-16 text-blue-500" />;
+      case 'spreadsheet': return <FileText className="w-16 h-16 text-green-500" />;
+      case 'presentation': return <FileText className="w-16 h-16 text-orange-500" />;
       default: return <FileText className="w-16 h-16 text-gray-400" />;
     }
+  };
+
+  const getDisplayName = () => {
+    if (fileType === 'unknown') return 'Unknown File Type';
+    return fileType.charAt(0).toUpperCase() + fileType.slice(1);
   };
 
   return (
@@ -412,6 +424,7 @@ function UnknownViewer({ file, onClose }) {
         <div className="text-center">
           <h3 className="text-gray-900 text-lg font-semibold">{file.name}</h3>
           <p className="text-gray-500 text-sm mt-1">{formatFileSize(file.fileSize)}</p>
+          <p className="text-gray-400 text-xs mt-1">{getDisplayName()}</p>
           {fileType === 'archive' && (
             <p className="text-amber-600 text-xs mt-2 flex items-center gap-1 justify-center">
               <AlertCircle className="w-3 h-3" />
@@ -423,10 +436,12 @@ function UnknownViewer({ file, onClose }) {
           <button onClick={onClose} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg text-sm font-medium transition-colors">
             Close
           </button>
-          <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
-            <Download className="w-4 h-4" />
-            Download
-          </a>
+          {canDownload && (
+            <a href={file.externalUrl || `/api/resources/${file._id}/download`} download={file.name} className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+              <Download className="w-4 h-4" />
+              Download
+            </a>
+          )}
         </div>
       </div>
     </div>
@@ -434,7 +449,7 @@ function UnknownViewer({ file, onClose }) {
 }
 
 // Main DocumentViewer Component
-export default function DocumentViewer({ file, onClose }) {
+export default function DocumentViewer({ file, onClose, canDownload = true }) {
   const [password, setPassword] = useState('');
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [passwordError, setPasswordError] = useState('');
@@ -475,7 +490,7 @@ export default function DocumentViewer({ file, onClose }) {
         <div className="flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 w-full py-16">
           <div className="flex flex-col items-center gap-6 max-w-md">
             <div className="w-24 h-24 bg-white rounded-2xl shadow-lg flex items-center justify-center">
-              <ExternalLink className="w-12 h-12 text-blue-500" />
+              <Globe className="w-12 h-12 text-blue-500" />
             </div>
             <div className="text-center">
               <h3 className="text-gray-900 text-lg font-semibold">{file.name}</h3>
@@ -494,7 +509,7 @@ export default function DocumentViewer({ file, onClose }) {
               rel="noopener noreferrer"
               className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-semibold transition-colors flex items-center gap-2 shadow-lg shadow-blue-500/30"
             >
-              <ExternalLink className="w-4 h-4" />
+              <Globe className="w-4 h-4" />
               Open in {file.storageProvider === 'google-drive' ? 'Google Drive' : file.storageProvider === 'onedrive' ? 'OneDrive' : file.storageProvider}
             </a>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-sm font-medium">
@@ -508,18 +523,18 @@ export default function DocumentViewer({ file, onClose }) {
     // Internal/server storage - show appropriate viewer
     switch (fileType) {
       case 'image':
-        return <ImageViewer file={file} onClose={onClose} />;
+        return <ImageViewer file={file} onClose={onClose} canDownload={canDownload} />;
       case 'pdf':
-        return <PDFViewer file={file} onClose={onClose} />;
+        return <PDFViewer file={file} onClose={onClose} canDownload={canDownload} />;
       case 'video':
-        return <VideoViewer file={file} onClose={onClose} />;
+        return <VideoViewer file={file} onClose={onClose} canDownload={canDownload} />;
       case 'audio':
-        return <AudioViewer file={file} onClose={onClose} />;
+        return <AudioViewer file={file} onClose={onClose} canDownload={canDownload} />;
       case 'code':
       case 'text':
-        return <CodeViewer file={file} onClose={onClose} />;
+        return <CodeViewer file={file} onClose={onClose} canDownload={canDownload} />;
       default:
-        return <UnknownViewer file={file} onClose={onClose} />;
+        return <UnknownViewer file={file} onClose={onClose} canDownload={canDownload} />;
     }
   };
 

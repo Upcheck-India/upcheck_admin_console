@@ -1,196 +1,378 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Mail, UserCheck, AlertCircle, Loader2, Shield, User } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  Plus, Trash2, Mail, UserCheck, AlertCircle, Loader2,
+  Shield, User, Crown, ChevronDown, Search, X, CheckCircle2, XCircle
+} from 'lucide-react';
 
-const RoleIcon = ({ role }) => {
-  switch (role) {
-    case 'Project Manager':
-      return <Shield className="h-4 w-4 text-blue-500" />;
-    default:
-      return <User className="h-4 w-4 text-gray-500" />;
-  }
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const PROJECT_ROLES = ['Project Manager', 'Contributor', 'Viewer'];
+
+const ROLE_META = {
+  'Project Manager': { badge: 'bg-blue-50 text-blue-700 ring-blue-200',    icon: Shield },
+  'Contributor':     { badge: 'bg-emerald-50 text-emerald-700 ring-emerald-200', icon: User   },
+  'Viewer':          { badge: 'bg-gray-100 text-gray-600 ring-gray-200',   icon: User   },
 };
 
-export default function ProjectMembers({ project, onMembersUpdate }) {
-  const [members, setMembers] = useState(project?.members || []);
-  const [allUsers, setAllUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState('');
-  const [selectedRole, setSelectedRole] = useState('Contributor');
-  const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [notifyNewMembers, setNotifyNewMembers] = useState(true);
-  const [emailStatus, setEmailStatus] = useState({});
+// ─── Inline toast ─────────────────────────────────────────────────────────────
 
-  const projectRoles = ['Project Manager', 'Contributor', 'Viewer'];
+function Banner({ type, message, onDismiss }) {
+  const styles = {
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    error:   'bg-red-50 border-red-200 text-red-700',
+    info:    'bg-blue-50 border-blue-100 text-blue-700',
+  };
+  const icons = {
+    success: <CheckCircle2 className="w-4 h-4 shrink-0" />,
+    error:   <XCircle      className="w-4 h-4 shrink-0" />,
+    info:    <AlertCircle  className="w-4 h-4 shrink-0" />,
+  };
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 border rounded-xl text-sm ${styles[type]}`}>
+      {icons[type]}
+      <p className="flex-1">{message}</p>
+      {onDismiss && (
+        <button onClick={onDismiss} className="opacity-60 hover:opacity-100 transition-opacity">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
 
-  // Fetch users on component mount
+// ─── User Search Picker ───────────────────────────────────────────────────────
+// Fully controlled: selectedUser is the source of truth from the parent.
+// The input shows the selected user's name when confirmed, or the live search query otherwise.
+
+function UserPicker({ availableUsers, selectedUser, onSelect, onClear }) {
+  const [query,    setQuery]    = useState('');
+  const [open,     setOpen]     = useState(false);
+  const ref   = useRef(null);
+  const input = useRef(null);
+
+  // When parent clears the selection (e.g. after Add), reset our local query too
   useEffect(() => {
-    const fetchUsers = async () => {
+    if (!selectedUser) setQuery('');
+  }, [selectedUser]);
+
+  const filtered = availableUsers.filter(u =>
+    u.username.toLowerCase().includes(query.toLowerCase()) ||
+    u.email.toLowerCase().includes(query.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handler = e => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const choose = (user) => {
+    onSelect(user);
+    setQuery('');   // clear search text; the confirmed chip takes over display
+    setOpen(false);
+  };
+
+  const handleClear = () => {
+    onClear();
+    setQuery('');
+    setOpen(false);
+    setTimeout(() => input.current?.focus(), 50);
+  };
+
+  // What to show: if a user is confirmed, show their chip instead of the raw input
+  if (selectedUser) {
+    return (
+      <div className="flex-1 flex items-center gap-2 pl-3 pr-2 py-2 border border-blue-400 bg-blue-50 rounded-xl ring-2 ring-blue-500/20">
+        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
+          {selectedUser.username.charAt(0).toUpperCase()}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-blue-800 truncate leading-tight">{selectedUser.username}</p>
+          <p className="text-[10px] text-blue-500 truncate leading-tight">{selectedUser.email}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handleClear}
+          className="p-0.5 rounded-md text-blue-400 hover:text-blue-700 hover:bg-blue-100 transition-colors shrink-0"
+          title="Clear selection"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} className="relative flex-1">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+        <input
+          ref={input}
+          type="text"
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder={availableUsers.length === 0 ? 'All users already added' : 'Search by name or email…'}
+          disabled={availableUsers.length === 0}
+          className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => { setQuery(''); setOpen(false); }}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {open && (query.length > 0 || availableUsers.length <= 6) && (
+        <div className="absolute left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-gray-100 max-h-52 overflow-y-auto z-30 animate-menu-in">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">
+              {query ? `No users match "${query}"` : 'No available users'}
+            </p>
+          ) : (
+            filtered.slice(0, 8).map(user => (
+              <button
+                key={user._id}
+                type="button"
+                // Use onMouseDown so it fires before the input's onBlur closes the dropdown
+                onMouseDown={e => { e.preventDefault(); choose(user); }}
+                className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-blue-50 transition-colors text-left group"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                  {user.username.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 truncate">{user.username}</p>
+                  <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Member Row ───────────────────────────────────────────────────────────────
+
+function MemberRow({ member, isOwner, onRoleChange, onRemove }) {
+  const meta = ROLE_META[member.role] || ROLE_META['Viewer'];
+  const RoleIcon = meta.icon;
+
+  return (
+    <div className={`flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all ${
+      isOwner ? 'border-blue-100 bg-blue-50/40' : 'border-gray-100 bg-white hover:border-gray-200'
+    }`}>
+      {/* Avatar */}
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0 ${
+        isOwner
+          ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
+          : 'bg-gradient-to-br from-gray-400 to-gray-500'
+      }`}>
+        {member.user?.charAt(0).toUpperCase() || '?'}
+      </div>
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <p className="text-sm font-semibold text-gray-900 truncate">{member.user}</p>
+          {isOwner && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
+              <Crown className="w-2.5 h-2.5" /> Owner
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 truncate">{member.email}</p>
+      </div>
+
+      {/* Role */}
+      {isOwner ? (
+        <span className={`hidden sm:flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ring-1 shrink-0 ${meta.badge}`}>
+          <RoleIcon className="w-3 h-3" />
+          {member.role || 'Super Manager'}
+        </span>
+      ) : (
+        <div className="relative shrink-0">
+          <select
+            value={member.role}
+            onChange={e => onRoleChange(member._id, e.target.value)}
+            className="appearance-none pl-3 pr-7 py-1.5 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all font-medium text-gray-700"
+          >
+            {PROJECT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+        </div>
+      )}
+
+      {/* Remove */}
+      {!isOwner && (
+        <button
+          type="button"
+          onClick={() => onRemove(member._id)}
+          title="Remove member"
+          className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ─── ProjectMembers ───────────────────────────────────────────────────────────
+
+export default function ProjectMembers({ project, onMembersUpdate, currentUser = null }) {
+  const [members,      setMembers]      = useState(project?.members || []);
+  const [allUsers,     setAllUsers]     = useState([]);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedRole, setSelectedRole] = useState('Contributor');
+  const [error,        setError]        = useState(null);
+  const [memberError,  setMemberError]  = useState('');
+  const [banner,       setBanner]       = useState(null); // { type, message }
+  const [loading,      setLoading]      = useState(false);
+  const [saving,       setSaving]       = useState(false);
+  const [notifyNew,    setNotifyNew]    = useState(true);
+  const [pendingRemove, setPendingRemove] = useState(null); // member._id pending confirm
+
+  // Sync with parent
+  useEffect(() => {
+    if (project?.members) setMembers(project.members);
+  }, [project?.members]);
+
+  // Fetch users
+  useEffect(() => {
+    const fetch_ = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/users');
-        if (!response.ok) {
-          throw new Error(`Failed to fetch users: ${response.status}`);
-        }
-        const data = await response.json();
+        const res = await fetch('/api/users');
+        if (!res.ok) throw new Error(`Failed to fetch users (${res.status})`);
+        const data = await res.json();
         setAllUsers(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error('Error fetching users:', err);
         setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-    fetchUsers();
+    fetch_();
   }, []);
 
-  // Sync with parent project changes
+  // Auto-dismiss banner
   useEffect(() => {
-    if (project?.members) {
-      setMembers(project.members);
-    }
-  }, [project?.members]);
+    if (!banner) return;
+    const t = setTimeout(() => setBanner(null), 4000);
+    return () => clearTimeout(t);
+  }, [banner]);
 
+  // The project super manager / owner — identified by project.superManager field
+  const ownerUsername = project?.superManager || currentUser?.username;
+
+  // Users not yet in the members list AND not the owner
   const availableUsers = allUsers.filter(u =>
-    !members.some(m => m._id === u._id || m.user === u.username)
+    u.username !== ownerUsername &&
+    !members.some(m => m.user === u.username || String(m._id) === String(u._id))
   );
 
   const handleAddMember = useCallback(() => {
-    if (!selectedUser) {
-      alert('Please select a user.');
-      return;
-    }
+    setMemberError('');
+    if (!selectedUser) return setMemberError('Please search and select a user first.');
+    if (selectedUser.username === ownerUsername)
+      return setMemberError('The project owner is already included automatically.');
+    if (members.some(m => m.user === selectedUser.username))
+      return setMemberError('This user is already a member.');
 
-    const userObject = allUsers.find(u => u.username === selectedUser);
-    if (!userObject) {
-      alert('Could not find user details.');
-      return;
-    }
-
-    const isDuplicate = members.some(member =>
-      member._id === userObject._id || member.user === userObject.username
-    );
-
-    if (isDuplicate) {
-      alert('This user is already a member of the project.');
-      return;
-    }
-
-    const newMember = {
-      _id: userObject._id,
-      user: userObject.username,
-      email: userObject.email,
-      role: selectedRole
-    };
-
-    setMembers(prev => [...prev, newMember]);
-    setSelectedUser('');
+    setMembers(prev => [...prev, {
+      _id:   selectedUser._id,
+      user:  selectedUser.username,
+      email: selectedUser.email,
+      role:  selectedRole,
+    }]);
+    // Reset picker — setting null triggers the UserPicker's useEffect to clear its query
+    setSelectedUser(null);
     setSelectedRole('Contributor');
-  }, [selectedUser, selectedRole, allUsers, members]);
+    setMemberError('');
+  }, [selectedUser, selectedRole, members, ownerUsername]);
 
-  const handleRemoveMember = useCallback((memberIdToRemove) => {
-    const memberToRemove = members.find(m => m._id === memberIdToRemove);
-
-    if (!memberToRemove) {
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to remove this member?')) {
-      return;
-    }
-
-    setMembers(prev => prev.filter(member => member._id !== memberIdToRemove));
-  }, [members]);
-
-  const handleRoleChange = useCallback((memberIdToUpdate, newRole) => {
-    setMembers(prev => prev.map(member =>
-      member._id === memberIdToUpdate ? { ...member, role: newRole } : member
+  const handleRoleChange = useCallback((memberId, newRole) => {
+    setMembers(prev => prev.map(m =>
+      String(m._id) === String(memberId) ? { ...m, role: newRole } : m
     ));
   }, []);
 
-  const sendNotificationEmail = async (user, projectName) => {
+  // Soft-confirm remove: first click sets pendingRemove, second confirms
+  const handleRemove = useCallback((memberId) => {
+    if (pendingRemove === memberId) {
+      setMembers(prev => prev.filter(m => String(m._id) !== String(memberId)));
+      setPendingRemove(null);
+    } else {
+      setPendingRemove(memberId);
+      // Auto-cancel after 3s if not confirmed
+      setTimeout(() => setPendingRemove(null), 3000);
+    }
+  }, [pendingRemove]);
+
+  const sendNotification = async (user, projectName) => {
     try {
-      const response = await fetch('/api/notify', {
+      const res = await fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           to: user.email,
-          subject: `You've been added to the project: ${projectName}`,
+          subject: `You've been added to: ${projectName}`,
           html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #1f2937;">Welcome to ${projectName}!</h2>
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;">
+              <h2 style="color:#1f2937;">Welcome to ${projectName}!</h2>
               <p>Hi ${user.username},</p>
-              <p>You have been added to the project <strong>${projectName}</strong> on Upcheck.</p>
-              <p>You can now access the project and its tasks through your dashboard.</p>
-              <hr style="margin: 20px 0; border: none; border-top: 1px solid #e5e7eb;">
-              <p style="color: #6b7280; font-size: 14px;">
-                Thank you,<br/>
-                The Upcheck Team
-              </p>
+              <p>You've been added to <strong>${projectName}</strong> on Upcheck.</p>
+              <p>You can now access the project from your dashboard.</p>
+              <hr style="margin:20px 0;border:none;border-top:1px solid #e5e7eb;">
+              <p style="color:#6b7280;font-size:14px;">The Upcheck Team</p>
             </div>
           `,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to send email: ${response.status}`);
-      }
-
-      return { success: true };
-    } catch (error) {
-      console.error(`Failed to send notification to ${user.email}:`, error);
-      return { success: false, error: error.message };
+      return res.ok;
+    } catch {
+      return false;
     }
   };
 
   const handleSave = async () => {
     setSaving(true);
-    setEmailStatus({});
+    setBanner(null);
 
     try {
-      const originalMembers = (project?.members || []).map(m => m.user);
-      const newMembers = members.filter(m => !originalMembers.includes(m.user));
+      const originalUsernames = new Set((project?.members || []).map(m => m.user));
+      const newMembers = members.filter(m => !originalUsernames.has(m.user));
 
-      if (notifyNewMembers && newMembers.length > 0) {
+      if (notifyNew && newMembers.length > 0) {
         const usersToNotify = allUsers.filter(u =>
           newMembers.some(nm => nm.user === u.username)
         );
-
-        const emailPromises = usersToNotify.map(async (user) => {
-          const result = await sendNotificationEmail(user, project?.name || 'Unknown Project');
-          return { user: user.username, ...result };
-        });
-
-        const emailResults = await Promise.all(emailPromises);
-
-        const statusMap = {};
-        emailResults.forEach(result => {
-          statusMap[result.user] = result.success;
-        });
-        setEmailStatus(statusMap);
+        await Promise.all(usersToNotify.map(u => sendNotification(u, project?.name || 'Project')));
       }
 
-      // Update the project via API
-      const response = await fetch(`/api/projects/${project._id}`, {
+      const res = await fetch(`/api/projects/${project._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ members }),
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update members');
-      }
+      if (!res.ok) throw new Error('Failed to update members.');
 
-      if (onMembersUpdate) {
-        onMembersUpdate(members);
-      }
-
-      alert('Members updated successfully!');
-    } catch (error) {
-      console.error('Error saving members:', error);
-      alert(`Error saving members: ${error.message}`);
+      setBanner({ type: 'success', message: 'Team members updated successfully.' });
+      if (typeof onMembersUpdate === 'function') onMembersUpdate(members);
+    } catch (err) {
+      setBanner({ type: 'error', message: err.message });
     } finally {
       setSaving(false);
     }
@@ -198,165 +380,157 @@ export default function ProjectMembers({ project, onMembersUpdate }) {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      <div className="flex flex-col items-center justify-center py-16 gap-3">
+        <Loader2 className="w-7 h-7 animate-spin text-blue-500" />
+        <p className="text-sm text-gray-400">Loading team members…</p>
       </div>
     );
   }
 
+  // Separate owner row from regular members for rendering
+  const ownerRecord = members.find(m => m.user === ownerUsername) || {
+    _id: 'owner', user: ownerUsername, email: currentUser?.email || '', role: 'Super Manager'
+  };
+  const regularMembers = members.filter(m => m.user !== ownerUsername);
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-800">Team Members</h3>
-        <span className="text-sm text-gray-500">
-          {members.length} member{members.length !== 1 ? 's' : ''}
-        </span>
-      </div>
+    <>
+      <style>{`
+        @keyframes menu-in {
+          from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+          to   { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .animate-menu-in { animation: menu-in 0.13s cubic-bezier(0.16, 1, 0.3, 1); }
+      `}</style>
 
-      {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center">
-          <AlertCircle className="h-5 w-5 text-red-500 mr-3" />
-          <p className="text-red-700 text-sm">{error}</p>
+      <div className="space-y-5">
+
+        {/* ── Header ── */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Team Members</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {members.length + (ownerRecord ? 0 : 1)} member{members.length !== 1 ? 's' : ''} · 1 owner
+            </p>
+          </div>
         </div>
-      )}
 
-      {/* Add new member form */}
-      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Add New Member</h4>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex-1 min-w-[200px]">
-            <select
-              value={selectedUser}
-              onChange={(e) => setSelectedUser(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-              disabled={availableUsers.length === 0}
-            >
-              <option value="" disabled>
-                {availableUsers.length === 0 ? 'No users available' : 'Select a user to add'}
-              </option>
-              {availableUsers.map(user => (
-                <option key={user._id} value={user.username}>
-                  {user.username} ({user.email})
-                </option>
-              ))}
-            </select>
+        {/* ── Banners ── */}
+        {error && <Banner type="error" message={error} onDismiss={() => setError(null)} />}
+        {banner && <Banner type={banner.type} message={banner.message} onDismiss={() => setBanner(null)} />}
+
+        {/* ── Add member panel ── */}
+        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Add Member</p>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <UserPicker
+              availableUsers={availableUsers}
+              selectedUser={selectedUser}
+              onSelect={setSelectedUser}
+              onClear={() => setSelectedUser(null)}
+            />
+
+            <div className="flex gap-2 sm:contents">
+              {/* Role picker */}
+              <div className="relative flex-1 sm:flex-none sm:w-40 shrink-0">
+                <select
+                  value={selectedRole}
+                  onChange={e => setSelectedRole(e.target.value)}
+                  className="w-full appearance-none pl-3 pr-7 py-2.5 text-sm border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all"
+                >
+                  {PROJECT_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAddMember}
+                disabled={!selectedUser}
+                className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex-1 min-w-[150px]">
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+
+          {memberError && (
+            <p className="text-xs text-red-500 flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3 shrink-0" /> {memberError}
+            </p>
+          )}
+        </div>
+
+        {/* ── Member list ── */}
+        <div className="space-y-2">
+          {/* Owner — always shown, always first */}
+          {ownerUsername && (
+            <MemberRow
+              member={ownerRecord}
+              isOwner={true}
+              onRoleChange={() => {}}
+              onRemove={() => {}}
+            />
+          )}
+
+          {/* Regular members */}
+          {regularMembers.length === 0 && !ownerUsername && (
+            <div className="text-center py-10 text-gray-400">
+              <User className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">No members added yet.</p>
+            </div>
+          )}
+
+          {regularMembers.map(member => (
+            <div key={member._id || member.user}>
+              {pendingRemove === member._id && (
+                <div className="flex items-center justify-between px-4 py-2 mb-1 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                  <span>Click remove again to confirm removing <strong>{member.user}</strong></span>
+                  <button onClick={() => setPendingRemove(null)} className="text-red-400 hover:text-red-600">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+              <MemberRow
+                member={member}
+                isOwner={false}
+                onRoleChange={handleRoleChange}
+                onRemove={handleRemove}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* ── Save bar ── */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-4 border-t border-gray-100">
+          {/* Email notify toggle */}
+          <label className="flex items-center gap-2.5 cursor-pointer">
+            <div
+              onClick={() => setNotifyNew(v => !v)}
+              className={`relative w-9 h-5 rounded-full transition-colors ${notifyNew ? 'bg-blue-500' : 'bg-gray-200'}`}
             >
-              {projectRoles.map(role => (
-                <option key={role} value={role}>{role}</option>
-              ))}
-            </select>
-          </div>
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${notifyNew ? 'translate-x-4' : ''}`} />
+            </div>
+            <div className="flex items-center gap-1.5 text-sm text-gray-600">
+              <Mail className="w-3.5 h-3.5 text-gray-400" />
+              Notify new members by email
+            </div>
+          </label>
+
           <button
-            type="button"
-            onClick={handleAddMember}
-            disabled={!selectedUser || availableUsers.length === 0}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 transition-colors flex items-center gap-2"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
           >
-            <Plus className="h-4 w-4" />
-            Add
+            {saving ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+            ) : (
+              <><UserCheck className="w-4 h-4" /> Save Changes</>
+            )}
           </button>
         </div>
       </div>
-
-      {/* Settings and Save */}
-      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center space-x-3">
-          <input
-            id="notify-members"
-            type="checkbox"
-            checked={notifyNewMembers}
-            onChange={(e) => setNotifyNewMembers(e.target.checked)}
-            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-          />
-          <label htmlFor="notify-members" className="flex items-center text-sm text-gray-700">
-            <Mail className="h-4 w-4 mr-2" />
-            Notify new members by email
-          </label>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            <>
-              <UserCheck className="h-4 w-4 mr-2" />
-              Save Changes
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* List of current members */}
-      <div className="space-y-3">
-        <h4 className="text-sm font-medium text-gray-700">Current Members</h4>
-        {members.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p>No members added yet.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {members.map((member, idx) => (
-              <div
-                key={member._id || member.user || idx}
-                className="flex items-center justify-between p-4 rounded-lg border bg-white border-gray-200 transition-colors"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium">
-                      {member.user?.charAt(0).toUpperCase() || '?'}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        {member.user}
-                      </p>
-                      <p className="text-sm text-gray-500">{member.email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1 text-sm text-gray-600">
-                    <RoleIcon role={member.role} />
-                    <span className="px-2 py-1 bg-gray-100 rounded-full text-xs font-medium">
-                      {member.role}
-                    </span>
-                  </div>
-                  <select
-                    value={member.role}
-                    onChange={(e) => handleRoleChange(member._id, e.target.value)}
-                    className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {projectRoles.map(role => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
-                  </select>
-
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMember(member._id)}
-                    className="text-red-500 hover:text-red-700 p-1 rounded transition-colors"
-                    title="Remove member"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+    </>
   );
 }

@@ -2,9 +2,9 @@
 
 import React from 'react';
 import { 
-  Folder, Users, Clock, Activity, MoreVertical, 
-  Settings, Trash2, Play, Pause, Lightbulb, Archive, XCircle,
-  FileText, GitBranch
+  Folder, Users, Clock, Activity,
+  Play, Pause, Lightbulb, Archive, XCircle,
+  FileText
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -33,6 +33,14 @@ const STATUS_CONFIG = {
     icon: Archive,
     description: 'Archived for later'
   },
+  // Bug fix: 'archived' was missing — cards with this status fell through to
+  // STATUS_CONFIG.active and showed a green "Active" badge incorrectly
+  archived: {
+    label: 'Archived',
+    color: 'bg-slate-100 text-slate-600 border-slate-200',
+    icon: Archive,
+    description: 'No longer active'
+  },
   dismissed: {
     label: 'Dismissed',
     color: 'bg-red-100 text-red-700 border-red-200',
@@ -44,14 +52,14 @@ const STATUS_CONFIG = {
 export default function ProjectSpaceCard({ 
   project, 
   stats = {},
-  onStatusChange,
-  onSettings,
-  onDelete,
   isGeneral = false 
 }) {
-  const [showDropdown, setShowDropdown] = React.useState(false);
-  const [showStatusMenu, setShowStatusMenu] = React.useState(false);
-  
+  // Bug fix: onStatusChange, onSettings, onDelete props removed.
+  // All card actions are handled exclusively by ProjectCardActions, which
+  // page.jsx renders as an absolute overlay (top-4 right-4) on each card.
+  // Having a second ⋮ menu inside the card caused two icon menus to appear
+  // side-by-side on every card.
+
   const status = project.status || 'active';
   const statusConfig = STATUS_CONFIG[status] || STATUS_CONFIG.active;
   const StatusIcon = statusConfig.icon;
@@ -79,6 +87,7 @@ export default function ProjectSpaceCard({
                 src={project.logo} 
                 alt={project.name}
                 className="w-10 h-10 rounded-lg object-cover"
+                onError={e => { e.currentTarget.style.display = 'none'; }}
               />
             ) : (
               <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
@@ -97,70 +106,13 @@ export default function ProjectSpaceCard({
             </div>
           </Link>
 
-          {!isGeneral && (
-            <div className="relative ml-2">
-              <button
-                onClick={() => setShowDropdown(!showDropdown)}
-                className="p-1.5 rounded-lg hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <MoreVertical className="w-4 h-4 text-gray-500" />
-              </button>
-
-              {showDropdown && (
-                <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-44">
-                  <button
-                    onClick={() => { setShowStatusMenu(!showStatusMenu); }}
-                    className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <StatusIcon className="w-4 h-4 mr-2" />
-                    Change Status
-                  </button>
-                  <button
-                    onClick={() => { onSettings(project); setShowDropdown(false); }}
-                    className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <Settings className="w-4 h-4 mr-2" />
-                    Settings
-                  </button>
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <button
-                    onClick={() => { onDelete(project); setShowDropdown(false); }}
-                    className="w-full flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete
-                  </button>
-                </div>
-              )}
-
-              {showStatusMenu && showDropdown && (
-                <div className="absolute right-full top-0 mr-1 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 min-w-40">
-                  {Object.entries(STATUS_CONFIG).map(([key, config]) => {
-                    const Icon = config.icon;
-                    return (
-                      <button
-                        key={key}
-                        onClick={() => {
-                          onStatusChange(project, key);
-                          setShowDropdown(false);
-                          setShowStatusMenu(false);
-                        }}
-                        className={`w-full flex items-center px-3 py-2 text-sm hover:bg-gray-100 ${
-                          status === key ? 'bg-gray-50 font-medium' : 'text-gray-700'
-                        }`}
-                      >
-                        <Icon className="w-4 h-4 mr-2" />
-                        {config.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+          {/* Bug fix: the card's own ⋮ dropdown (Settings, Delete, Change Status)
+              has been removed. ProjectCardActions rendered as an absolute overlay
+              in page.jsx already provides all these actions. Two menus on the same
+              card caused the double-icon problem shown in the screenshot. */}
         </div>
 
-        {/* Status Badge */}
+        {/* Status Badge — display only, no interaction */}
         {!isGeneral && (
           <div className="mt-3 flex items-center gap-2">
             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${statusConfig.color}`}>

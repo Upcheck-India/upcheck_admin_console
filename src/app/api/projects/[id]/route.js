@@ -61,6 +61,86 @@ export async function PUT(req, { params }) {
 
     await projectsCollection.updateOne({ _id: new ObjectId(id) }, updateData);
 
+    // Log activity for member changes
+    if (members !== undefined) {
+      const oldMembers = project.members || [];
+      const newMembers = members || [];
+
+      const addedMembers = newMembers.filter(m =>
+        !oldMembers.some(om => om.user === m.user)
+      );
+      const removedMembers = oldMembers.filter(m =>
+        !newMembers.some(nm => nm.user === m.user)
+      );
+      const roleChanges = newMembers.filter(m => {
+        const old = oldMembers.find(om => om.user === m.user);
+        return old && old.role !== m.role;
+      });
+
+      try {
+        const logEntries = [];
+
+        for (const member of addedMembers) {
+          logEntries.push({
+            projectId: id,
+            action: 'member_add',
+            resourceType: 'project',
+            resourceName: project.name,
+            userId: user._id,
+            username: user.username,
+            timestamp: new Date(),
+            metadata: {
+              targetUser: member.user,
+              targetEmail: member.email,
+              role: member.role,
+            }
+          });
+        }
+
+        for (const member of removedMembers) {
+          logEntries.push({
+            projectId: id,
+            action: 'member_remove',
+            resourceType: 'project',
+            resourceName: project.name,
+            userId: user._id,
+            username: user.username,
+            timestamp: new Date(),
+            metadata: {
+              targetUser: member.user,
+              targetEmail: member.email,
+              previousRole: member.role,
+            }
+          });
+        }
+
+        for (const member of roleChanges) {
+          const oldMember = oldMembers.find(om => om.user === member.user);
+          logEntries.push({
+            projectId: id,
+            action: 'member_role_change',
+            resourceType: 'project',
+            resourceName: project.name,
+            userId: user._id,
+            username: user.username,
+            timestamp: new Date(),
+            metadata: {
+              targetUser: member.user,
+              targetEmail: member.email,
+              oldRole: oldMember?.role,
+              newRole: member.role,
+            }
+          });
+        }
+
+        if (logEntries.length > 0) {
+          await db.collection('doc_activity_logs').insertMany(logEntries);
+        }
+      } catch (logError) {
+        console.error('Failed to log member activity:', logError);
+      }
+    }
+
     const updatedProject = await projectsCollection.findOne({ _id: new ObjectId(id) });
 
     return NextResponse.json(updatedProject, { status: 200 });

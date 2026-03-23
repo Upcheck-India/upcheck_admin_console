@@ -8,7 +8,7 @@ import { MoreHorizontal, Edit2, Trash2, Shield, Info, FolderInput, X, Folder } f
 function FolderActionModal({ folder, onClose, onRename, onDelete, onPermissions, onDetails, onCreateSubfolder }) {
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
       onClick={onClose}
     >
       <div
@@ -130,7 +130,7 @@ function RenameModal({ folder, onConfirm, onClose }) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 animate-modal-in">
@@ -199,7 +199,7 @@ function RenameModal({ folder, onConfirm, onClose }) {
 function DeleteModal({ folder, onConfirm, onClose }) {
   return (
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[9999] p-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm border border-gray-100 animate-modal-in">
