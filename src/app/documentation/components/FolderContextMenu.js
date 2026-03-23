@@ -3,6 +3,111 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MoreHorizontal, Edit2, Trash2, Shield, Info, FolderInput, X, Folder } from 'lucide-react';
 
+// ─── Folder Action Modal (Centered Dialog) ────────────────────────────────────
+
+function FolderActionModal({ folder, onClose, onRename, onDelete, onPermissions, onDetails, onCreateSubfolder }) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-modal-in"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+              <Folder className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Folder Options</h3>
+              <p className="text-xs text-gray-500 truncate max-w-[200px]">{folder.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Actions */}
+        <div className="p-4 space-y-2">
+          <button
+            onClick={() => { onCreateSubfolder(folder); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+              <FolderInput className="w-4 h-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">New Subfolder</p>
+              <p className="text-xs text-gray-500">Create a new folder inside this one</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { onRename(folder); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0">
+              <Edit2 className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Rename</p>
+              <p className="text-xs text-gray-500">Change the folder name</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { onPermissions(folder); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center shrink-0">
+              <Shield className="w-4 h-4 text-purple-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Permissions</p>
+              <p className="text-xs text-gray-500">Manage who can access this folder</p>
+            </div>
+          </button>
+
+          <button
+            onClick={() => { onDetails(folder); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+              <Info className="w-4 h-4 text-amber-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Details</p>
+              <p className="text-xs text-gray-500">View folder information</p>
+            </div>
+          </button>
+
+          <div className="border-t border-gray-100 my-2" />
+
+          <button
+            onClick={() => { onDelete(folder); onClose(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 transition-colors text-left group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-100">
+              <Trash2 className="w-4 h-4 text-red-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-red-600">Delete</p>
+              <p className="text-xs text-gray-500">Permanently delete this folder</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Rename Modal ─────────────────────────────────────────────────────────────
 
 function RenameModal({ folder, onConfirm, onClose }) {
@@ -140,82 +245,24 @@ export default function FolderContextMenu({
   onDetails,
   onCreateSubfolder,
 }) {
-  const [showMenu,         setShowMenu]         = useState(false);
-  const [showRenameModal,  setShowRenameModal]  = useState(false);
-  const [showDeleteModal,  setShowDeleteModal]  = useState(false);
-  const menuRef   = useRef(null);
-  const buttonRef = useRef(null);
+  const [showModal, setShowModal] = useState(false);
 
-  // Close menu on outside click
-  useEffect(() => {
-    if (!showMenu) return;
-    const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target) &&
-          buttonRef.current && !buttonRef.current.contains(e.target)) {
-        setShowMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showMenu]);
-
-  // Close on Escape
-  useEffect(() => {
-    if (!showMenu) return;
-    const handler = (e) => { if (e.key === 'Escape') setShowMenu(false); };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [showMenu]);
-
-  const safe = (fn, ...args) => (e) => {
-    e.stopPropagation();
-    setShowMenu(false);
-    if (typeof fn === 'function') fn(...args);
+  const handleRename = (f) => {
+    const newName = prompt('Enter new folder name:', f.name);
+    if (newName && newName.trim() && newName !== f.name) {
+      onRename(f, newName.trim());
+    }
   };
 
-  const menuItems = [
-    {
-      icon: FolderInput,
-      label: 'New Subfolder',
-      fn: safe(onCreateSubfolder, folder),
-      cls: 'text-gray-700',
-    },
-    {
-      icon: Edit2,
-      label: 'Rename',
-      fn: (e) => { e.stopPropagation(); setShowMenu(false); setShowRenameModal(true); },
-      cls: 'text-gray-700',
-    },
-    {
-      icon: Shield,
-      label: 'Permissions',
-      fn: safe(onPermissions, folder),
-      cls: 'text-gray-700',
-    },
-    {
-      icon: Info,
-      label: 'Details',
-      fn: safe(onDetails, folder),
-      cls: 'text-gray-700',
-    },
-    null, // divider
-    {
-      icon: Trash2,
-      label: 'Delete',
-      fn: (e) => { e.stopPropagation(); setShowMenu(false); setShowDeleteModal(true); },
-      cls: 'text-red-600',
-    },
-  ];
+  const handleDelete = (f) => {
+    if (confirm(`Are you sure you want to delete "${f.name}" and all its contents?`)) {
+      onDelete(f);
+    }
+  };
 
   return (
     <>
       <style>{`
-        @keyframes menu-in {
-          from { opacity: 0; transform: scale(0.95) translateY(-4px); }
-          to   { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .animate-menu-in { animation: menu-in 0.13s cubic-bezier(0.16, 1, 0.3, 1); }
-
         @keyframes modal-in {
           from { opacity: 0; transform: translateY(8px) scale(0.98); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -226,56 +273,27 @@ export default function FolderContextMenu({
       <div className="relative" onClick={e => e.stopPropagation()}>
         {/* Trigger */}
         <button
-          ref={buttonRef}
-          onClick={e => { e.stopPropagation(); setShowMenu(v => !v); }}
+          onClick={(e) => { e.stopPropagation(); setShowModal(true); }}
           className={`w-6 h-6 flex items-center justify-center rounded-lg transition-all ${
-            showMenu
+            showModal
               ? 'bg-gray-200 text-gray-700'
               : 'text-gray-400 hover:bg-gray-200 hover:text-gray-700'
           }`}
         >
           <MoreHorizontal className="w-3.5 h-3.5" />
         </button>
-
-        {/* Dropdown */}
-        {showMenu && (
-          <div
-            ref={menuRef}
-            className="absolute right-0 top-full mt-1.5 w-44 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-menu-in"
-          >
-            {menuItems.map((item, i) =>
-              item === null ? (
-                <div key={`d-${i}`} className="border-t border-gray-100 my-1" />
-              ) : (
-                <button
-                  key={item.label}
-                  onClick={item.fn}
-                  className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm ${item.cls} hover:bg-gray-50 transition-colors`}
-                >
-                  <item.icon className="w-3.5 h-3.5 opacity-60 shrink-0" />
-                  {item.label}
-                </button>
-              )
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Rename Modal */}
-      {showRenameModal && (
-        <RenameModal
+      {/* Folder Action Modal */}
+      {showModal && (
+        <FolderActionModal
           folder={folder}
-          onConfirm={onRename}
-          onClose={() => { setShowRenameModal(false); setNewName?.(folder.name); }}
-        />
-      )}
-
-      {/* Delete Confirm Modal */}
-      {showDeleteModal && (
-        <DeleteModal
-          folder={folder}
-          onConfirm={onDelete}
-          onClose={() => setShowDeleteModal(false)}
+          onClose={() => setShowModal(false)}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onPermissions={onPermissions}
+          onDetails={onDetails}
+          onCreateSubfolder={onCreateSubfolder}
         />
       )}
     </>

@@ -51,7 +51,7 @@ export async function PUT(req, { params }) {
     
     // Validate and set status if provided
     if (status !== undefined) {
-      const validStatuses = ['active', 'ideation', 'paused', 'shelved', 'dismissed'];
+      const validStatuses = ['active', 'ideation', 'paused', 'shelved', 'archived', 'dismissed'];
       if (validStatuses.includes(status)) {
         updateFields.status = status;
       }

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { 
+import {
   ChevronLeft, Upload, Search, Grid, List, Plus, Filter,
   Folder, FolderPlus, Settings, Users, Activity, Clock,
   MoreVertical, Download, Trash2, CheckSquare, X, RefreshCw,
@@ -15,6 +15,10 @@ import ActivityLog from '../components/ActivityLog';
 import VersionHistory from '../components/VersionHistory';
 import UploadModal from '../components/UploadModal';
 import FolderContextMenu from '../components/FolderContextMenu';
+import DocumentViewer from '../components/DocumentViewer';
+import ShareModal from '../components/ShareModal';
+import ProjectSettings from '../components/ProjectSettings';
+import ProjectMembers from '../components/ProjectMembers';
 
 const STATUS_CONFIG = {
   active: { label: 'Active', color: 'bg-green-100 text-green-700', icon: Play },
@@ -43,7 +47,7 @@ export default function ProjectDocumentationPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedItems, setSelectedItems] = useState([]);
   const [showSidebar, setShowSidebar] = useState(true);
-  const [activeTab, setActiveTab] = useState('files'); // files, activity, settings
+  const [activeTab, setActiveTab] = useState('files'); // files, activity, members, settings
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Modals
@@ -56,6 +60,8 @@ export default function ProjectDocumentationPage() {
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [newFolderName, setNewFolderName] = useState('');
   const [parentFolderIdForNew, setParentFolderIdForNew] = useState(null);
+  const [viewingFile, setViewingFile] = useState(null);
+  const [sharingFile, setSharingFile] = useState(null);
 
   // Fetch project details
   useEffect(() => {
@@ -242,8 +248,8 @@ export default function ProjectDocumentationPage() {
   };
 
   const handleFileClick = (file) => {
-    // Preview or details
-    console.log('File clicked:', file);
+    // Open file viewer
+    setViewingFile(file);
   };
 
   const handleDownload = async (item) => {
@@ -308,15 +314,8 @@ export default function ProjectDocumentationPage() {
     setShowFolderDetails(true);
   };
 
-  const handleFileShare = async (file) => {
-    // Generate shareable link
-    const shareUrl = `${window.location.origin}/shared/${file._id}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      alert('Share link copied to clipboard!');
-    } catch (err) {
-      prompt('Copy this link:', shareUrl);
-    }
+  const handleFileShare = (file) => {
+    setSharingFile(file);
   };
 
   const [lockModal, setLockModal] = useState({ show: false, file: null, mode: 'add', password: '', confirmPassword: '' });
@@ -500,17 +499,30 @@ export default function ProjectDocumentationPage() {
               Activity
             </button>
             {projectId !== 'general' && (
-              <button
-                onClick={() => setActiveTab('settings')}
-                className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
-                  activeTab === 'settings'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <Settings className="w-4 h-4 inline mr-1.5" />
-                Settings
-              </button>
+              <>
+                <button
+                  onClick={() => setActiveTab('members')}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'members'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Users className="w-4 h-4 inline mr-1.5" />
+                  Members
+                </button>
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`pb-3 px-1 text-sm font-medium border-b-2 transition-colors ${
+                    activeTab === 'settings'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Settings className="w-4 h-4 inline mr-1.5" />
+                  Settings
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -674,65 +686,34 @@ export default function ProjectDocumentationPage() {
             </div>
           )}
 
+          {activeTab === 'members' && projectId !== 'general' && (
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <ProjectMembers
+                project={project}
+                onMembersUpdate={(updatedMembers) => {
+                  setProject({ ...project, members: updatedMembers });
+                }}
+              />
+            </div>
+          )}
+
           {activeTab === 'settings' && projectId !== 'general' && (
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Project Settings</h2>
-              
-              <div className="space-y-6">
-                {/* Basic Info */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Basic Information</h3>
-                  <div className="grid gap-4 max-w-lg">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">Project Name</label>
-                      <input
-                        type="text"
-                        value={project?.name || ''}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">Description</label>
-                      <textarea
-                        value={project?.description || ''}
-                        disabled
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-50"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Members */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">Team Members</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {project?.members?.map((member, index) => (
-                      <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
-                        <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-medium">
-                          {member.user?.charAt(0).toUpperCase() || '?'}
-                        </div>
-                        <span className="text-sm text-gray-700">{member.user}</span>
-                        <span className="text-xs text-gray-500">({member.role})</span>
-                      </div>
-                    ))}
-                    {(!project?.members || project.members.length === 0) && (
-                      <p className="text-sm text-gray-500">No members assigned</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Link to full project settings */}
-                <div className="pt-4 border-t border-gray-200">
-                  <Link
-                    href={`/project_management/${projectId}`}
-                    className="text-blue-600 hover:text-blue-700 text-sm font-medium"
-                  >
-                    Go to full project settings →
-                  </Link>
-                </div>
-              </div>
+              <ProjectSettings
+                project={project}
+                onProjectUpdate={async () => {
+                  // Refresh project data
+                  try {
+                    const response = await fetch(`/api/projects/${projectId}`);
+                    if (response.ok) {
+                      const data = await response.json();
+                      setProject(data);
+                    }
+                  } catch (error) {
+                    console.error('Error refreshing project:', error);
+                  }
+                }}
+              />
             </div>
           )}
         </main>
@@ -870,6 +851,24 @@ export default function ProjectDocumentationPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Document Viewer Modal */}
+      {viewingFile && (
+        <DocumentViewer
+          file={viewingFile}
+          onClose={() => setViewingFile(null)}
+        />
+      )}
+
+      {/* Share Modal */}
+      {sharingFile && (
+        <ShareModal
+          isOpen={!!sharingFile}
+          onClose={() => setSharingFile(null)}
+          file={sharingFile}
+          projectId={projectId}
+        />
       )}
     </div>
   );

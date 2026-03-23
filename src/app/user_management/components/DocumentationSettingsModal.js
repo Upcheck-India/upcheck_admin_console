@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Save, FileText, Upload, Calendar, AlertCircle } from 'lucide-react';
+import { X, Save, FileText, Upload, Calendar, AlertCircle, Shield, HardDrive } from 'lucide-react';
 
 export default function DocumentationSettingsModal({ isOpen, onClose }) {
   const [settings, setSettings] = useState({
@@ -12,15 +12,26 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
     fileNameRegex: '.*',
     uploadDeadline: '',
     allowedProjectsForDownload: ['general'],
-    allowedDocuments: {} // { projectId: { docId: true } }
+    allowedDocuments: {},
+    // New settings
+    enableVirusScanning: false,
+    defaultStorageProvider: 'server'
   });
 
   const [projects, setProjects] = useState([{ _id: 'general', name: 'General' }]);
-  const [documents, setDocuments] = useState({}); // { projectId: [{ _id, name }] }
+  const [documents, setDocuments] = useState({});
   const [expandedProjects, setExpandedProjects] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState({ type: '', message: '' });
   const [isLoadingDocuments, setIsLoadingDocuments] = useState({});
+
+  const STORAGE_PROVIDERS = [
+    { id: 'server', name: 'Server Storage', description: 'Store on application server (GridFS)' },
+    { id: 'google-drive', name: 'Google Drive', description: 'Store on Google Drive' },
+    { id: 'onedrive', name: 'Microsoft OneDrive', description: 'Store on OneDrive' },
+    { id: 'mega', name: 'Mega', description: 'Store on Mega cloud' },
+    { id: 'mediafire', name: 'MediaFire', description: 'Store on MediaFire' },
+  ];
 
   useEffect(() => {
     if (isOpen) {
@@ -125,7 +136,10 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
             fileNameRegex: data.fileNameRegex || '.*',
             uploadDeadline: data.uploadDeadline ? new Date(data.uploadDeadline).toISOString().split('T')[0] : '',
             allowedProjectsForDownload: Array.isArray(data.allowedProjectsForDownload) ? data.allowedProjectsForDownload : ['general'],
-            allowedDocuments: data.allowedDocuments || {}
+            allowedDocuments: data.allowedDocuments || {},
+            // New settings
+            enableVirusScanning: data.enableVirusScanning || false,
+            defaultStorageProvider: data.defaultStorageProvider || 'server'
           });
           console.log('Settings state updated');
         } else {
@@ -194,13 +208,15 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
         allowedProjectsForDownload: Array.isArray(settings.allowedProjectsForDownload)
           ? settings.allowedProjectsForDownload
           : ['general'],
-        // Clean up allowedDocuments to only include selected projects
         allowedDocuments: Object.entries(settings.allowedDocuments || {}).reduce((acc, [projectId, docs]) => {
           if (settings.allowedProjectsForDownload?.includes(projectId) && docs && typeof docs === 'object') {
             acc[projectId] = docs;
           }
           return acc;
-        }, {})
+        }, {}),
+        // New settings
+        enableVirusScanning: settings.enableVirusScanning,
+        defaultStorageProvider: settings.defaultStorageProvider
       };
 
       console.log('Sending settings:', JSON.stringify(settingsToSave, null, 2));
@@ -357,7 +373,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-end justify-center z-50 transition-opacity duration-300">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity duration-300">
       <div className="bg-white shadow-2xl w-full max-w-2xl h-[100vh] sm:h-[90vh] sm:rounded-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:slide-in-from-bottom-8 duration-300">
         <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-white z-10">
           <div className="flex justify-between items-center mb-4">
@@ -406,6 +422,77 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                   <label htmlFor="allowInternUpload" className="ml-2 block text-sm font-medium text-gray-700">
                     Allow Interns to Upload Documents
                   </label>
+                </div>
+
+                {/* Security Settings Section */}
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    Security Settings
+                  </h3>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="enableVirusScanning"
+                        checked={settings.enableVirusScanning}
+                        onChange={(e) => setSettings(prev => ({
+                          ...prev,
+                          enableVirusScanning: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-blue-600 rounded mt-0.5"
+                      />
+                      <div className="ml-2">
+                        <label htmlFor="enableVirusScanning" className="text-sm font-medium text-gray-700">
+                          Enable Virus Scanning
+                        </label>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Scan uploaded files for viruses and malware using Cloudmersive API (requires API key in .env.local)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Storage Settings Section */}
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <HardDrive className="w-4 h-4" />
+                    Storage Settings
+                  </h3>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Default Storage Provider
+                      </label>
+                      <div className="space-y-2">
+                        {STORAGE_PROVIDERS.map(provider => (
+                          <label
+                            key={provider.id}
+                            className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                          >
+                            <input
+                              type="radio"
+                              name="storageProvider"
+                              value={provider.id}
+                              checked={settings.defaultStorageProvider === provider.id}
+                              onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                defaultStorageProvider: e.target.value
+                              }))}
+                              className="h-4 w-4 text-blue-600"
+                            />
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-gray-700">{provider.name}</p>
+                              <p className="text-xs text-gray-500">{provider.description}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="border-t pt-4">
