@@ -92,7 +92,7 @@ function Checkbox({ checked, onChange }) {
 
 // ─── Dropdown menu (portal-safe, fixed position) ─────────────────────────────
 
-function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, onOpenExternally }) {
+function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicate, onMove, onVersionHistory, onToggleLock, onDelete, onOpenExternally, onShare }) {
   const menuRef = useRef(null);
 
   // Position the menu relative to the trigger button
@@ -130,6 +130,7 @@ function ContextMenu({ item, isFolder, onClose, triggerRef, onRename, onDuplicat
   if (!isFolder) {
     actions.push(
       { icon: History, label: 'Version History', fn: onVersionHistory, cls: 'text-gray-700' },
+      { icon: Share2,  label: 'Share',             fn: onShare,          cls: 'text-emerald-600' },
       {
         icon: item.isPasswordProtected ? Unlock : Lock,
         label: item.isPasswordProtected ? 'Remove Password' : 'Add Password',
@@ -271,6 +272,7 @@ function GridCard({ item, isFolder, selected, selectionMode, onClick, onDownload
           onToggleLock={onToggleLock}
           onDelete={onDelete}
           onOpenExternally={onOpenExternally}
+          onShare={onShare}
         />
       )}
     </div>
@@ -371,6 +373,7 @@ function ListRow({ item, isFolder, selected, selectionMode, onClick, onDownload,
               onToggleLock={onToggleLock}
               onDelete={onDelete}
               onOpenExternally={onOpenExternally}
+              onShare={onShare}
             />
           )}
         </div>
