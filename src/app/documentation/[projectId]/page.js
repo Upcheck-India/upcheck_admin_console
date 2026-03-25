@@ -26,6 +26,7 @@ import MoveModal from '../components/MoveModal';
 import ShareLinksModal from '../components/ShareLinksModal';
 import CreateFileModal from '../components/CreateFileModal';
 import FileEditor from '../components/FileEditor';
+import MarkdownViewer from '../components/MarkdownViewer';
 
 const STATUS_CONFIG = {
   active: { label: 'Active', color: 'bg-green-100 text-green-700', icon: Play },
@@ -280,6 +281,21 @@ export default function ProjectDocumentationPage() {
   };
 
   const handleFileViewOrEdit = (file) => {
+    // Check if it's a markdown file
+    const isMarkdown = file.fileType === 'md' || file.mimeType === 'text/markdown';
+
+    if (isMarkdown) {
+      // Use MarkdownViewer for markdown files
+      const canEdit = userRole === 'Admin' || userRole === 'Console admin' ||
+                      memberRole === 'Project Manager' || memberRole === 'Contributor';
+      if (canEdit) {
+        setEditingFile(file);
+      } else {
+        setViewingFile(file);
+      }
+      return;
+    }
+
     // Check if it's a created inline file (txt or docx)
     const isInlineFile = file.fileType === 'txt' || file.fileType === 'docx' ||
                          file.mimeType === 'text/plain' ||
@@ -486,18 +502,44 @@ export default function ProjectDocumentationPage() {
     setSharingFile(file);
   };
 
-  const handleOpenExternally = (file) => {
-    // Open file in Microsoft Office Online Viewer
+  const handleOpenExternally = async (file) => {
+    // Open file in Microsoft Office Online Viewer or Google Docs Viewer
     const isDocx = file.fileType === 'docx' || file.mimeType?.includes('wordprocessingml');
     const isXlsx = file.fileType === 'xlsx' || file.mimeType?.includes('spreadsheetml');
     const isPptx = file.fileType === 'pptx' || file.mimeType?.includes('presentationml');
+    const isPdf = file.fileType === 'pdf' || file.mimeType?.includes('pdf');
 
-    if (isDocx || isXlsx || isPptx) {
-      // For Office Online, we need a publicly accessible URL
-      // Using the download endpoint with a public URL pattern
-      const fileUrl = `${window.location.origin}/api/download/${file.fileId}`;
-      const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(fileUrl)}`;
-      window.open(viewerUrl, '_blank');
+    if (isDocx || isXlsx || isPptx || isPdf) {
+      try {
+        // Generate a temporary public URL
+        const response = await fetch(`/api/resources/${file._id}/public-view`);
+        const data = await response.json();
+
+        if (response.ok && data.publicUrl) {
+          const publicUrl = data.publicUrl;
+
+          // Determine which viewer to use
+          if (isDocx || isXlsx || isPptx) {
+            // Microsoft Office Online Viewer
+            const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(publicUrl)}`;
+            window.open(viewerUrl, '_blank');
+          } else if (isPdf) {
+            // Google Docs Viewer for PDF
+            const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(publicUrl)}&embedded=true`;
+            window.open(viewerUrl, '_blank');
+          }
+
+          // Notify user about token expiration
+          setTimeout(() => {
+            alert(`Note: The external viewer link will expire in 1 hour. Refresh the page to generate a new link.`);
+          }, 1000);
+        } else {
+          alert('Failed to generate public view URL. Please try downloading the file instead.');
+        }
+      } catch (error) {
+        console.error('Error generating public view URL:', error);
+        alert('Failed to open in external viewer. Please download the file instead.');
+      }
     }
   };
 
@@ -1204,12 +1246,21 @@ export default function ProjectDocumentationPage() {
 
       {/* File Editor Modal */}
       {editingFile && (
-        <FileEditor
-          file={editingFile}
-          onClose={() => setEditingFile(null)}
-          canEdit={true}
-          onSaved={handleFileSave}
-        />
+        (editingFile.fileType === 'md' || editingFile.mimeType === 'text/markdown') ? (
+          <MarkdownViewer
+            file={editingFile}
+            onClose={() => setEditingFile(null)}
+            canEdit={true}
+            onSaved={handleFileSave}
+          />
+        ) : (
+          <FileEditor
+            file={editingFile}
+            onClose={() => setEditingFile(null)}
+            canEdit={true}
+            onSaved={handleFileSave}
+          />
+        )
       )}
 
       {/* Share Modal */}

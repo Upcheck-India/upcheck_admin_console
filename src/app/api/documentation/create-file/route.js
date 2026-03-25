@@ -68,8 +68,8 @@ export async function POST(req) {
       return NextResponse.json({ error: 'File name is required' }, { status: 400 });
     }
 
-    if (!type || !['txt', 'docx'].includes(type)) {
-      return NextResponse.json({ error: 'File type must be "txt" or "docx"' }, { status: 400 });
+    if (!type || !['txt', 'docx', 'md'].includes(type)) {
+      return NextResponse.json({ error: 'File type must be "txt", "docx", or "md"' }, { status: 400 });
     }
 
     if (!projectId) {
@@ -138,9 +138,13 @@ export async function POST(req) {
       const docxContent = await createSimpleDocX(content);
       fileContent = Buffer.from(docxContent, 'base64');
       mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    } else if (type === 'md') {
+      // For Markdown, store as plain text
+      fileContent = Buffer.from(content, 'utf-8');
+      mimeType = 'text/markdown';
     }
 
-    const fileName = `${name.trim()}${type === 'txt' ? '.txt' : '.docx'}`;
+    const fileName = `${name.trim()}${type === 'txt' ? '.txt' : type === 'docx' ? '.docx' : '.md'}`;
     const bucket = new GridFSBucket(db);
 
     // Upload to GridFS

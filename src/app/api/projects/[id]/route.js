@@ -2,6 +2,20 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
+// Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
+function sanitizeTag(tag) {
+  if (typeof tag !== 'string') return null;
+  const sanitized = tag.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return sanitized.slice(0, 20) || null;
+}
+
+// Sanitize tags array
+function sanitizeTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  const sanitized = tags.map(sanitizeTag).filter(Boolean);
+  return [...new Set(sanitized)];
+}
+
 // PUT - Update a project by ID
 export async function PUT(req, { params }) {
   try {
@@ -38,23 +52,28 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can edit this project.' }, { status: 403 });
     }
 
-    const { name, description, logo, members, githubRepoUrl, status } = await req.json();
+    const { name, description, logo, members, githubRepoUrl, status, tags } = await req.json();
 
     // Build update object dynamically to only update provided fields
     const updateFields = { updatedAt: new Date() };
-    
+
     if (name !== undefined) updateFields.name = name.trim();
     if (description !== undefined) updateFields.description = description?.trim() || '';
     if (logo !== undefined) updateFields.logo = logo || '';
     if (members !== undefined) updateFields.members = members;
     if (githubRepoUrl !== undefined) updateFields.githubRepoUrl = githubRepoUrl || '';
-    
+
     // Validate and set status if provided
     if (status !== undefined) {
       const validStatuses = ['active', 'ideation', 'paused', 'shelved', 'archived', 'dismissed'];
       if (validStatuses.includes(status)) {
         updateFields.status = status;
       }
+    }
+
+    // Sanitize and set tags if provided
+    if (tags !== undefined) {
+      updateFields.tags = sanitizeTags(tags);
     }
 
     const updateData = { $set: updateFields };

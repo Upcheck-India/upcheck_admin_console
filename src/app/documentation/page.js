@@ -7,7 +7,7 @@ import {
   Folder, Plus, Search, Grid, List, LogOut,
   Settings, ChevronDown, FileText, RefreshCw, Home,
   FolderOpen, Upload, SortAsc, X, CheckCircle2,
-  AlertCircle, Info, ArrowUpDown, Filter, Link2, Activity
+  AlertCircle, Info, ArrowUpDown, Filter, Link2, Activity, Tag
 } from 'lucide-react';
 import ProjectSpaceCard from './components/ProjectSpaceCard';
 import CreateProjectModal from './components/CreateProjectModal';
@@ -133,6 +133,7 @@ export default function DocumentationPage() {
   const [loading, setLoading]         = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedTag, setSelectedTag]   = useState(null);
   const [sortBy, setSortBy]           = useState('name_asc');
   const [viewMode, setViewMode]       = useState('grid');
   const [showCreateModal, setShowCreateModal]       = useState(false);
@@ -153,6 +154,7 @@ export default function DocumentationPage() {
       if (e.key === 'Escape') {
         setShowUserDropdown(false);
         setShowSortMenu(false);
+        setSelectedTag(null);
       }
     };
     window.addEventListener('keydown', handler);
@@ -286,6 +288,15 @@ export default function DocumentationPage() {
 
   // ── Filtering + Sorting ──────────────────────────────────────────────────────
 
+  // Collect all unique tags from projects
+  const allTags = [...new Set(projects.flatMap(p => p.tags || []))].sort();
+  const tagCounts = projects.reduce((acc, p) => {
+    (p.tags || []).forEach(tag => {
+      acc[tag] = (acc[tag] || 0) + 1;
+    });
+    return acc;
+  }, {});
+
   const statusCounts = projects.reduce((acc, p) => {
     acc[p.status] = (acc[p.status] || 0) + 1;
     return acc;
@@ -296,7 +307,8 @@ export default function DocumentationPage() {
       const q = searchQuery.toLowerCase();
       const matchSearch = p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q);
       const matchStatus = statusFilter === 'all' || p.status === statusFilter;
-      return matchSearch && matchStatus;
+      const matchTag = !selectedTag || (p.tags && p.tags.includes(selectedTag));
+      return matchSearch && matchStatus && matchTag;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -507,6 +519,52 @@ export default function DocumentationPage() {
               })}
             </div>
 
+            {/* Tag filter pills */}
+            {allTags.length > 0 && (
+              <>
+                <div className="w-px h-6 bg-gray-300 hidden sm:block" />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    onClick={() => setSelectedTag(null)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      !selectedTag
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Tag className="w-3 h-3" />
+                    All Tags
+                  </button>
+                  {allTags.slice(0, 15).map(tag => {
+                    const count = tagCounts[tag] || 0;
+                    const active = selectedTag === tag;
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => setSelectedTag(active ? null : tag)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                          active
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-white border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Tag className={`w-3 h-3 ${active ? 'text-white' : 'text-emerald-600'}`} />
+                        {tag}
+                        {count > 0 && (
+                          <span className={`${active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'} px-1.5 py-0.5 rounded-full text-[10px] font-semibold`}>
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                  {allTags.length > 15 && (
+                    <span className="text-xs text-gray-400 px-2">+{allTags.length - 15} more</span>
+                  )}
+                </div>
+              </>
+            )}
+
             <div className="sm:ml-auto flex items-center gap-2">
               {/* Sort */}
               <div className="relative">
@@ -642,11 +700,13 @@ export default function DocumentationPage() {
               <p className="text-sm text-gray-500 mt-1">
                 {searchQuery
                   ? `Nothing matched "${searchQuery}"`
+                  : selectedTag
+                  ? `No projects with tag "${selectedTag}" found`
                   : `No ${statusFilter} projects found`
                 }
               </p>
               <button
-                onClick={() => { setSearchQuery(''); setStatusFilter('all'); }}
+                onClick={() => { setSearchQuery(''); setStatusFilter('all'); setSelectedTag(null); }}
                 className="mt-4 text-sm text-blue-600 hover:underline"
               >
                 Clear filters

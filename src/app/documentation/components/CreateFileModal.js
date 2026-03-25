@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, FileCode, Folder, ChevronDown, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, FileText, FileCode, Folder, ChevronDown, AlertCircle, CheckCircle2, Loader2, BookOpen } from 'lucide-react';
 
 export default function CreateFileModal({ isOpen, onClose, onCreate, defaultProjectId = null, defaultFolderId = null, userProjects = [] }) {
   const [fileName, setFileName] = useState('');
-  const [fileType, setFileType] = useState('txt'); // 'txt' or 'docx'
+  const [fileType, setFileType] = useState('txt'); // 'txt', 'docx', or 'md'
   const [content, setContent] = useState('');
   const [projectId, setProjectId] = useState(defaultProjectId || '');
   const [folderId, setFolderId] = useState(defaultFolderId || '');
@@ -150,13 +150,17 @@ export default function CreateFileModal({ isOpen, onClose, onCreate, defaultProj
             <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
               {fileType === 'txt' ? (
                 <FileText className="w-5 h-5 text-blue-600" />
-              ) : (
+              ) : fileType === 'docx' ? (
                 <FileCode className="w-5 h-5 text-blue-600" />
+              ) : (
+                <BookOpen className="w-5 h-5 text-emerald-600" />
               )}
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900 leading-tight">Create New File</h2>
-              <p className="text-xs text-gray-400 mt-0.5">Create a text document directly</p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                {fileType === 'txt' ? 'Create a plain text document' : fileType === 'docx' ? 'Create a Word document' : 'Create a Markdown document'}
+              </p>
             </div>
           </div>
           <button
@@ -191,7 +195,7 @@ export default function CreateFileModal({ isOpen, onClose, onCreate, defaultProj
                 type="text"
                 value={fileName}
                 onChange={(e) => setFileName(e.target.value)}
-                placeholder={`e.g., Meeting Notes${fileType === 'txt' ? '.txt' : '.docx'}`}
+                placeholder={`e.g., Meeting Notes${fileType === 'txt' ? '.txt' : fileType === 'docx' ? '.docx' : '.md'}`}
                 className="w-full px-3.5 py-2.5 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all pr-16"
                 autoFocus
               />
@@ -250,30 +254,42 @@ export default function CreateFileModal({ isOpen, onClose, onCreate, defaultProj
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
               File Type <span className="text-gray-300 font-normal normal-case">(select before entering content)</span>
             </label>
-            <div className="flex gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setFileType('txt')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 transition-all ${
                   fileType === 'txt'
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span className="text-sm font-medium">Plain Text (.txt)</span>
+                <span className="text-sm font-medium">Plain Text</span>
               </button>
               <button
                 type="button"
                 onClick={() => setFileType('docx')}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 transition-all ${
+                className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 transition-all ${
                   fileType === 'docx'
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                 }`}
               >
                 <FileCode className="w-4 h-4" />
-                <span className="text-sm font-medium">Word Document (.docx)</span>
+                <span className="text-sm font-medium">Word</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFileType('md')}
+                className={`flex items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 transition-all ${
+                  fileType === 'md'
+                    ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="text-sm font-medium">Markdown</span>
               </button>
             </div>
           </div>
@@ -291,12 +307,28 @@ export default function CreateFileModal({ isOpen, onClose, onCreate, defaultProj
                   placeholder="Enter your text content here..."
                   className="w-full h-[300px] px-3.5 py-3 text-sm font-mono border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all resize-none"
                 />
-              ) : (
+              ) : fileType === 'docx' ? (
                 <textarea
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   placeholder="Enter your document content here. Basic formatting will be preserved when opened in Word..."
                   className="w-full h-[300px] px-3.5 py-3 text-sm border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 outline-none transition-all resize-none"
+                />
+              ) : (
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder="# Heading
+
+Write your **markdown** content here...
+
+## Features
+- Lists
+- **Bold** and *italic*
+- `code`
+- [links](url)
+"
+                  className="w-full h-[300px] px-3.5 py-3 text-sm font-mono border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 outline-none transition-all resize-none"
                 />
               )}
             </div>
@@ -304,7 +336,9 @@ export default function CreateFileModal({ isOpen, onClose, onCreate, defaultProj
               <AlertCircle className="w-3 h-3" />
               {fileType === 'txt'
                 ? 'Plain text format, ideal for code, logs, and simple notes.'
-                : 'Word document format, suitable for formatted documents.'}
+                : fileType === 'docx'
+                ? 'Word document format, suitable for formatted documents.'
+                : 'Markdown format with live preview, auto-save, and syntax highlighting.'}
             </p>
           </div>
         </div>

@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Save, Settings, UploadCloud, Loader2, CheckCircle2,
   XCircle, AlertCircle, Trash2, Github, Image as ImageIcon,
-  Folder, FileText, Code, PieChart, Database, Globe, Shield, Zap
+  Folder, FileText, Code, PieChart, Database, Globe, Shield, Zap,
+  Tag, X
 } from 'lucide-react';
 import { uploadFile } from '../../../lib/upload';
 
@@ -165,6 +166,63 @@ function LogoUploader({ currentLogoUrl, logoFile, onFileChange, onUrlChange, onC
   );
 }
 
+// ─── Tag Input Component ──────────────────────────────────────────────────────
+
+function TagInput({ tags, onChange }) {
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef(null);
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const newTag = inputValue.trim().toLowerCase();
+      if (newTag && !tags.includes(newTag)) {
+        onChange([...tags, newTag]);
+      }
+      setInputValue('');
+    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      onChange(tags.slice(0, -1));
+    }
+  };
+
+  const removeTag = (tagToRemove) => {
+    onChange(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  return (
+    <div
+      onClick={() => inputRef.current?.focus()}
+      className="flex flex-wrap gap-2 p-3 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all min-h-[48px] cursor-text"
+    >
+      {tags.map((tag) => (
+        <span
+          key={tag}
+          className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded-full"
+        >
+          <Tag className="w-3 h-3" />
+          {tag}
+          <button
+            type="button"
+            onClick={() => removeTag(tag)}
+            className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={tags.length === 0 ? "Add tags (press Enter or comma to add)" : ""}
+        className="flex-1 min-w-[120px] outline-none text-sm bg-transparent"
+      />
+    </div>
+  );
+}
+
 // ─── ProjectSettings ──────────────────────────────────────────────────────────
 
 export default function ProjectSettings({ project, onProjectUpdate }) {
@@ -174,6 +232,7 @@ export default function ProjectSettings({ project, onProjectUpdate }) {
   const [logoUrl,     setLogoUrl]     = useState(project?.logo           || '');
   const [status,      setStatus]      = useState(project?.status         || 'active');
   const [repoUrl,     setRepoUrl]     = useState(project?.githubRepoUrl  || '');
+  const [tags,        setTags]        = useState(project?.tags           || []);
 
   const [isSubmitting,     setIsSubmitting]     = useState(false);
   const [error,            setError]            = useState(null);
@@ -190,9 +249,10 @@ export default function ProjectSettings({ project, onProjectUpdate }) {
       logoUrl     !== (project.logo          || '') ||
       status      !== (project.status        || 'active') ||
       repoUrl     !== (project.githubRepoUrl || '') ||
-      logoFile    !== null
+      logoFile    !== null ||
+      JSON.stringify(tags) !== JSON.stringify(project.tags || [])
     );
-  }, [name, description, logoUrl, status, repoUrl, logoFile, project]);
+  }, [name, description, logoUrl, status, repoUrl, logoFile, project, tags]);
 
   // Auto-clear success banner
   useEffect(() => {
@@ -227,6 +287,7 @@ export default function ProjectSettings({ project, onProjectUpdate }) {
           logo:         uploadedLogoUrl,
           status,
           githubRepoUrl: repoUrl.trim(),
+          tags:         tags,
         }),
       });
 
@@ -252,6 +313,7 @@ export default function ProjectSettings({ project, onProjectUpdate }) {
     setStatus(project?.status         || 'active');
     setRepoUrl(project?.githubRepoUrl  || '');
     setLogoFile(null);
+    setTags(project?.tags || []);
     setError(null);
     setSuccess(false);
     setNameError('');
@@ -381,6 +443,20 @@ export default function ProjectSettings({ project, onProjectUpdate }) {
               onClear={() => { setLogoFile(null); setLogoUrl(''); }}
               onPresetSelect={(presetId) => { setLogoUrl(presetId); setLogoFile(null); }}
             />
+          </div>
+
+          {/* Tags */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Tags <span className="text-gray-300 font-normal normal-case">optional</span>
+            </label>
+            <TagInput
+              tags={tags}
+              onChange={setTags}
+            />
+            <p className="text-xs text-gray-400 mt-1.5 ml-1">
+              Press Enter or comma to add a tag. Tags help you search and filter projects.
+            </p>
           </div>
         </div>
       </div>

@@ -5,13 +5,13 @@ import {
   File, Folder, Download, MoreVertical, Edit2, Trash2,
   Copy, Move, Lock, Unlock, History, Grid, List,
   FileText, FileImage, FileVideo, FileArchive, FileCode,
-  ChevronRight, Share2, Music, Home, X
+  ChevronRight, Share2, Music, Home, X, BookOpen
 } from 'lucide-react';
 
 // ─── File type → icon map ────────────────────────────────────────────────────
 
 const EXT_MAP = {
-  pdf:  FileText,  doc:  FileText,  docx: FileText,  txt: FileText,  md: FileText,
+  pdf:  FileText,  doc:  FileText,  docx: FileText,  txt: FileText,  md: BookOpen,
   jpg:  FileImage, jpeg: FileImage, png:  FileImage,  gif: FileImage, svg: FileImage, webp: FileImage,
   mp4:  FileVideo, mov:  FileVideo, avi:  FileVideo,  webm: FileVideo,
   mp3:  Music,     wav:  Music,     flac: Music,      ogg: Music,
@@ -21,7 +21,7 @@ const EXT_MAP = {
 };
 
 const EXT_COLORS = {
-  pdf:  'text-red-500',   doc:  'text-blue-600',  docx: 'text-blue-600',  txt: 'text-gray-500', md: 'text-gray-600',
+  pdf:  'text-red-500',   doc:  'text-blue-600',  docx: 'text-blue-600',  txt: 'text-gray-500', md: 'text-emerald-600',
   jpg:  'text-pink-500',  jpeg: 'text-pink-500',  png:  'text-pink-500',  gif: 'text-purple-500', svg: 'text-orange-500', webp: 'text-pink-400',
   mp4:  'text-violet-500', mov: 'text-violet-500', avi: 'text-violet-500', webm: 'text-violet-500',
   mp3:  'text-indigo-500', wav: 'text-indigo-500', flac: 'text-indigo-500', ogg: 'text-indigo-500',

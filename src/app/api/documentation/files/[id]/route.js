@@ -65,9 +65,9 @@ export async function GET(req, { params }) {
         fileStream.on('error', reject);
         fileStream.on('end', () => {
           const buffer = Buffer.concat(chunks);
-          // For text files, return as string
+          // For text files and markdown, return as string
           // For DOCX files, return as base64
-          if (contentType === 'text/plain') {
+          if (contentType === 'text/plain' || contentType === 'text/markdown') {
             resolve(buffer.toString('utf-8'));
           } else {
             resolve(buffer.toString('base64'));
@@ -81,7 +81,7 @@ export async function GET(req, { params }) {
       name: resource.name,
       content: content,
       contentType: contentType,
-      fileType: resource.fileType || (contentType === 'text/plain' ? 'txt' : 'docx'),
+      fileType: resource.fileType || (contentType === 'text/plain' ? 'txt' : contentType === 'text/markdown' ? 'md' : 'docx'),
       projectId: resource.projectId,
       folderId: resource.folderId,
       version: resource.currentVersion
@@ -161,10 +161,10 @@ export async function PUT(req, { params }) {
 
     // Prepare new file content
     const mimeType = resource.mimeType || 'text/plain';
-    const fileType = resource.fileType || (mimeType === 'text/plain' ? 'txt' : 'docx');
+    const fileType = resource.fileType || (mimeType === 'text/plain' ? 'txt' : mimeType === 'text/markdown' ? 'md' : 'docx');
 
     let fileContent;
-    if (fileType === 'txt') {
+    if (fileType === 'txt' || fileType === 'md') {
       fileContent = Buffer.from(content, 'utf-8');
     } else if (fileType === 'docx') {
       // For DOCX, we'll create a simple HTML-based DOCX

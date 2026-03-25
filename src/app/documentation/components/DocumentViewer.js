@@ -5,8 +5,9 @@ import {
   X, Download, ZoomIn, ZoomOut, Minimize2, Maximize2,
   Globe, Lock, AlertCircle,
   FileText, FileImage, FileVideo, Music, FileCode, FileArchive,
-  Loader2, Eye, EyeOff, ExternalLink
+  Loader2, Eye, EyeOff, ExternalLink, BookOpen
 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 // ─── File type detection ──────────────────────────────────────────────────────
 
@@ -17,7 +18,8 @@ function getFileType(fileName, mimeType = '') {
   if (['mp4', 'mov', 'avi', 'webm', 'mkv', 'flv'].includes(ext))                       return 'video';
   if (['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a'].includes(ext))                       return 'audio';
   if (['js','jsx','ts','tsx','py','java','go','rs','c','cpp','h','hpp','rb','php'].includes(ext)) return 'code';
-  if (['html', 'css', 'json', 'xml', 'yaml', 'yml', 'md', 'txt'].includes(ext))        return 'text';
+  if (['md'].includes(ext))                                                              return 'markdown';
+  if (['html', 'css', 'json', 'xml', 'yaml', 'yml', 'txt'].includes(ext))              return 'text';
   if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext))                          return 'archive';
   if (['docx'].includes(ext))                                                            return 'docx';
   if (['doc'].includes(ext))                                                             return 'doc';
@@ -27,6 +29,7 @@ function getFileType(fileName, mimeType = '') {
   if (mimeType.includes('image/')) return 'image';
   if (mimeType.includes('video/')) return 'video';
   if (mimeType.includes('audio/')) return 'audio';
+  if (mimeType.includes('markdown') || (mimeType.includes('text/') && ext === 'md')) return 'markdown';
   if (mimeType.includes('text/'))  return 'text';
   if (mimeType.includes('wordprocessingml') || mimeType.includes('msword')) return 'docx';
   if (mimeType.includes('spreadsheetml') || mimeType.includes('ms-excel'))  return 'spreadsheet';
@@ -104,10 +107,9 @@ function DownloadBtn({ file, small = false }) {
 
 // ─── ImageViewer ──────────────────────────────────────────────────────────────
 
-function ImageViewer({ file, onClose, canDownload }) {
-  const [zoom,         setZoom]         = useState(1);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showInfo,     setShowInfo]     = useState(false);
+function ImageViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
+  const [zoom,     setZoom]     = useState(1);
+  const [showInfo, setShowInfo] = useState(false);
   const containerRef = useRef(null);
 
   // Bug fix: define handler with useCallback so the ref in useEffect is stable
@@ -155,7 +157,7 @@ function ImageViewer({ file, onClose, canDownload }) {
           <button onClick={() => setZoom(z => Math.min(3, z + 0.25))} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors" title="Zoom in">
             <ZoomIn className="w-4 h-4" />
           </button>
-          <button onClick={() => setIsFullscreen(v => !v)} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors" title="Fullscreen">
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-white/10 rounded-lg text-white transition-colors" title="Fullscreen">
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
           {canDownload && <DownloadBtn file={file} small />}
@@ -179,12 +181,12 @@ function ImageViewer({ file, onClose, canDownload }) {
 
 // ─── PDFViewer ────────────────────────────────────────────────────────────────
 
-function PDFViewer({ file, onClose, canDownload }) {
+function PDFViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
   const [loading,  setLoading]  = useState(true);
   const [showInfo, setShowInfo] = useState(false);
 
   return (
-    <div className="flex flex-col h-[70vh] bg-gray-100 rounded-xl overflow-hidden">
+    <div className={`flex flex-col bg-gray-100 rounded-xl overflow-hidden ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full h-[70vh]'}`}>
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors shrink-0">
@@ -196,6 +198,9 @@ function PDFViewer({ file, onClose, canDownload }) {
         <div className="flex items-center gap-2 shrink-0">
           <button onClick={() => setShowInfo(v => !v)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="File info">
             <FileText className="w-4 h-4" />
+          </button>
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </button>
           {canDownload && <DownloadBtn file={file} small />}
         </div>
@@ -220,14 +225,18 @@ function PDFViewer({ file, onClose, canDownload }) {
 
 // ─── VideoViewer ──────────────────────────────────────────────────────────────
 
-function VideoViewer({ file, onClose, canDownload }) {
+function VideoViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
   return (
-    // Bug fix: added `relative` so absolute children position correctly
-    <div className="relative flex flex-col items-center justify-center bg-black w-full min-h-[400px]">
+    <div className={`relative flex flex-col items-center justify-center bg-black ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full min-h-[400px]'}`}>
       <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
-        <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors">
-          <X className="w-5 h-5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+          <button onClick={onToggleFullscreen} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+        </div>
         {canDownload && <DownloadBtn file={file} small />}
       </div>
       <div className="w-full max-w-5xl aspect-video">
@@ -247,12 +256,15 @@ function VideoViewer({ file, onClose, canDownload }) {
 
 // ─── AudioViewer ──────────────────────────────────────────────────────────────
 
-function AudioViewer({ file, onClose, canDownload }) {
+function AudioViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
   return (
-    <div className="relative flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 to-purple-900 w-full py-12">
-      <div className="absolute top-4 left-4">
+    <div className={`relative flex flex-col items-center justify-center bg-gradient-to-br from-indigo-900 to-purple-900 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full py-12'}`}>
+      <div className="absolute top-4 left-4 flex items-center gap-2 z-10">
         <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors">
           <X className="w-5 h-5" />
+        </button>
+        <button onClick={onToggleFullscreen} className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors" title="Fullscreen">
+          {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </button>
       </div>
       <div className="flex flex-col items-center gap-6">
@@ -274,7 +286,7 @@ function AudioViewer({ file, onClose, canDownload }) {
 
 // ─── CodeViewer ───────────────────────────────────────────────────────────────
 
-function CodeViewer({ file, onClose, canDownload }) {
+function CodeViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
@@ -287,7 +299,7 @@ function CodeViewer({ file, onClose, canDownload }) {
   }, [file]);
 
   return (
-    <div className="flex flex-col h-[70vh] bg-white rounded-xl overflow-hidden border border-gray-200">
+    <div className={`flex flex-col bg-white rounded-xl overflow-hidden border border-gray-200 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full h-[70vh]'}`}>
       <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors shrink-0">
@@ -296,7 +308,12 @@ function CodeViewer({ file, onClose, canDownload }) {
           <FileCode className="w-5 h-5 text-emerald-500 shrink-0" />
           <span className="font-medium text-gray-900 truncate">{file.name}</span>
         </div>
-        {canDownload && <DownloadBtn file={file} small />}
+        <div className="flex items-center gap-2 shrink-0">
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+          {canDownload && <DownloadBtn file={file} small />}
+        </div>
       </div>
       <div className="flex-1 overflow-auto bg-gray-900">
         {loading ? (
@@ -322,7 +339,7 @@ function CodeViewer({ file, onClose, canDownload }) {
 // Works with private/authenticated file URLs since the fetch goes through
 // your own API — no external viewer needs to reach the file.
 
-function DocxViewer({ file, onClose, canDownload }) {
+function DocxViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
   const [html,    setHtml]    = useState('');
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
@@ -365,7 +382,7 @@ function DocxViewer({ file, onClose, canDownload }) {
   }, [file]);
 
   return (
-    <div className="flex flex-col h-[70vh] bg-white rounded-xl overflow-hidden border border-gray-200">
+    <div className={`flex flex-col bg-white rounded-xl overflow-hidden border border-gray-200 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full h-[70vh]'}`}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -378,6 +395,9 @@ function DocxViewer({ file, onClose, canDownload }) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-xs text-gray-400 hidden sm:inline">{formatFileSize(file.fileSize)}</span>
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
           {canDownload && <DownloadBtn file={file} small />}
         </div>
       </div>
@@ -415,12 +435,171 @@ function DocxViewer({ file, onClose, canDownload }) {
   );
 }
 
+// ─── MarkdownViewer ───────────────────────────────────────────────────────────
+// Renders markdown files with proper formatting using marked.js
+
+function MarkdownViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
+  const [content, setContent] = useState('');
+  const [html, setHtml] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAndParse = async () => {
+      try {
+        // Load marked.js from CDN if not already present
+        if (!window.marked) {
+          await new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js';
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('Failed to load marked.js'));
+            document.head.appendChild(s);
+          });
+        }
+
+        const res = await fetch(fileViewUrl(file));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        if (cancelled) return;
+
+        setContent(text);
+
+        // Parse markdown to HTML and sanitize it
+        const parsed = window.marked.parse(text, {
+          breaks: true,
+          gfm: true,
+          headerIds: false,
+          mangle: false
+        });
+        if (!cancelled) setHtml(DOMPurify.sanitize(parsed));
+      } catch (e) {
+        if (!cancelled) setError(e.message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadAndParse();
+    return () => { cancelled = true; };
+  }, [file]);
+
+  return (
+    <div className={`flex flex-col bg-white rounded-xl overflow-hidden border border-gray-200 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full h-[70vh]'}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
+        <div className="flex items-center gap-3 min-w-0">
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors shrink-0">
+            <X className="w-5 h-5" />
+          </button>
+          <BookOpen className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span className="font-medium text-gray-900 truncate">{file.name}</span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-md shrink-0">MD</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-xs text-gray-400 hidden sm:inline">{formatFileSize(file.fileSize)}</span>
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+          {canDownload && <DownloadBtn file={file} small />}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto bg-white">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full gap-2 text-red-500">
+            <AlertCircle className="w-5 h-5" /><span>{error}</span>
+          </div>
+        ) : (
+          <article
+            className="markdown-preview p-6 max-w-4xl mx-auto"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )}
+      </div>
+
+      <style>{`
+        .markdown-preview {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+          line-height: 1.7;
+          color: #1f2937;
+        }
+        .markdown-preview h1 { font-size: 2em; font-weight: 700; margin: 1.5em 0 0.5em; color: #111827; }
+        .markdown-preview h2 { font-size: 1.5em; font-weight: 600; margin: 1.5em 0 0.5em; color: #1f2937; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.3em; }
+        .markdown-preview h3 { font-size: 1.25em; font-weight: 600; margin: 1.2em 0 0.5em; color: #374151; }
+        .markdown-preview h4 { font-size: 1em; font-weight: 600; margin: 1em 0 0.5em; }
+        .markdown-preview p { margin: 1em 0; }
+        .markdown-preview blockquote {
+          border-left: 4px solid #10b981;
+          padding-left: 1em;
+          margin: 1em 0;
+          color: #6b7280;
+          font-style: italic;
+          background: #f9fafb;
+          padding: 0.75em 1em;
+          border-radius: 0 0.5em 0.5em 0;
+        }
+        .markdown-preview ul, .markdown-preview ol { margin: 1em 0; padding-left: 2em; }
+        .markdown-preview li { margin: 0.5em 0; }
+        .markdown-preview code {
+          background: #f3f4f6;
+          padding: 0.2em 0.4em;
+          border-radius: 0.25em;
+          font-family: 'SF Mono', Monaco, Consolas, monospace;
+          font-size: 0.9em;
+          color: #dc2626;
+        }
+        .markdown-preview pre {
+          background: #1f2937;
+          color: #f9fafb;
+          padding: 1em;
+          border-radius: 0.5em;
+          overflow-x: auto;
+          margin: 1em 0;
+        }
+        .markdown-preview pre code {
+          background: transparent;
+          color: inherit;
+          padding: 0;
+        }
+        .markdown-preview a {
+          color: #059669;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .markdown-preview a:hover { color: #047857; }
+        .markdown-preview table {
+          border-collapse: collapse;
+          width: 100%;
+          margin: 1em 0;
+        }
+        .markdown-preview th, .markdown-preview td {
+          border: 1px solid #e5e7eb;
+          padding: 0.75em;
+          text-align: left;
+        }
+        .markdown-preview th { background: #f9fafb; font-weight: 600; }
+        .markdown-preview tr:nth-child(even) { background: #f9fafb; }
+        .markdown-preview img { max-width: 100%; height: auto; margin: 1em 0; border-radius: 0.5em; }
+        .markdown-preview hr { border: none; border-top: 2px solid #e5e7eb; margin: 2em 0; }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── OfficeOnlineViewer ───────────────────────────────────────────────────────
 // For xlsx, xls, pptx, ppt — uses Microsoft Office Online viewer.
 // Requires the file URL to be publicly reachable. If the file is behind auth,
 // falls back to a download prompt with a clear explanation.
 
-function OfficeOnlineViewer({ file, onClose, canDownload, type }) {
+function OfficeOnlineViewer({ file, onClose, canDownload, type, isFullscreen, onToggleFullscreen }) {
   const [loading, setLoading] = useState(true);
   const [useFallback, setUseFallback] = useState(false);
 
@@ -435,7 +614,7 @@ function OfficeOnlineViewer({ file, onClose, canDownload, type }) {
   // If file is private/internal, Office Online can't reach it — show fallback
   if (!isExternalOrPublic) {
     return (
-      <div className="flex flex-col h-[70vh] bg-white rounded-xl overflow-hidden border border-gray-200">
+      <div className={`flex flex-col bg-white rounded-xl overflow-hidden border border-gray-200 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full h-[70vh]'}`}>
         <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors shrink-0">
@@ -444,7 +623,12 @@ function OfficeOnlineViewer({ file, onClose, canDownload, type }) {
             <TypeIcon className={`w-5 h-5 shrink-0 ${iconColor}`} />
             <span className="font-medium text-gray-900 truncate">{file.name}</span>
           </div>
-          {canDownload && <DownloadBtn file={file} small />}
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            {canDownload && <DownloadBtn file={file} small />}
+          </div>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
           <div className="w-16 h-16 rounded-2xl bg-gray-50 border border-gray-200 flex items-center justify-center">
@@ -469,7 +653,7 @@ function OfficeOnlineViewer({ file, onClose, canDownload, type }) {
   }
 
   return (
-    <div className="flex flex-col h-[70vh] bg-white rounded-xl overflow-hidden border border-gray-200">
+    <div className={`flex flex-col bg-white rounded-xl overflow-hidden border border-gray-200 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full h-[70vh]'}`}>
       <div className="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors shrink-0">
@@ -486,6 +670,9 @@ function OfficeOnlineViewer({ file, onClose, canDownload, type }) {
             className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Open in Office Online">
             <ExternalLink className="w-4 h-4" />
           </a>
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
           {canDownload && <DownloadBtn file={file} small />}
         </div>
       </div>
@@ -513,7 +700,7 @@ function OfficeOnlineViewer({ file, onClose, canDownload, type }) {
 
 // ─── UnknownViewer ────────────────────────────────────────────────────────────
 
-function UnknownViewer({ file, onClose, canDownload }) {
+function UnknownViewer({ file, onClose, canDownload, isFullscreen, onToggleFullscreen }) {
   const fileType = getFileType(file.name, file.mimeType);
   const icons = {
     archive:      <FileArchive className="w-16 h-16 text-amber-500" />,
@@ -526,8 +713,16 @@ function UnknownViewer({ file, onClose, canDownload }) {
     : fileType.charAt(0).toUpperCase() + fileType.slice(1);
 
   return (
-    <div className="flex flex-col items-center justify-center bg-gray-50 w-full py-16">
+    <div className={`flex flex-col items-center justify-center bg-gray-50 ${isFullscreen ? 'fixed inset-0 z-[60]' : 'w-full py-16'}`}>
       <div className="flex flex-col items-center gap-4">
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+          <button onClick={onToggleFullscreen} className="p-2 hover:bg-gray-200 rounded-lg text-gray-500 transition-colors" title="Fullscreen">
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+        </div>
         {icons[fileType] || <FileText className="w-16 h-16 text-gray-400" />}
         <div className="text-center">
           <h3 className="text-gray-900 text-lg font-semibold">{file.name}</h3>
@@ -602,6 +797,7 @@ export default function DocumentViewer({ file, onClose, canDownload = true }) {
   const [passwordError, setPasswordError] = useState('');
   const [verifying,     setVerifying]     = useState(false);
   const [verified,      setVerified]      = useState(false);
+  const [isFullscreen,  setIsFullscreen]  = useState(false);
 
   const fileType = getFileType(file.name, file.mimeType);
 
@@ -644,23 +840,24 @@ export default function DocumentViewer({ file, onClose, canDownload = true }) {
     }
 
     switch (fileType) {
-      case 'image':        return <ImageViewer        file={file} onClose={onClose} canDownload={canDownload} />;
-      case 'pdf':          return <PDFViewer           file={file} onClose={onClose} canDownload={canDownload} />;
-      case 'video':        return <VideoViewer         file={file} onClose={onClose} canDownload={canDownload} />;
-      case 'audio':        return <AudioViewer         file={file} onClose={onClose} canDownload={canDownload} />;
+      case 'image':        return <ImageViewer        file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      case 'pdf':          return <PDFViewer          file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      case 'video':        return <VideoViewer        file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      case 'audio':        return <AudioViewer        file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
       case 'code':
-      case 'text':         return <CodeViewer          file={file} onClose={onClose} canDownload={canDownload} />;
+      case 'text':         return <CodeViewer         file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      case 'markdown':     return <MarkdownViewer     file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
       case 'docx':
-      case 'doc':          return <DocxViewer          file={file} onClose={onClose} canDownload={canDownload} />;
-      case 'spreadsheet':  return <OfficeOnlineViewer  file={file} onClose={onClose} canDownload={canDownload} type="spreadsheet"  />;
-      case 'presentation': return <OfficeOnlineViewer  file={file} onClose={onClose} canDownload={canDownload} type="presentation" />;
-      default:             return <UnknownViewer       file={file} onClose={onClose} canDownload={canDownload} />;
+      case 'doc':          return <DocxViewer         file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      case 'spreadsheet':  return <OfficeOnlineViewer file={file} onClose={onClose} canDownload={canDownload} type="spreadsheet" isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      case 'presentation': return <OfficeOnlineViewer file={file} onClose={onClose} canDownload={canDownload} type="presentation" isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
+      default:             return <UnknownViewer      file={file} onClose={onClose} canDownload={canDownload} isFullscreen={isFullscreen} onToggleFullscreen={() => setIsFullscreen(!isFullscreen)} />;
     }
   };
 
   return (
     <div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center ${isFullscreen ? 'p-0' : 'p-4'}`}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       <style>{`
@@ -671,7 +868,7 @@ export default function DocumentViewer({ file, onClose, canDownload = true }) {
         .animate-modal-in { animation: modal-in 0.2s cubic-bezier(0.16,1,0.3,1); }
       `}</style>
 
-      <div className="animate-modal-in bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+      <div className={`animate-modal-in bg-white rounded-2xl shadow-2xl w-full overflow-hidden ${isFullscreen ? 'max-w-none max-h-none h-screen' : 'max-w-6xl max-h-[90vh]'}`}>
         {showPwInput ? (
           // ── Password gate ──
           <div className="p-8 max-w-md mx-auto">
