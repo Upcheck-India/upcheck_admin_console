@@ -4,28 +4,50 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Activity, FileText, Folder, Upload, Download, Edit2, Trash2,
   Copy, Move, Lock, Unlock, GitBranch, Clock, RefreshCw,
-  ChevronDown, AlertCircle, User
+  ChevronDown, AlertCircle, User, Users
 } from 'lucide-react';
 
 // ─── Action config ────────────────────────────────────────────────────────────
 
 const ACTION_CONFIG = {
-  folder_created:   { icon: Folder,    color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'created folder'               },
-  folder_renamed:   { icon: Edit2,     color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'renamed folder'               },
-  folder_deleted:   { icon: Trash2,    color: 'text-red-500',    bg: 'bg-red-50',     label: 'deleted folder'               },
-  folder_moved:     { icon: Move,      color: 'text-violet-600', bg: 'bg-violet-50',  label: 'moved folder'                 },
-  file_uploaded:    { icon: Upload,    color: 'text-emerald-600',bg: 'bg-emerald-50', label: 'uploaded'                     },
-  file_downloaded:  { icon: Download,  color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'downloaded'                   },
-  file_renamed:     { icon: Edit2,     color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'renamed'                      },
-  file_deleted:     { icon: Trash2,    color: 'text-red-500',    bg: 'bg-red-50',     label: 'deleted'                      },
-  file_duplicated:  { icon: Copy,      color: 'text-indigo-600', bg: 'bg-indigo-50',  label: 'duplicated'                   },
-  file_moved:       { icon: Move,      color: 'text-violet-600', bg: 'bg-violet-50',  label: 'moved'                        },
-  password_added:   { icon: Lock,      color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'added password to'            },
-  password_removed: { icon: Unlock,    color: 'text-gray-500',   bg: 'bg-gray-100',   label: 'removed password from'        },
-  version_created:  { icon: GitBranch, color: 'text-teal-600',   bg: 'bg-teal-50',    label: 'uploaded new version of'      },
-  version_reverted: { icon: RefreshCw, color: 'text-orange-600', bg: 'bg-orange-50',  label: 'reverted version of'          },
-  project_created:  { icon: Folder,    color: 'text-emerald-600',bg: 'bg-emerald-50', label: 'created project'              },
-  project_updated:  { icon: Edit2,     color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'updated project'              },
+  // File actions
+  file_created:     { icon: FileText,  color: 'text-emerald-600',bg: 'bg-emerald-50', label: 'created file'               },
+  file_uploaded:    { icon: Upload,    color: 'text-emerald-600',bg: 'bg-emerald-50', label: 'uploaded'                   },
+  file_downloaded:  { icon: Download,  color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'downloaded'                 },
+  file_renamed:     { icon: Edit2,     color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'renamed'                    },
+  file_deleted:     { icon: Trash2,    color: 'text-red-500',    bg: 'bg-red-50',     label: 'deleted'                    },
+  file_duplicated:  { icon: Copy,      color: 'text-indigo-600', bg: 'bg-indigo-50',  label: 'duplicated'                 },
+  file_moved:       { icon: Move,      color: 'text-violet-600', bg: 'bg-violet-50',  label: 'moved'                      },
+  file_updated:     { icon: Edit2,     color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'updated'                    },
+
+  // Folder actions
+  folder_created:   { icon: Folder,    color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'created folder'             },
+  folder_renamed:   { icon: Edit2,     color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'renamed folder'             },
+  folder_deleted:   { icon: Trash2,    color: 'text-red-500',    bg: 'bg-red-50',     label: 'deleted folder'             },
+  folder_moved:     { icon: Move,      color: 'text-violet-600', bg: 'bg-violet-50',  label: 'moved folder'               },
+  folder_duplicate: { icon: Copy,      color: 'text-indigo-600', bg: 'bg-indigo-50',  label: 'duplicated folder'          },
+
+  // Share actions
+  share_link_created: { icon: Activity, color: 'text-pink-600', bg: 'bg-pink-50',     label: 'created share link for'     },
+  share_link_updated: { icon: Edit2,    color: 'text-pink-600', bg: 'bg-pink-50',     label: 'updated share link for'     },
+  share_link_deleted: { icon: Trash2,   color: 'text-red-500',  bg: 'bg-red-50',     label: 'deleted share link for'     },
+
+  // Member actions
+  member_add:       { icon: Users,     color: 'text-emerald-600',bg: 'bg-emerald-50', label: 'added member to'            },
+  member_remove:    { icon: Users,     color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'removed member from'        },
+  member_role_change: { icon: Users,   color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'changed role for'           },
+
+  // Security actions
+  password_added:   { icon: Lock,      color: 'text-amber-600',  bg: 'bg-amber-50',   label: 'added password to'          },
+  password_removed: { icon: Unlock,    color: 'text-gray-500',   bg: 'bg-gray-100',   label: 'removed password from'      },
+
+  // Version actions
+  version_created:  { icon: GitBranch, color: 'text-teal-600',   bg: 'bg-teal-50',    label: 'uploaded new version of'    },
+  version_reverted: { icon: RefreshCw, color: 'text-orange-600', bg: 'bg-orange-50',  label: 'reverted version of'        },
+
+  // Project actions
+  project_created:  { icon: Folder,    color: 'text-emerald-600',bg: 'bg-emerald-50', label: 'created project'            },
+  project_updated:  { icon: Edit2,     color: 'text-blue-600',   bg: 'bg-blue-50',    label: 'updated project'            },
 };
 
 const FALLBACK_CONFIG = { icon: Activity, color: 'text-gray-500', bg: 'bg-gray-100', label: '' };
@@ -80,6 +102,15 @@ function hue(str = '') {
   return h % 360;
 }
 
+/** Format bytes to human-readable size */
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
 // ─── Group activities by date ─────────────────────────────────────────────────
 
 function groupByDate(activities) {
@@ -114,6 +145,13 @@ function ActivityRow({ activity, isLast }) {
   const username = activity.user?.username || 'Unknown';
   const h        = hue(username);
 
+  // Get the target name from various possible fields
+  const targetName = activity.targetName || activity.resourceName || activity.details?.fileName || '';
+  const targetType = activity.targetType || activity.resourceType || '';
+
+  // Icon for target type
+  const TargetIcon = targetType === 'folder' ? Folder : targetType === 'file' ? FileText : null;
+
   return (
     <div className={`relative flex gap-3 py-3 ${!isLast ? 'border-b border-gray-50' : ''}`}>
       {/* Timeline dot + line */}
@@ -141,8 +179,14 @@ function ActivityRow({ activity, isLast }) {
               <span className="font-semibold text-gray-900">{username}</span>
             </span>
             <span className="text-gray-500">{cfg.label}</span>
-            {activity.targetName && (
-              <span className="font-medium text-gray-900"> "{activity.targetName}"</span>
+            {targetName && (
+              <>
+                <span className="text-gray-400"> • </span>
+                <span className="inline-flex items-center gap-1 font-medium text-gray-900">
+                  {TargetIcon && <TargetIcon className="w-3 h-3 text-gray-400" />}
+                  {targetName}
+                </span>
+              </>
             )}
           </p>
 
@@ -157,21 +201,54 @@ function ActivityRow({ activity, isLast }) {
 
         {/* Secondary details */}
         {activity.details && (
-          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
             {activity.details.path && (
-              <span className="text-[11px] text-gray-400 flex items-center gap-1">
+              <span className="text-[11px] text-gray-500 flex items-center gap-1">
                 <Folder className="w-2.5 h-2.5" />
                 {activity.details.path}
               </span>
             )}
+            {activity.details.folderId && (
+              <span className="text-[11px] text-gray-400">
+                Folder ID: {activity.details.folderId}
+              </span>
+            )}
             {activity.details.versionNumber && (
-              <span className="text-[11px] text-teal-600 font-medium">
+              <span className="text-[11px] text-teal-600 font-medium flex items-center gap-0.5">
+                <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
                 v{activity.details.versionNumber}
               </span>
             )}
             {activity.details.changeNote && (
-              <span className="text-[11px] text-gray-400 italic truncate max-w-[180px]">
+              <span className="text-[11px] text-gray-500 italic">
                 {activity.details.changeNote}
+              </span>
+            )}
+            {activity.details.fileSize && (
+              <span className="text-[11px] text-gray-400">
+                {formatBytes(activity.details.fileSize)}
+              </span>
+            )}
+            {activity.details.mimeType && (
+              <span className="text-[11px] text-gray-400">
+                {activity.details.mimeType}
+              </span>
+            )}
+            {activity.details.oldName && activity.details.newName && (
+              <span className="text-[11px] text-amber-600 font-medium">
+                "{activity.details.oldName}" → "{activity.details.newName}"
+              </span>
+            )}
+            {activity.metadata?.targetUser && (
+              <span className="text-[11px] text-gray-500">
+                User: {activity.metadata.targetUser}
+              </span>
+            )}
+            {activity.metadata?.role && (
+              <span className="text-[11px] text-gray-500">
+                Role: {activity.metadata.role}
               </span>
             )}
           </div>

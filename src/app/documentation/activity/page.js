@@ -71,7 +71,7 @@ export default function AllActivityLogPage() {
       const response = await fetch('/api/documentation/activity');
       if (response.ok) {
         const data = await response.json();
-        setLogs(data);
+        setLogs(data.logs || []);
       } else {
         setError('Failed to load activity logs');
       }
@@ -88,7 +88,7 @@ export default function AllActivityLogPage() {
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       const resourceName = log.resourceName?.toLowerCase() || '';
-      const username = log.username?.toLowerCase() || '';
+      const username = log.user?.username?.toLowerCase() || log.username?.toLowerCase() || '';
       const action = log.action?.toLowerCase() || '';
       if (!resourceName.includes(query) && !username.includes(query) && !action.includes(query)) {
         return false;
@@ -310,30 +310,46 @@ export default function AllActivityLogPage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-gray-900">{log.username || 'Unknown'}</span>
+                            <span className="font-semibold text-gray-900">{log.user?.username || log.username || 'Unknown'}</span>
                             <span className="text-gray-400">•</span>
                             <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${actionConfig.bg} ${actionConfig.color}`}>
                               {actionConfig.label}
                             </span>
-                            {log.resourceName && (
+                            {(log.targetName || log.resourceName) && (
                               <>
                                 <span className="text-gray-400">•</span>
-                                <span className="text-gray-700 truncate">{log.resourceName}</span>
+                                <span className="text-gray-700 truncate max-w-xs">{log.targetName || log.resourceName}</span>
                               </>
+                            )}
+                          </div>
+
+                          {/* Details */}
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                            {log.details?.fileSize && (
+                              <span className="text-xs text-gray-500">{formatBytes(log.details.fileSize)}</span>
+                            )}
+                            {log.details?.versionNumber && (
+                              <span className="text-xs text-teal-600 font-medium">v{log.details.versionNumber}</span>
+                            )}
+                            {log.details?.changeNote && (
+                              <span className="text-xs text-gray-500 italic">{log.details.changeNote}</span>
+                            )}
+                            {log.details?.oldName && log.details?.newName && (
+                              <span className="text-xs text-amber-600">"{log.details.oldName}" → "{log.details.newName}"</span>
                             )}
                           </div>
 
                           {/* Metadata */}
                           {log.metadata && Object.keys(log.metadata).length > 0 && (
-                            <div className="mt-1 text-xs text-gray-500">
-                              {log.metadata.oldName && log.metadata.newName && (
-                                <span>"{log.metadata.oldName}" → "{log.metadata.newName}"</span>
-                              )}
+                            <div className="mt-1 text-xs text-gray-500 flex flex-wrap gap-2">
                               {log.metadata.targetUser && (
-                                <span>Target: {log.metadata.targetUser}</span>
+                                <span>User: {log.metadata.targetUser}</span>
                               )}
                               {log.metadata.role && (
                                 <span>Role: {log.metadata.role}</span>
+                              )}
+                              {log.metadata.targetEmail && (
+                                <span>Email: {log.metadata.targetEmail}</span>
                               )}
                             </div>
                           )}
@@ -365,6 +381,14 @@ export default function AllActivityLogPage() {
       </main>
     </div>
   );
+}
+
+function formatBytes(bytes) {
+  if (!bytes || bytes === 0) return '';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
 function formatTimeAgo(date) {
