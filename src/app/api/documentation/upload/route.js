@@ -175,6 +175,23 @@ export async function POST(req) {
 
         const result = await db.collection('resources').insertOne(resourceDoc);
 
+        // Create initial version entry in doc_versions collection
+        await db.collection('doc_versions').insertOne({
+          resourceId: result.insertedId,
+          versionNumber: 1,
+          fileId: fileId,
+          fileName: file.name,
+          fileSize: file.size,
+          changeNote: 'Initial upload',
+          createdBy: {
+            userId: user._id,
+            username: user.username,
+            email: user.email
+          },
+          createdAt: new Date(),
+          isCurrent: true
+        });
+
         // Don't return password hash to client
         const { passwordHash, ...safeResource } = resourceDoc;
         uploadedFiles.push({ ...safeResource, _id: result.insertedId });

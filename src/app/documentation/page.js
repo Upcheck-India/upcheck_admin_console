@@ -32,6 +32,8 @@ const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
   { value: 'oldest', label: 'Oldest first' },
   { value: 'status', label: 'By status' },
+  { value: 'modified_desc', label: 'Last modified (newest)' },
+  { value: 'modified_asc', label: 'Last modified (oldest)' },
 ];
 
 const STATUS_COLORS = {
@@ -317,6 +319,8 @@ export default function DocumentationPage() {
         case 'newest':    return new Date(b.createdAt) - new Date(a.createdAt);
         case 'oldest':    return new Date(a.createdAt) - new Date(b.createdAt);
         case 'status':    return (a.status || '').localeCompare(b.status || '');
+        case 'modified_desc': return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        case 'modified_asc':  return new Date(a.updatedAt || a.createdAt) - new Date(b.updatedAt || b.createdAt);
         default:          return 0;
       }
     });

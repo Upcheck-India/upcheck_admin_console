@@ -7,7 +7,7 @@ import {
   ChevronLeft, Upload, Search, Grid, List, Plus, Filter, Link2,
   Folder, FolderPlus, Settings, Users, Activity, Clock,
   MoreVertical, AlertTriangle, Download, Trash2, CheckSquare, X, RefreshCw,
-  Play, Pause, Lightbulb, Archive, XCircle, FileText
+  Play, Pause, Lightbulb, Archive, XCircle, FileText, SortAsc
 } from 'lucide-react';
 import FolderTree from '../components/FolderTree';
 import FileList from '../components/FileList';
@@ -57,7 +57,9 @@ export default function ProjectDocumentationPage() {
   const [showSidebar, setShowSidebar] = useState(true);
   const [activeTab, setActiveTab] = useState('files'); // files, activity, members, settings
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
+  const [sortBy, setSortBy] = useState('name_asc'); // name_asc, name_desc, modified_desc, modified_asc
+  const [showSortMenu, setShowSortMenu] = useState(false);
+
   // Modals
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
@@ -695,17 +697,70 @@ export default function ProjectDocumentationPage() {
   };
 
   // Filter items by search
-  const filteredFolders = folders.filter(f => 
+  const filteredFolders = folders.filter(f =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
-  const filteredFiles = files.filter(f => 
+  const filteredFiles = files.filter(f =>
     f.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ).sort((a, b) => {
+    switch (sortBy) {
+      case 'name_asc': return a.name.localeCompare(b.name);
+      case 'name_desc': return b.name.localeCompare(a.name);
+      case 'modified_desc': return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+      case 'modified_asc': return new Date(a.updatedAt || a.createdAt) - new Date(b.updatedAt || b.createdAt);
+      default: return 0;
+    }
+  });
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header Skeleton */}
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+          <div className="px-4 lg:px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-gray-100 animate-pulse" />
+                <div className="space-y-2">
+                  <div className="w-40 h-5 bg-gray-100 rounded-md animate-pulse" />
+                  <div className="w-24 h-4 bg-gray-100 rounded-md animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Skeleton */}
+        <main className="p-4 lg:p-6">
+          {/* Toolbar Skeleton */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-48 h-10 bg-gray-100 rounded-lg animate-pulse" />
+              <div className="w-8 h-10 bg-gray-100 rounded-lg animate-pulse" />
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-20 h-10 bg-gray-100 rounded-lg animate-pulse" />
+              <div className="w-20 h-10 bg-gray-100 rounded-lg animate-pulse" />
+              <div className="w-10 h-10 bg-gray-100 rounded-lg animate-pulse" />
+            </div>
+          </div>
+
+          {/* Grid Skeleton */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 animate-pulse">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-100 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-gray-100 rounded w-3/4" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  </div>
+                </div>
+                <div className="h-8 bg-gray-100 rounded w-full" />
+              </div>
+            ))}
+          </div>
+        </main>
       </div>
     );
   }
@@ -934,6 +989,54 @@ export default function ProjectDocumentationPage() {
                     >
                       <List className="w-4 h-4 text-gray-600" />
                     </button>
+                  </div>
+
+                  {/* Sort */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowSortMenu(!showSortMenu)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    >
+                      <SortAsc className="w-4 h-4 text-gray-600" />
+                      <span className="text-sm text-gray-700 hidden sm:inline">
+                        {sortBy === 'name_asc' ? 'Name A–Z' : sortBy === 'name_desc' ? 'Name Z–A' : sortBy === 'modified_desc' ? 'Last Modified' : 'Oldest'}
+                      </span>
+                    </button>
+                    {showSortMenu && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setShowSortMenu(false)} />
+                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-20 py-1">
+                          <button
+                            onClick={() => { setSortBy('name_asc'); setShowSortMenu(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${sortBy === 'name_asc' ? 'text-blue-600' : 'text-gray-700'}`}
+                          >
+                            Name A–Z
+                            {sortBy === 'name_asc' && <CheckSquare className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => { setSortBy('name_desc'); setShowSortMenu(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${sortBy === 'name_desc' ? 'text-blue-600' : 'text-gray-700'}`}
+                          >
+                            Name Z–A
+                            {sortBy === 'name_desc' && <CheckSquare className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => { setSortBy('modified_desc'); setShowSortMenu(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${sortBy === 'modified_desc' ? 'text-blue-600' : 'text-gray-700'}`}
+                          >
+                            Last Modified
+                            {sortBy === 'modified_desc' && <CheckSquare className="w-4 h-4" />}
+                          </button>
+                          <button
+                            onClick={() => { setSortBy('modified_asc'); setShowSortMenu(false); }}
+                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${sortBy === 'modified_asc' ? 'text-blue-600' : 'text-gray-700'}`}
+                          >
+                            Oldest Modified
+                            {sortBy === 'modified_asc' && <CheckSquare className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Refresh */}

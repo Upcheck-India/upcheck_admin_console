@@ -80,8 +80,8 @@ export async function GET(req, { params }) {
     });
 
     // Generate the public URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || req.headers.get('origin');
-    const publicUrl = `${baseUrl}/api/resources/${id}/public-view/${publicToken}`;
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXTAUTH_URL || req.headers.get('origin');
+    const publicUrl = `${appUrl}/api/resources/${id}/public-view/${publicToken}`;
 
     return NextResponse.json({
       success: true,

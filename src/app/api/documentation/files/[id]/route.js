@@ -237,6 +237,27 @@ export async function PUT(req, { params }) {
       }
     );
 
+    // Create version entry in doc_versions collection
+    await db.collection('doc_versions').updateMany(
+      { resourceId: new ObjectId(id) },
+      { $set: { isCurrent: false } }
+    );
+    await db.collection('doc_versions').insertOne({
+      resourceId: new ObjectId(id),
+      versionNumber: newVersion,
+      fileId: newFileId,
+      fileName: resource.name,
+      fileSize: fileContent.length,
+      changeNote: 'Content updated',
+      createdBy: {
+        userId: user._id,
+        username: user.username,
+        email: user.email
+      },
+      createdAt: new Date(),
+      isCurrent: true
+    });
+
     // Log activity
     await db.collection('doc_activity_logs').insertOne({
       projectId: resource.projectId,

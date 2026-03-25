@@ -593,7 +593,7 @@ export default function MarkdownViewer({ file, onClose, canEdit = false, onSaved
         </div>
 
         {/* Content Area */}
-        <div className={`flex-1 overflow-hidden bg-white ${isFullscreen ? 'h-screen' : 'h-[calc(90vh-140px)]'}`}>
+        <div className={`flex-1 overflow-auto bg-white ${isFullscreen ? 'h-screen' : 'h-[calc(90vh-140px)]'}`}>
           {loading ? (
             <div className="flex items-center justify-center h-full">
               <div className="flex flex-col items-center gap-3">
@@ -618,7 +618,7 @@ export default function MarkdownViewer({ file, onClose, canEdit = false, onSaved
               </div>
             </div>
           ) : (
-            <div className="h-full flex overflow-hidden">
+            <div className="h-full flex">
               {/* Editor */}
               {(editing && (viewMode === 'edit' || viewMode === 'split')) && (
                 <div className={`flex-1 flex flex-col ${viewMode === 'split' ? 'border-r border-gray-200' : ''}`}>

@@ -23,11 +23,19 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(req.url);
+    const projectId = searchParams.get('projectId');
+    const limit = parseInt(searchParams.get('limit') || '100');
+    const offset = parseInt(searchParams.get('offset') || '0');
+
     // Admins can see all activity
     // Other users can only see activity from projects they're member of
     let query = {};
 
-    if (user.role !== 'Admin' && user.role !== 'Console admin') {
+    // If projectId is specified, filter to that project only
+    if (projectId) {
+      query.projectId = projectId;
+    } else if (user.role !== 'Admin' && user.role !== 'Console admin') {
       // Get all project IDs the user is a member of
       const projects = await db.collection('projects')
         .find({
@@ -50,11 +58,13 @@ export async function GET(req) {
       };
     }
 
-    // Fetch activity logs
+    // Fetch activity logs with pagination
+    const total = await db.collection('doc_activity_logs').countDocuments(query);
     const logs = await db.collection('doc_activity_logs')
       .find(query)
       .sort({ timestamp: -1 })
-      .limit(1000)
+      .skip(offset)
+      .limit(limit)
       .toArray();
 
     // Format logs for response
@@ -65,14 +75,20 @@ export async function GET(req) {
       action: log.action,
       resourceType: log.resourceType,
       resourceName: log.resourceName,
-      userId: log.userId?.toString(),
-      username: log.username,
+      targetId: log.targetId,
+      targetType: log.targetType,
+      targetName: log.targetName,
+      user: log.user || {
+        userId: log.userId?.toString(),
+        username: log.username || 'Unknown',
+        email: log.email
+      },
       timestamp: log.timestamp,
       details: log.details,
       metadata: log.metadata,
     }));
 
-    return NextResponse.json(formattedLogs);
+    return NextResponse.json({ logs: formattedLogs, total });
 
   } catch (error) {
     console.error('Error fetching activity logs:', error);
