@@ -19,7 +19,7 @@ export default function Login() {
 
   useEffect(() => {
     setMounted(true);
-    
+
     // Check for redirect URL in query params
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -290,6 +290,11 @@ export default function Login() {
         localStorage.setItem('username', username);
         const checkAuth = await fetch('/api/auth/check', { credentials: 'include' });
         if (checkAuth.ok) {
+          // Sign out from Clerk (external user) if there's an active session
+          // This ensures only one session (internal OR external) exists at a time
+          if (clerk?.user) {
+            await clerk.signOut({ redirectUrl: '/login' });
+          }
           // Redirect to original URL if exists, otherwise go to console
           const destination = redirectUrl || '/console';
           router.push(destination);
@@ -343,10 +348,10 @@ export default function Login() {
               <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-400 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
               <span className="relative flex items-center justify-center gap-2">{isLoading ? (<><Loader2 className="animate-spin" size={20} />Signing in...</>) : ('Sign in')}</span>
             </button>
-            <div className="flex flex-col items-center space-y-2 pt-2">
+            {/*}<div className="flex flex-col items-center space-y-2 pt-2">
               <Link href="/legacy_login" className="inline-flex items-center text-xs text-blue-200 hover:text-blue-100 transition-colors duration-300"><RotateCcw size={12} className="mr-1" />Use legacy login</Link>
               <Link href="/register" className="inline-flex items-center text-xs text-blue-200 hover:text-blue-100 transition-colors duration-300"><Sparkle size={12} className="mr-1" />Wanna create a new account?</Link>
-            </div>
+            </div>{*/}
             <div className="mt-6 pt-6 border-t border-white/20">              <div className="flex flex-col space-y-2">
                 <Link href="/dataroom/external/login" className="w-full py-2.5 px-4 border border-white/30 rounded-lg text-sm font-medium text-white bg-white/5 hover:bg-white/10 transition-all duration-300 text-center">Login/Register as External User</Link>              </div>
             </div>

@@ -5,17 +5,25 @@ import { AlertTriangle, ArrowLeft, Lock, Coffee, Frown, ChevronRight, ChevronLef
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
+import { useClerk } from '@clerk/nextjs';
 
 export default function Register() {
   const router = useRouter();
+  const clerk = useClerk();
   const [currentPage, setCurrentPage] = useState(0);
-  
+
   // Initialize the particles and shrimps background on component mount
   useEffect(() => {
+    // Check if user has an active Clerk session (external user)
+    // If so, redirect them to their dashboard
+    if (clerk?.user) {
+      router.push('/dataroom/external/dashboard');
+      return;
+    }
+
     if (typeof window !== 'undefined') {
       initParticlesAndShrimps();
     }
-    
     return () => {
       // Clean up particles and shrimps when component unmounts
       if (typeof window !== 'undefined' && window.animationInstance) {
@@ -359,6 +367,7 @@ export default function Register() {
   ];
 
   return (
+    <ClerkProvider>
     <div className="min-h-screen bg-gradient-to-br from-blue-500 via-teal-500 to-green-600 flex items-center justify-center p-4 overflow-hidden relative">
       {/* Particles and shrimps background */}
       <div id="particles-container" className="absolute inset-0 z-0"></div>
@@ -485,5 +494,6 @@ export default function Register() {
         }
       `}</style>
     </div>
+    </ClerkProvider>
   );
 }
