@@ -311,6 +311,29 @@ const UserManagement = () => {
     }
   };
 
+  const handleDeleteExternalUser = async (userId, clerkId, deleteFromClerk) => {
+    try {
+      const params = new URLSearchParams({ userId });
+      if (clerkId) params.append('clerkId', clerkId);
+      if (deleteFromClerk) params.append('deleteFromClerk', 'true');
+
+      const response = await fetch(`/api/user-management/external-users?${params}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
+      }
+
+      await fetchExternalUsers();
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -955,6 +978,7 @@ const UserManagement = () => {
             users={externalUsers}
             onApprove={handleApproveExternalUser}
             onReject={handleRejectExternalUser}
+            onDelete={handleDeleteExternalUser}
             loading={loadingExternal}
           />
         )}

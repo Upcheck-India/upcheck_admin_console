@@ -5,10 +5,10 @@ import { NextResponse } from 'next/server'
 const isPublicRoute = createRouteMatcher([
   '/dataroom/external/login(.*)',
   '/dataroom/external/register(.*)',
-  '/api/clerk(.*)',
   '/login(.*)',
   '/register(.*)',
   '/api/auth(.*)',
+  '/api/clerk/webhook(.*)', // Clerk webhook endpoint
 ])
 
 // Routes protected by Clerk (external user routes)
