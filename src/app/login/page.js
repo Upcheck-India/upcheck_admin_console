@@ -6,6 +6,7 @@ import { User, Lock, Loader2, RotateCcw, Sparkle } from 'lucide-react';
 import { AlertMessage } from "../components/AlertMessage";
 import Link from 'next/link';
 import Image from 'next/image';
+import { useClerk } from '@clerk/nextjs';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -14,6 +15,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const clerk = useClerk();
 
   const [redirectUrl, setRedirectUrl] = useState('');
 

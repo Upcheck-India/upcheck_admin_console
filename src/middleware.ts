@@ -29,6 +29,17 @@ export default clerkMiddleware(async (auth, req) => {
   const { userId: clerkUserId } = await auth()
   const hasAdminToken = req.cookies.has('admin_token')
 
+  // Handle root path - redirect based on session type
+  if (req.nextUrl.pathname === '/') {
+    if (clerkUserId) {
+      return NextResponse.redirect(new URL('/dataroom/external/dashboard', req.url))
+    }
+    if (hasAdminToken) {
+      return NextResponse.redirect(new URL('/console', req.url))
+    }
+    return NextResponse.next()
+  }
+
   // Allow public routes without authentication
   if (isPublicRoute(req)) {
     // If user has Clerk session but trying to access internal login,

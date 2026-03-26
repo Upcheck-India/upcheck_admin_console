@@ -35,19 +35,19 @@ export default function Register() {
   // Function to initialize particles and shrimps (same as login page)
   const initParticlesAndShrimps = () => {
     if (!document.getElementById('particles-container')) return;
-    
+
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     const container = document.getElementById('particles-container');
-    
+
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     container.appendChild(canvas);
-    
+
     // Load shrimp image
     const shrimpImage = new window.Image();
     shrimpImage.src = '/shrimp.png';
-    
+
     // Particle class
     class Particle {
       constructor() {
@@ -58,15 +58,15 @@ export default function Register() {
         this.speedY = Math.random() * 0.5 - 0.25;
         this.color = `rgba(255, 255, 255, ${Math.random() * 0.3})`;
       }
-      
+
       update() {
         this.x += this.speedX;
         this.y += this.speedY;
-        
+
         if (this.x < 0 || this.x > canvas.width) this.speedX *= -1;
         if (this.y < 0 || this.y > canvas.height) this.speedY *= -1;
       }
-      
+
       draw() {
         ctx.fillStyle = this.color;
         ctx.beginPath();
@@ -74,7 +74,7 @@ export default function Register() {
         ctx.fill();
       }
     }
-    
+
     // Shrimp class
     class Shrimp {
       constructor() {
@@ -115,13 +115,13 @@ export default function Register() {
         this.scaredTime = 0;
         this.scale = 0.7 + Math.random() * 0.6;
       }
-      
+
       update() {
         // Regular movement
         if (!this.scared) {
           this.x += this.speedX;
           this.y += this.speedY;
-          
+
           // Natural wiggle movement
           this.wiggle += this.wiggleSpeed;
           this.rotation = Math.atan2(this.speedY, this.speedX) + Math.sin(this.wiggle) * this.wiggleAmount;
@@ -130,56 +130,56 @@ export default function Register() {
           // Scared movement (faster, erratic)
           this.x += this.speedX * 3;
           this.y += this.speedY * 3;
-          
+
           // More erratic wiggle when scared
           this.wiggle += this.wiggleSpeed * 2;
           this.rotation = Math.atan2(this.speedY, this.speedX) + Math.sin(this.wiggle) * (this.wiggleAmount * 2);
-          
+
           this.scaredTime++;
           if (this.scaredTime > 50) {
             this.scared = false;
             this.scaredTime = 0;
           }
         }
-        
+
         // Fade in/out logic
-        if (this.x < -100 || this.x > canvas.width + 100 || 
+        if (this.x < -100 || this.x > canvas.width + 100 ||
             this.y < -100 || this.y > canvas.height + 100) {
           this.alpha -= this.fadeSpeed;
           if (this.alpha <= 0) return true; // Remove this shrimp
         } else if (this.alpha < this.targetAlpha) {
           this.alpha += this.fadeSpeed;
         }
-        
+
         return false; // Keep this shrimp
       }
-      
+
       draw() {
         if (this.alpha <= 0) return;
-        
+
         ctx.save();
         ctx.globalAlpha = this.alpha;
         ctx.translate(this.x, this.y);
         ctx.rotate(this.rotation);
         ctx.scale(this.scaleX * this.scale, this.scale);
-        
+
         // Draw semi-transparent white shrimp
         ctx.drawImage(shrimpImage, -this.width/2, -this.height/2, this.width, this.height);
-        
+
         ctx.restore();
       }
-      
+
       checkClick(mouseX, mouseY) {
         // Calculate distance from click to shrimp
         const dx = mouseX - this.x;
         const dy = mouseY - this.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        
+
         // If click is close to shrimp, make it scared
         if (distance < 50) {
           this.scared = true;
           this.scaredTime = 0;
-          
+
           // Change direction away from click
           const angle = Math.atan2(dy, dx);
           this.speedX = -Math.cos(angle) * (1 + Math.random());
@@ -189,25 +189,25 @@ export default function Register() {
         return false;
       }
     }
-    
+
     // Create particles
     const particles = [];
     const particleCount = Math.min(100, window.innerWidth / 10);
-    
+
     for (let i = 0; i < particleCount; i++) {
       particles.push(new Particle());
     }
-    
+
     // Create shrimps
     const shrimps = [];
     const maxShrimps = 6; // Maximum number of shrimps at any time
-    
+
     // Add click event listener for canvas
     canvas.addEventListener('click', (event) => {
       const rect = canvas.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const mouseY = event.clientY - rect.top;
-      
+
       // Check each shrimp for collision with click
       let shrimpClicked = false;
       shrimps.forEach(shrimp => {
@@ -215,7 +215,7 @@ export default function Register() {
           shrimpClicked = true;
         }
       });
-      
+
       // If no shrimp was clicked, spawn a new one at click position
       if (!shrimpClicked && shrimps.length < maxShrimps + 2) {
         const newShrimp = new Shrimp();
@@ -229,24 +229,24 @@ export default function Register() {
         shrimps.push(newShrimp);
       }
     });
-    
+
     // Animation function
     function animate() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
+
       // Draw and update particles
       for (let i = 0; i < particles.length; i++) {
         particles[i].update();
         particles[i].draw();
       }
-      
+
       // Draw connections between particles
       for (let a = 0; a < particles.length; a++) {
         for (let b = a; b < particles.length; b++) {
           const dx = particles[a].x - particles[b].x;
           const dy = particles[a].y - particles[b].y;
           const distance = Math.sqrt(dx * dx + dy * dy);
-          
+
           if (distance < 100) {
             ctx.beginPath();
             ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - distance / 100)})`;
@@ -257,40 +257,40 @@ export default function Register() {
           }
         }
       }
-      
+
       // Add new shrimps randomly, but maintain maximum count
       if (shrimps.length < maxShrimps && Math.random() < 0.01) {
         shrimps.push(new Shrimp());
       }
-      
+
       // Draw and update shrimps
       for (let i = shrimps.length - 1; i >= 0; i--) {
         const shouldRemove = shrimps[i].update();
         shrimps[i].draw();
-        
+
         if (shouldRemove) {
           shrimps.splice(i, 1);
         }
       }
-      
+
       requestAnimationFrame(animate);
     }
-    
+
     // Handle resize
     function handleResize() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     }
-    
+
     window.addEventListener('resize', handleResize);
-    
+
     // Start animation
     shrimpImage.onload = () => {
       animate();
     };
-    
+
     // Store reference for cleanup
-    window.animationInstance = { 
+    window.animationInstance = {
       destroy: () => {
         window.removeEventListener('resize', handleResize);
         container.removeChild(canvas);
@@ -307,14 +307,14 @@ export default function Register() {
           <Hand className="text-yellow-300" size={32} />
         </div>
       </div>
-      
+
       <h3 className="text-center text-l font-bold text-white">Woah Woah, wait a minute!</h3>
-      
+
       <div className="space-y-4 text-center text-blue-100">
         <p>
           This isn't like signing up for yet another social media platform to share pictures of your lunch. 🍱
         </p>
-        
+
         <div className="bg-white/5 p-4 rounded-lg border border-white/10 my-4">
           <p className="text-lg font-medium text-yellow-200 flex items-center justify-center gap-2">
             <Lock size={18} />
@@ -326,7 +326,7 @@ export default function Register() {
         </div>
       </div>
     </div>,
-    
+
     // Page 2: Humor
     <div key="humor" className="space-y-6">
       <h3 className="text-center text-l font-bold text-white">🙆‍♂️ Plot Twist!</h3>
@@ -334,7 +334,7 @@ export default function Register() {
         <p>
           If you're looking for cat videos, you've taken a wrong turn at the internet. <Frown className="inline-block" size={16} />
         </p>
-        
+
         <p className="italic text-sm text-blue-200/70">
           "With great dashboard access comes great responsibility."
           <br />
@@ -342,7 +342,7 @@ export default function Register() {
         </p>
       </div>
     </div>,
-    
+
     // Page 3: Instructions
     <div key="instructions" className="space-y-6">
       <h3 className="text-center text-l font-bold text-white">If you are a member then you can...</h3>
@@ -358,7 +358,7 @@ export default function Register() {
             <li>A cup of coffee wouldn't hurt either <Coffee className="inline-block" size={14} /></li>
           </ul>
         </div>
-        
+
         <p className="text-xs text-center text-blue-200/50 mt-4">
           P.S. The shrimps in the background are just for fun. They don't grant access either.
         </p>
@@ -367,11 +367,10 @@ export default function Register() {
   ];
 
   return (
-    <ClerkProvider>
     <div className="min-h-screen bg-gradient-to-br from-blue-500 via-teal-500 to-green-600 flex items-center justify-center p-4 overflow-hidden relative">
       {/* Particles and shrimps background */}
       <div id="particles-container" className="absolute inset-0 z-0"></div>
-      
+
       {/* Gradient overlay */}
       <div className="absolute inset-0 bg-gradient-radial from-transparent to-black/30 z-0"></div>
 
@@ -381,16 +380,16 @@ export default function Register() {
             {/* Logo with hover effect */}
             <div className="flex justify-center mb-4 logo-container">
               <div className="relative w-24 h-24 transform transition-transform duration-500 hover:scale-110 logo-glow">
-                <Image 
-                  src="/Upcheck_logo_thumbnail.png" 
-                  alt="Organization Logo" 
+                <Image
+                  src="/Upcheck_logo_thumbnail.png"
+                  alt="Organization Logo"
                   layout="fill"
                   objectFit="contain"
                   className="drop-shadow-lg transition-all duration-300"
                 />
               </div>
             </div>
-            
+
             <h1 className="mt-3 text-center text-5xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-300 to-blue-400 tracking-tight hover-title">
               Upcheck
             </h1>
@@ -400,12 +399,12 @@ export default function Register() {
           </div>
         </div>
 
-        <div className="backdrop-blur-xl bg-white/10 p-8 rounded-2xl shadow-2xl border border-white/20 transition-all duration-500 animate-fadeIn opacity-0 hover:shadow-blue-500/20 hover:border-blue-300/30" 
+        <div className="backdrop-blur-xl bg-white/10 p-8 rounded-2xl shadow-2xl border border-white/20 transition-all duration-500 animate-fadeIn opacity-0 hover:shadow-blue-500/20 hover:border-blue-300/30"
              style={{ animationDelay: '0.4s', animationFillMode: 'forwards' }}>
-          
+
           {/* Current page content */}
           {pages[currentPage]}
-          
+
           {/* Navigation */}
           <div className="flex justify-between items-center mt-6">
             <button
@@ -416,7 +415,7 @@ export default function Register() {
               <ChevronLeft size={16} className="mr-1" />
               Previous
             </button>
-            
+
             <div className="flex space-x-1">
               {pages.map((_, index) => (
                 <button
@@ -427,7 +426,7 @@ export default function Register() {
                 />
               ))}
             </div>
-            
+
             {currentPage < pages.length - 1 ? (
               <button
                 onClick={() => setCurrentPage(prev => Math.min(pages.length - 1, prev + 1))}
@@ -437,8 +436,8 @@ export default function Register() {
                 <ChevronRight size={16} className="ml-1" />
               </button>
             ) : (
-              <Link 
-                href="/login" 
+              <Link
+                href="/login"
                 className="flex items-center px-3 py-2 rounded-lg text-sm text-blue-300 hover:text-blue-100 hover:bg-white/10"
               >
                 Login
@@ -448,52 +447,51 @@ export default function Register() {
           </div>
         </div>
       </div>
-      
+
       <style jsx>{`
         .bg-gradient-radial {
           background-image: radial-gradient(var(--tw-gradient-stops));
         }
-        
+
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        
+
         .animate-fadeIn {
           animation: fadeIn 0.8s ease-out;
         }
-        
+
         /* Logo glow effect */
         .logo-glow {
           filter: drop-shadow(0 0 8px rgba(0, 200, 255, 0.3));
           transition: filter 0.5s ease, transform 0.5s ease;
         }
-        
+
         .logo-glow:hover {
           filter: drop-shadow(0 0 15px rgba(0, 200, 255, 0.8));
         }
-        
+
         /* Title hover effects */
         .hover-title {
           position: relative;
           transition: all 0.3s ease;
         }
-        
+
         .hover-title:hover {
           text-shadow: 0 0 15px rgba(0, 200, 255, 0.8);
           letter-spacing: 0.5px;
         }
-        
+
         .hover-subtitle {
           transition: all 0.3s ease;
         }
-        
+
         .hover-subtitle:hover {
           text-shadow: 0 0 10px rgba(128, 255, 212, 0.8);
           letter-spacing: 0.3px;
         }
       `}</style>
     </div>
-    </ClerkProvider>
   );
 }
