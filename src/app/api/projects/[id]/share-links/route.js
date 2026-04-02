@@ -96,7 +96,7 @@ export async function POST(request, { params }) {
     }
 
     const body = await request.json();
-    const { name, expiresAt, settings } = body;
+    const { name, expiresAt, showSprints, includeProductBoard, showUserNames, showDescriptions, showDueDates } = body;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: 'Share link name is required' }, { status: 400 });
@@ -110,10 +110,11 @@ export async function POST(request, { params }) {
       name: name.trim(),
       slug,
       settings: {
-        showSprints: settings?.showSprints || [],
-        showUserNames: settings?.showUserNames !== false, // default true
-        showDescriptions: settings?.showDescriptions !== false, // default true
-        showDueDates: settings?.showDueDates !== false, // default true
+        showSprints: showSprints || [],
+        includeProductBoard: includeProductBoard === true, // Must be explicitly true
+        showUserNames: showUserNames === true,
+        showDescriptions: showDescriptions === true,
+        showDueDates: showDueDates === true,
       },
       expiresAt: expiresAt ? new Date(expiresAt) : null,
       isActive: true,

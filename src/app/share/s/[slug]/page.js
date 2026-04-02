@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Head from 'next/head';
 import {
   Clock, Calendar, Users, FileText, AlertCircle, CheckCircle, X, User, Mail,
-  Loader2, ExternalLink, Eye, ChevronLeft, ChevronRight
+  Loader2, Eye, ChevronLeft, ChevronRight, RefreshCw
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -34,10 +34,13 @@ export default function PublicSharePage() {
   const [error, setError] = useState(null);
   const [expired, setExpired] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
-  const [includeProductBoard, setIncludeProductBoard] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Available views based on share settings
+  const [availableViews, setAvailableViews] = useState([]);
 
   // Navigation state
-  const [selectedView, setSelectedView] = useState('all'); // 'all', 'backlog', or sprint._id
+  const [selectedView, setSelectedView] = useState(null);
   const [visitorSubmitted, setVisitorSubmitted] = useState(false);
 
   // Visitor info modal
@@ -45,80 +48,118 @@ export default function PublicSharePage() {
   const [visitorInfo, setVisitorInfo] = useState({ name: '', email: '' });
 
   // Fetch shared project data
-  useEffect(() => {
-    const fetchSharedProject = async () => {
-      try {
-        const res = await fetch(`/api/share/s/${slug}`);
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (res.status === 410) {
-            setExpired(true);
-            setError('This share link has expired');
-          } else if (res.status === 404) {
-            setError('Share link not found or inactive');
-          } else {
-            setError(data.error || 'Failed to load shared project');
-          }
-          setLoading(false);
-          return;
-        }
-
-        setProject(data.project);
-        setSprints(data.sprints);
-        setTasks(data.tasks);
-        setShareLink(data.shareLink);
-        setIncludeProductBoard(data.includeProductBoard);
-
-        // Set initial view
-        if (data.includeProductBoard) {
-          setSelectedView('all');
-        } else if (data.sprints.length > 0) {
-          setSelectedView(data.sprints[0]._id);
-        }
-      } catch (err) {
-        console.error('Error fetching shared project:', err);
-        setError('Failed to load shared project');
-      } finally {
-        setLoading(false);
+  const fetchSharedProject = async (silent = false) => {
+    try {
+      if (!silent) {
+        setLoading(true);
       }
-    };
+      setError(null);
 
+      const res = await fetch(`/api/share/s/${slug}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 410) {
+          setExpired(true);
+          setError('This share link has expired');
+        } else if (res.status === 404) {
+          setError('Share link not found or inactive');
+        } else {
+          setError(data.error || 'Failed to load shared project');
+        }
+        setLoading(false);
+        return false;
+      }
+
+      setProject(data.project);
+      setSprints(data.sprints);
+      setTasks(data.tasks);
+      setShareLink(data.shareLink);
+
+      // Build available views based on share settings
+      const views = [];
+
+      // Use the processed includeProductBoard from API response (handles old data correctly)
+      if (data.includeProductBoard === true) {
+        views.push({ id: 'backlog', name: 'Product Board' });
+      }
+
+      // Add selected sprints only
+      data.sprints.forEach(sprint => {
+        views.push({ id: sprint._id, name: sprint.name });
+      });
+
+      setAvailableViews(views);
+
+      // Set initial view
+      if (views.length > 0 && !selectedView) {
+        setSelectedView(views[0].id);
+      }
+
+      // Update countdown
+      if (data.shareLink?.expiresAt) {
+        updateCountdown(new Date(data.shareLink.expiresAt));
+      }
+
+      setLoading(false);
+      return true;
+    } catch (err) {
+      console.error('Error fetching shared project:', err);
+      setError('Failed to load shared project');
+      setLoading(false);
+      return false;
+    }
+  };
+
+  useEffect(() => {
     if (slug) {
       fetchSharedProject();
     }
   }, [slug]);
 
+  // Polling - check link validity every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!expired && !loading) {
+        fetchSharedProject(true); // silent refresh
+      }
+    }, 10000); // 10 seconds
+
+    return () => clearInterval(interval);
+  }, [expired, loading, slug]);
+
   // Countdown timer for expiration
+  const updateCountdown = (endDate) => {
+    const end = new Date(endDate);
+    const now = new Date();
+    const diff = end - now;
+
+    if (diff <= 0) {
+      setExpired(true);
+      setTimeLeft('Expired');
+      return;
+    }
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (days > 0) {
+      setTimeLeft(`${days}d ${hours}h ${minutes}m remaining`);
+    } else if (hours > 0) {
+      setTimeLeft(`${hours}h ${minutes}m remaining`);
+    } else {
+      setTimeLeft(`${minutes}m remaining`);
+    }
+  };
+
   useEffect(() => {
     if (!shareLink?.expiresAt) return;
 
-    const updateCountdown = () => {
-      const end = new Date(shareLink.expiresAt);
-      const now = new Date();
-      const diff = end - now;
-
-      if (diff <= 0) {
-        setExpired(true);
-        setTimeLeft('Expired');
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-      if (days > 0) {
-        setTimeLeft(`${days}d ${hours}h ${minutes}m remaining`);
-      } else if (hours > 0) {
-        setTimeLeft(`${hours}h ${minutes}m remaining`);
-      } else {
-        setTimeLeft(`${minutes}m remaining`);
-      }
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 60000);
+    updateCountdown(new Date(shareLink.expiresAt));
+    const interval = setInterval(() => {
+      updateCountdown(new Date(shareLink.expiresAt));
+    }, 60000); // Update every minute
 
     return () => clearInterval(interval);
   }, [shareLink?.expiresAt]);
@@ -151,9 +192,6 @@ export default function PublicSharePage() {
 
   // Filter tasks based on selected view
   const getFilteredTasks = () => {
-    if (selectedView === 'all') {
-      return tasks;
-    }
     if (selectedView === 'backlog') {
       return tasks.filter(t => !t.sprintId);
     }
@@ -166,31 +204,24 @@ export default function PublicSharePage() {
   };
 
   const getCurrentViewName = () => {
-    if (selectedView === 'all') return 'All Tasks';
-    if (selectedView === 'backlog') return 'Product Board';
-    const sprint = sprints.find(s => s._id === selectedView);
-    return sprint?.name || 'Unknown';
+    const view = availableViews.find(v => v.id === selectedView);
+    return view?.name || 'All Tasks';
   };
 
   const navigateView = (direction) => {
-    const views = [];
-    if (includeProductBoard) views.push('backlog');
-    sprints.forEach(s => views.push(s._id));
-
-    if (selectedView === 'all') {
-      // Special case: 'all' shows everything, go to first view
-      if (direction === 'next' && views.length > 0) {
-        setSelectedView(views[0]);
-      }
-      return;
-    }
-
-    const currentIndex = views.indexOf(selectedView);
+    const currentIndex = availableViews.findIndex(v => v.id === selectedView);
     if (direction === 'prev' && currentIndex > 0) {
-      setSelectedView(views[currentIndex - 1]);
-    } else if (direction === 'next' && currentIndex < views.length - 1) {
-      setSelectedView(views[currentIndex + 1]);
+      setSelectedView(availableViews[currentIndex - 1].id);
+    } else if (direction === 'next' && currentIndex < availableViews.length - 1) {
+      setSelectedView(availableViews[currentIndex + 1].id);
     }
+  };
+
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchSharedProject();
+    setRefreshing(false);
   };
 
   if (loading) {
@@ -317,7 +348,7 @@ export default function PublicSharePage() {
                 <p className="text-gray-600 mt-2">{project.description}</p>
               )}
               {shareLink && (
-                <div className="flex items-center gap-4 mt-3 text-sm">
+                <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
                   <span className="flex items-center gap-1 text-gray-600">
                     <FileText className="h-4 w-4" />
                     {shareLink.name}
@@ -339,7 +370,15 @@ export default function PublicSharePage() {
                 </div>
               )}
             </div>
-            <div className="text-right">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
+                title="Refresh data"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
                 project.status === 'active' ? 'bg-green-100 text-green-700' :
                 project.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
@@ -354,55 +393,31 @@ export default function PublicSharePage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* View Navigation */}
+        {/* View Navigation - Only show selected views */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">
               {getCurrentViewName()}
             </h2>
-            <div className="flex items-center gap-2">
-              {includeProductBoard && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {availableViews.map((view) => (
                 <button
-                  onClick={() => setSelectedView('all')}
+                  key={view.id}
+                  onClick={() => setSelectedView(view.id)}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    selectedView === 'all'
+                    selectedView === view.id
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                   }`}
                 >
-                  All Views
-                </button>
-              )}
-              {includeProductBoard && (
-                <button
-                  onClick={() => setSelectedView('backlog')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    selectedView === 'backlog'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                  }`}
-                >
-                  Product Board
-                </button>
-              )}
-              {sprints.map(sprint => (
-                <button
-                  key={sprint._id}
-                  onClick={() => setSelectedView(sprint._id)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    selectedView === sprint._id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                  }`}
-                >
-                  {sprint.name}
+                  {view.name}
                 </button>
               ))}
             </div>
           </div>
 
           {/* Quick navigation arrows */}
-          {(includeProductBoard || sprints.length > 1) && (
+          {availableViews.length > 1 && (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => navigateView('prev')}
@@ -426,7 +441,7 @@ export default function PublicSharePage() {
         </div>
 
         {/* Sprint Info Cards (when viewing specific sprint) */}
-        {selectedView !== 'all' && selectedView !== 'backlog' && (
+        {selectedView && selectedView !== 'backlog' && (
           <div className="mb-8">
             {(() => {
               const sprint = sprints.find(s => s._id === selectedView);
@@ -486,6 +501,7 @@ export default function PublicSharePage() {
         <div className="max-w-7xl mx-auto px-4 py-6">
           <p className="text-sm text-gray-500 text-center">
             This is a public view of the project. Some information may be hidden based on share settings.
+            Link validity is not guaranteed.
           </p>
         </div>
       </footer>

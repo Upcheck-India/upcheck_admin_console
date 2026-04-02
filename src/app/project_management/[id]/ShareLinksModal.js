@@ -61,13 +61,19 @@ const ShareLinksModal = ({ projectId, onClose }) => {
       if (!res.ok) throw new Error('Failed to fetch sprints');
       const data = await res.json();
       setSprints(data);
-      setFormData(prev => ({ ...prev, showSprints: data.map(s => s._id) }));
+      // Don't auto-select sprints - let user choose explicitly
     } catch (err) {
       console.error('Error fetching sprints:', err);
     }
   };
 
   const handleCreateLink = async () => {
+    // Validate that at least one view is selected
+    if (!formData.includeProductBoard && formData.showSprints.length === 0) {
+      setSubmitError('Please select at least one view (Product Board or at least one sprint)');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -92,7 +98,7 @@ const ShareLinksModal = ({ projectId, onClose }) => {
       setFormData({
         name: '',
         expiresAt: '',
-        showSprints: sprints.map(s => s._id),
+        showSprints: [],
         includeProductBoard: true,
         showUserNames: true,
         showDescriptions: true,
@@ -265,8 +271,11 @@ const ShareLinksModal = ({ projectId, onClose }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     <FileText className="h-4 w-4 inline mr-1" />
-                    Sprints to Include
+                    Views to Include
                   </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Select which views visitors can see. Visitors will only see the selected views.
+                  </p>
                   <div className="mb-3">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -279,23 +288,27 @@ const ShareLinksModal = ({ projectId, onClose }) => {
                     </label>
                   </div>
                   <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2 bg-white">
-                    {sprints.map(sprint => (
-                      <label key={sprint._id} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={formData.showSprints.includes(sprint._id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setFormData(prev => ({ ...prev, showSprints: [...prev.showSprints, sprint._id] }));
-                            } else {
-                              setFormData(prev => ({ ...prev, showSprints: prev.showSprints.filter(id => id !== sprint._id) }));
-                            }
-                          }}
-                          className="rounded text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-sm text-gray-700">{sprint.name}</span>
-                      </label>
-                    ))}
+                    {sprints.length === 0 ? (
+                      <p className="text-sm text-gray-500 py-2">No sprints available</p>
+                    ) : (
+                      sprints.map(sprint => (
+                        <label key={sprint._id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.showSprints.includes(sprint._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData(prev => ({ ...prev, showSprints: [...prev.showSprints, sprint._id] }));
+                              } else {
+                                setFormData(prev => ({ ...prev, showSprints: prev.showSprints.filter(id => id !== sprint._id) }));
+                              }
+                            }}
+                            className="rounded text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{sprint.name}</span>
+                        </label>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -406,6 +419,12 @@ const ShareLinksModal = ({ projectId, onClose }) => {
                           <span className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded flex items-center gap-1">
                             <FileText className="h-3 w-3" />
                             {link.settings.showSprints.length} sprint(s)
+                          </span>
+                        )}
+                        {link.settings.includeProductBoard === true && (
+                          <span className="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded flex items-center gap-1">
+                            <FileText className="h-3 w-3" />
+                            Product Board included
                           </span>
                         )}
                         {link.settings.showUserNames && (

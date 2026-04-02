@@ -64,25 +64,62 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Get sprints - separate backlog from sprint sprints
-    let sprintsQuery = { projectId: shareLink.projectId };
+    // Get sprints - filter by selected sprint IDs only
     const selectedSprintIds = shareLink.settings?.showSprints || [];
+    const includeProductBoard = shareLink.settings?.includeProductBoard === true; // Must be explicitly true
 
+    // Debug: log the settings to verify what's stored
+    console.log('Share link settings:', {
+      selectedSprintIds,
+      includeProductBoard,
+      rawSettings: shareLink.settings
+    });
+
+    let sprints = [];
     if (selectedSprintIds.length > 0) {
-      sprintsQuery._id = { $in: selectedSprintIds.map(id => new ObjectId(id)) };
+      // Filter sprints by selected IDs (stored as strings in settings)
+      sprints = await db.collection('project_sprints')
+        .find({
+          projectId: shareLink.projectId,
+          _id: { $in: selectedSprintIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id)) }
+        })
+        .sort({ createdAt: 1 })
+        .toArray();
     }
 
-    const sprints = await db.collection('project_sprints')
-      .find(sprintsQuery)
-      .sort({ createdAt: 1 })
-      .toArray();
+    // Get tasks for selected sprints only
+    const sprintIds = sprints.map(s => s._id);
 
-    // Get tasks
-    const sprintIds = sprints.map(s => s._id.toString());
     let tasksQuery = { projectId: shareLink.projectId };
 
-    if (sprintIds.length > 0) {
-      tasksQuery.sprintId = { $in: [...sprintIds.map(id => new ObjectId(id)), null] };
+    if (sprintIds.length > 0 && includeProductBoard) {
+      // Include tasks from selected sprints AND backlog (Product Board)
+      tasksQuery.sprintId = { $in: [...sprintIds, null] };
+    } else if (sprintIds.length > 0 && !includeProductBoard) {
+      // Include only tasks from selected sprints, NOT backlog
+      tasksQuery.sprintId = { $in: sprintIds };
+    } else if (sprintIds.length === 0 && includeProductBoard) {
+      // Only Product Board (backlog tasks)
+      tasksQuery.sprintId = null;
+    } else {
+      // No sprints selected and no Product Board - no tasks to show
+      return NextResponse.json({
+        project: {
+          _id: shareLink.projectId.toString(),
+          name: project.name,
+          description: project.description,
+          status: project.status,
+        },
+        sprints: [],
+        tasks: [],
+        shareLink: {
+          name: shareLink.name,
+          expiresAt: shareLink.expiresAt,
+          settings: shareLink.settings,
+          visitCount,
+        },
+        includeProductBoard,
+      });
     }
 
     const tasks = await db.collection('project_tasks')
@@ -151,7 +188,7 @@ export async function GET(request, { params }) {
         settings: shareLink.settings,
         visitCount,
       },
-      includeProductBoard: shareLink.settings.includeProductBoard !== false,
+      includeProductBoard: shareLink.settings?.includeProductBoard === true,
     };
 
     return NextResponse.json(responseData);

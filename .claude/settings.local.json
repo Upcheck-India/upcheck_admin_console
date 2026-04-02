@@ -17,7 +17,10 @@
       "Bash(node --check src/app/api/share/s/[slug]/visitors/route.js)",
       "Bash(ls -la src/app/api/projects/[id]/share-links/)",
       "Bash(node --check src/app/api/projects/[id]/share-links/route.js)",
-      "Bash(node --check src/app/api/projects/[id]/share-links/[shareId]/route.js)"
+      "Bash(node --check src/app/api/projects/[id]/share-links/[shareId]/route.js)",
+      "Bash(npm run:*)",
+      "Bash(Select-String -Pattern \"Share link settings\" -Context 2)",
+      "Bash(Select-Object -First 20)"
     ]
   }
 }
