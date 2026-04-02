@@ -46,11 +46,13 @@ export async function GET(request, { params }) {
     const { db, user, error } = await authAndGetDb(request);
     if (error) return error;
 
-    if (!ObjectId.isValid(params.id)) {
+    const { id } = await params;
+
+    if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
 
-    const projectId = new ObjectId(params.id);
+    const projectId = new ObjectId(id);
 
     // Verify membership
     const project = await db.collection('projects').findOne({ _id: projectId });
@@ -80,11 +82,13 @@ export async function POST(request, { params }) {
     const { db, user, error } = await authAndGetDb(request);
     if (error) return error;
 
-    if (!ObjectId.isValid(params.id)) {
+    const { id } = await params;
+
+    if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
 
-    const projectId = new ObjectId(params.id);
+    const projectId = new ObjectId(id);
 
     const project = await db.collection('projects').findOne({ _id: projectId });
     if (!project) {
@@ -137,11 +141,13 @@ export async function PUT(request, { params }) {
     const { db, user, error } = await authAndGetDb(request);
     if (error) return error;
 
-    if (!ObjectId.isValid(params.id)) {
+    const { id } = await params;
+
+    if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
 
-    const projectId = new ObjectId(params.id);
+    const projectId = new ObjectId(id);
     const project = await db.collection('projects').findOne({ _id: projectId });
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
@@ -187,11 +193,13 @@ export async function DELETE(request, { params }) {
     const { db, user, error } = await authAndGetDb(request);
     if (error) return error;
 
-    if (!ObjectId.isValid(params.id)) {
+    const { id } = await params;
+
+    if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
 
-    const projectId = new ObjectId(params.id);
+    const projectId = new ObjectId(id);
     const project = await db.collection('projects').findOne({ _id: projectId });
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });

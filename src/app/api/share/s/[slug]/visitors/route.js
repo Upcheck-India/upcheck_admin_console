@@ -27,7 +27,7 @@ export async function GET(request, { params }) {
     const { db, user, error } = await authAndGetDb(request);
     if (error) return error;
 
-    const { slug } = params;
+    const { slug } = await params;
 
     // Find the share link
     const shareLink = await db.collection('project_share_links').findOne({ slug });

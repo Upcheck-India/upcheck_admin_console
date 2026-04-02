@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
+import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 /**
@@ -37,7 +37,7 @@ function parseUserAgent(ua) {
 
 export async function GET(request, { params }) {
   try {
-    const { slug } = params;
+    const { slug } = await params;
 
     if (!slug) {
       return NextResponse.json({ error: 'Invalid share link' }, { status: 400 });
@@ -163,7 +163,7 @@ export async function GET(request, { params }) {
 
 export async function POST(request, { params }) {
   try {
-    const { slug } = params;
+    const { slug } = await params;
     const { name, email } = await request.json();
 
     if (!slug) {
