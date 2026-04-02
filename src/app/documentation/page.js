@@ -13,6 +13,8 @@ import ProjectSpaceCard from './components/ProjectSpaceCard';
 import CreateProjectModal from './components/CreateProjectModal';
 import UploadModal from './components/UploadModal';
 import ProjectCardActions from './components/ProjectCardActions';
+import PermissionsModal from './components/PermissionsModal';
+import { canManagePermissions } from '../../lib/projectPermissions';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -643,11 +645,24 @@ export default function DocumentationPage() {
               : 'flex flex-col gap-3'
             }`}>
               {/* General space — always first */}
-              <ProjectSpaceCard
-                project={{ _id: 'general', name: 'General', description: 'Shared documents and general files' }}
-                stats={projectStats['general'] || { fileCount: 0, folderCount: 0 }}
-                isGeneral={true}
-              />
+              <div className="relative group">
+                <ProjectSpaceCard
+                  project={{ _id: 'general', name: 'General', description: 'Shared documents and general files' }}
+                  stats={projectStats['general'] || { fileCount: 0, folderCount: 0 }}
+                  isGeneral={true}
+                />
+                <div className="absolute top-3.5 right-3.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ProjectCardActions
+                    project={{ _id: 'general', name: 'General', permissionSettings: { accessMode: 'roles_based', allowedRoles: ['Console admin', 'Admin'], rolePermissions: {} } }}
+                    onEdit={() => {}}
+                    onDelete={() => {}}
+                    onPermissions={handlePermissions}
+                    onDetails={() => {}}
+                    onStatusChange={() => {}}
+                    canManagePerms={user && ['Admin', 'Console admin'].includes(user.role)}
+                  />
+                </div>
+              </div>
 
               {/* Project spaces */}
               {filteredProjects.map(project => (
@@ -667,6 +682,7 @@ export default function DocumentationPage() {
                       onPermissions={handlePermissions}
                       onDetails={handleDetails}
                       onStatusChange={handleStatusChange}
+                      canManagePerms={user && canManagePermissions(user, project)}
                     />
                   </div>
                 </div>
@@ -742,24 +758,18 @@ export default function DocumentationPage() {
         />
 
         {showPermissionsModal && selectedProject && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setShowPermissionsModal(false)}>
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 animate-slide-up" onClick={e => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold text-gray-900">Permissions — {selectedProject.name}</h3>
-                <button onClick={() => setShowPermissionsModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-sm text-gray-500 bg-gray-50 rounded-xl p-4 text-center">
-                Permission management coming soon.
-              </p>
-              <div className="flex justify-end mt-5">
-                <button onClick={() => setShowPermissionsModal(false)} className="px-4 py-2 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
+          <PermissionsModal
+            project={selectedProject}
+            isOpen={showPermissionsModal}
+            onClose={() => {
+              setShowPermissionsModal(false);
+              setSelectedProject(null);
+            }}
+            onUpdate={() => {
+              fetchProjects();
+            }}
+            isGeneralSpace={selectedProject._id === 'general'}
+          />
         )}
 
         {showDetailsModal && selectedProject && (

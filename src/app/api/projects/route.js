@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject } from '../../../lib/projectPermissions';
 
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
 function sanitizeTag(tag) {
@@ -41,9 +42,10 @@ export async function GET(req) {
     // Always filter projects by user permissions unless Admin/Console admin
     const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
 
+    // Fetch all projects based on query
     let query = {};
     if (!isAdmin) {
-      // Non-admins can only see projects they're part of
+      // Non-admins can only see projects they have access to
       query = {
         $or: [
           { superManager: user.username },
@@ -52,26 +54,28 @@ export async function GET(req) {
       };
     }
 
+    const allProjects = await projectsCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+    // Filter projects by permission settings
+    const accessibleProjects = allProjects.filter(project => canAccessProject(user, project));
+
     // Further filter if 'my' tab specified
     if (tab === 'my' && isAdmin) {
-      query = {
-        $or: [
-          { superManager: user.username },
-          { 'members.user': user.username }
-        ]
-      };
+      const myProjects = accessibleProjects.filter(p =>
+        p.superManager === user.username || p.members?.some(m => m.user === user.username)
+      );
+      return NextResponse.json(myProjects);
     }
 
     // Filter by tag if provided
     if (tag) {
       const sanitizedTag = sanitizeTag(tag);
       if (sanitizedTag) {
-        query.tags = sanitizedTag;
+        return NextResponse.json(accessibleProjects.filter(p => p.tags?.includes(sanitizedTag)));
       }
     }
 
-    const projects = await projectsCollection.find(query).sort({ createdAt: -1 }).toArray();
-    return NextResponse.json(projects);
+    return NextResponse.json(accessibleProjects);
   } catch (error) {
     console.error('Error fetching projects:', error);
     return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 });

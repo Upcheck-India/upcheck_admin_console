@@ -11,7 +11,8 @@
       "Bash(mv \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\login\\\\[[...catchall]].js\" \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\login\\\\[[...catchall]]\\\\page.js\")",
       "Bash(mkdir -p \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\register\\\\[[...catchall]]\")",
       "Bash(mv \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\register\\\\[[...catchall]].js\" \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\register\\\\[[...catchall]]\\\\page.js\")",
-      "Bash(yarn add:*)"
+      "Bash(yarn add:*)",
+      "Bash(node --check src/app/api/projects/[id]/sprints/route.js)"
     ]
   }
 }

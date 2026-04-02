@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from "../../../../../lib/mongodb";
 import { ObjectId, GridFSBucket } from 'mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canDownloadFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../../lib/projectPermissions';
 
 /**
  * GET /api/resources/[id]/download
@@ -47,8 +48,55 @@ export async function GET(req, { params }) {
       user = await db.collection('admin_users').findOne({ sessionToken: token });
     }
 
-    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
+    // Check project-level access
+    if (resource.projectId === 'general') {
+      // For General space, fetch permissions from database
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      // Check if user can access General space
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: "Access denied to General space" }, { status: 403 });
+      }
+
+      // Check if user can download this file
+      const perms = getGeneralSpacePermissionLevel(user, permSettings);
+      if (!perms) {
+        return NextResponse.json({ error: "Download not allowed for your permission level" }, { status: 403 });
+      }
+
+      if (perms.downloadScope === 'none') {
+        return NextResponse.json({ error: "Download not allowed for your permission level" }, { status: 403 });
+      }
+
+      if (perms.downloadScope === 'own') {
+        const isOwnFile = resource.createdBy === user.username || resource.createdBy === user._id?.toString() || resource.ownerId === user._id?.toString();
+        if (!isOwnFile) {
+          return NextResponse.json({ error: "You can only download your own files" }, { status: 403 });
+        }
+      }
+      // downloadScope === 'all' - can download all files
+    } else if (resource.projectId) {
+      const project = await db.collection('projects').findOne({ _id: new ObjectId(resource.projectId) });
+      if (project) {
+        // Check if user can access the project
+        if (!canAccessProject(user, project)) {
+          return NextResponse.json({ error: "Access denied to this project" }, { status: 403 });
+        }
+
+        // Check if user can download this file
+        if (!canDownloadFile(user, project, resource)) {
+          return NextResponse.json({ error: "Download not allowed for your permission level" }, { status: 403 });
+        }
+      }
+    }
+
+    // Fall back to intern restrictions for non-general projects
+    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
     if (!isAdmin && user?.role === 'Intern') {
       const serverSettings = await db.collection('server_settings').findOne({});
       if (!serverSettings?.allowInternDownload) {

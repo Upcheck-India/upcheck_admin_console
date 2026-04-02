@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject, canCreateInProject, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../lib/projectPermissions';
 
 // GET - Fetch folders for a project
 export async function GET(req) {
@@ -27,20 +28,22 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Project ID is required' }, { status: 400 });
     }
 
-    // Check project access (skip for 'general' project)
-    if (projectId !== 'general') {
+    // Check project access using permission system
+    if (projectId === 'general') {
+      // For General space, fetch permissions from database
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: 'Access denied to General space' }, { status: 403 });
+      }
+    } else {
       const project = await db.collection('projects').findOne({
         _id: new ObjectId(projectId)
       });
 
-      if (project) {
-        const isMember = project.members?.some(m => m.user === user.username);
-        const isSuperManager = project.superManager === user.username;
-        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-
-        if (!isMember && !isSuperManager && !isAdmin) {
-          return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
-        }
+      if (project && !canAccessProject(user, project)) {
+        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
       }
     }
 
@@ -91,19 +94,36 @@ export async function POST(req) {
     }
 
     // Check project access and permissions
-    if (projectId !== 'general') {
+    if (projectId === 'general') {
+      // For General space, fetch permissions from database
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      // Check if user can access General space
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: 'Access denied to General space' }, { status: 403 });
+      }
+
+      // Check if user can create folders in General space
+      const perms = getGeneralSpacePermissionLevel(user, permSettings);
+      if (!perms || perms.writeScope === 'none') {
+        return NextResponse.json({ error: 'Access denied: You do not have permission to create folders in General space' }, { status: 403 });
+      }
+    } else {
       const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
-      
+
       if (!project) {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       }
 
-      const isMember = project.members?.some(m => m.user === user.username);
-      const isSuperManager = project.superManager === user.username;
-      const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-      
-      if (!isMember && !isSuperManager && !isAdmin) {
+      // Check if user can access the project
+      if (!canAccessProject(user, project)) {
         return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
+      }
+
+      // Check if user can create folders in this project
+      if (!canCreateInProject(user, project)) {
+        return NextResponse.json({ error: 'Access denied: You do not have permission to create folders' }, { status: 403 });
       }
     }
 

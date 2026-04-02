@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject } from '../../../../lib/projectPermissions';
 
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
 function sanitizeTag(tag) {
@@ -242,12 +243,8 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // If superManager is null, no one is the manager yet.
-    const isSuperManager = project.superManager === user.username;
-    // Check if the user is in the members array by username.
-    const isMember = project.members.some(member => member.user === user.username);
-
-    if (!isMember && !isSuperManager) {
+    // Check if user can access the project using permission system
+    if (!canAccessProject(user, project)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

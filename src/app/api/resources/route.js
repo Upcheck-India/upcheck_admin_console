@@ -1,8 +1,9 @@
 // src/app/api/resources/route.js
 import { NextResponse } from 'next/server';
 import clientPromise from "../../../lib/mongodb";
-import { GridFSBucket } from 'mongodb';
+import { GridFSBucket, ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canReadFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../lib/projectPermissions';
 
 export async function GET(req) {
   try {
@@ -80,29 +81,53 @@ export async function GET(req) {
     // Combine both sources
     const allResources = [...resourcesCollection, ...resourcesFromGridFS];
 
-    // Check user permissions for download access
-    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
-
-    // Get server settings for intern restrictions
-    let serverSettings = null;
-    let allowInternDownload = true;
-    let allowedProjectsForDownload = [];
-
-    if (!isAdmin && user?.role === 'Intern') {
-      serverSettings = await db.collection('server_settings').findOne({});
-      allowInternDownload = serverSettings?.allowInternDownload !== false;
-      allowedProjectsForDownload = serverSettings?.allowedProjectsForDownload || [];
+    // Filter resources by project access permissions
+    if (projectId && projectId !== 'general') {
+      const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+      if (project && !canAccessProject(user, project)) {
+        // User doesn't have access to this project
+        return NextResponse.json([]);
+      }
     }
 
-    // Process resources - remove sensitive data and check access
+    // Process resources - remove sensitive data and check read permissions
     const processedResources = [];
     for (const resource of allResources) {
-      // For non-admin users, check download permissions
-      if (!isAdmin && user?.role === 'Intern' && !allowInternDownload) {
-        // Check if resource is in allowed projects/documents
-        const isAllowed = allowedProjectsForDownload.includes(resource.projectId);
-        if (!isAllowed) {
-          continue; // Skip this resource
+      // Check project-level access
+      if (resource.projectId === 'general') {
+        // For General space, fetch permissions from database
+        const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+        const permSettings = generalPerms?.permissionSettings;
+
+        if (!canAccessGeneralSpace(user, permSettings)) {
+          continue; // Skip this resource - user doesn't have access to General space
+        }
+
+        // Check file-level read permissions for General space
+        const perms = getGeneralSpacePermissionLevel(user, permSettings);
+        if (perms) {
+          if (perms.readScope === 'own') {
+            // Can only read own files
+            const isOwnFile = resource.createdBy === user.username || resource.createdBy === user._id?.toString() || resource.ownerId === user._id?.toString();
+            if (!isOwnFile) {
+              continue;
+            }
+          } else if (perms.readScope === 'none') {
+            continue; // Cannot read any files
+          }
+          // readScope === 'all' - can read all files
+        } else {
+          continue; // No permissions
+        }
+      } else if (resource.projectId) {
+        const project = await db.collection('projects').findOne({ _id: new ObjectId(resource.projectId) });
+        if (project && !canAccessProject(user, project)) {
+          continue; // Skip this resource - user doesn't have access to project
+        }
+
+        // Check file-level read permissions
+        if (project && !canReadFile(user, project, resource)) {
+          continue; // Skip this resource - user cannot read this file
         }
       }
 
@@ -110,7 +135,7 @@ export async function GET(req) {
       const { passwordHash, ...safeResource } = resource;
 
       // Add canDownload flag based on permissions
-      safeResource.canDownload = isAdmin || allowInternDownload || !resource.isPasswordProtected;
+      safeResource.canDownload = true; // Already filtered by canReadFile above
 
       processedResources.push(safeResource);
     }

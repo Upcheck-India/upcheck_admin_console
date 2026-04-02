@@ -198,6 +198,7 @@ export default function ProjectCardActions({
   onPermissions,
   onDetails,
   onStatusChange,
+  canManagePerms = false,
 }) {
   const [showMenu,          setShowMenu]          = useState(false);
   const [showStatusSub,     setShowStatusSub]     = useState(false);
@@ -346,14 +347,16 @@ export default function ProjectCardActions({
               Edit Project
             </button>
 
-            {/* Permissions */}
-            <button
-              onClick={() => { setShowMenu(false); if (typeof onPermissions === 'function') onPermissions(project); }}
-              className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Lock className="w-3.5 h-3.5 text-gray-400" />
-              Permissions
-            </button>
+            {/* Permissions - only visible to users who can manage permissions */}
+            {canManagePerms && (
+              <button
+                onClick={() => { setShowMenu(false); if (typeof onPermissions === 'function') onPermissions(project); }}
+                className="flex items-center gap-2.5 w-full px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Lock className="w-3.5 h-3.5 text-gray-400" />
+                Permissions
+              </button>
+            )}
 
             {/* Details */}
             <button
