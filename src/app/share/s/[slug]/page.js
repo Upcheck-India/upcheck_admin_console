@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Head from 'next/head';
 import {
   Clock, Calendar, Users, FileText, AlertCircle, CheckCircle, X, User, Mail,
-  Loader2, ExternalLink, Eye
+  Loader2, ExternalLink, Eye, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -34,11 +34,15 @@ export default function PublicSharePage() {
   const [error, setError] = useState(null);
   const [expired, setExpired] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
+  const [includeProductBoard, setIncludeProductBoard] = useState(true);
+
+  // Navigation state
+  const [selectedView, setSelectedView] = useState('all'); // 'all', 'backlog', or sprint._id
+  const [visitorSubmitted, setVisitorSubmitted] = useState(false);
 
   // Visitor info modal
   const [showVisitorModal, setShowVisitorModal] = useState(true);
   const [visitorInfo, setVisitorInfo] = useState({ name: '', email: '' });
-  const [visitorSubmitted, setVisitorSubmitted] = useState(false);
 
   // Fetch shared project data
   useEffect(() => {
@@ -64,6 +68,14 @@ export default function PublicSharePage() {
         setSprints(data.sprints);
         setTasks(data.tasks);
         setShareLink(data.shareLink);
+        setIncludeProductBoard(data.includeProductBoard);
+
+        // Set initial view
+        if (data.includeProductBoard) {
+          setSelectedView('all');
+        } else if (data.sprints.length > 0) {
+          setSelectedView(data.sprints[0]._id);
+        }
       } catch (err) {
         console.error('Error fetching shared project:', err);
         setError('Failed to load shared project');
@@ -106,22 +118,80 @@ export default function PublicSharePage() {
     };
 
     updateCountdown();
-    const interval = setInterval(updateCountdown, 60000); // Update every minute
+    const interval = setInterval(updateCountdown, 60000);
 
     return () => clearInterval(interval);
   }, [shareLink?.expiresAt]);
+
+  // Record visitor info
+  useEffect(() => {
+    if (visitorSubmitted && !showVisitorModal) {
+      const recordVisit = async () => {
+        try {
+          await fetch(`/api/share/s/${slug}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(visitorInfo),
+          });
+        } catch (err) {
+          console.error('Failed to record visit:', err);
+        }
+      };
+      recordVisit();
+    }
+  }, [visitorSubmitted, showVisitorModal, slug, visitorInfo]);
 
   const handleVisitorSubmit = (skip) => {
     if (!skip && (!visitorInfo.name || !visitorInfo.email)) {
       return;
     }
-    // Here you could send the visitor info to your backend
-    // await fetch('/api/share/visitor', { method: 'POST', body: JSON.stringify({ slug, ...visitorInfo }) });
     setVisitorSubmitted(true);
     setShowVisitorModal(false);
   };
 
-  const getColumnTasks = (status) => tasks.filter(t => t.status === status);
+  // Filter tasks based on selected view
+  const getFilteredTasks = () => {
+    if (selectedView === 'all') {
+      return tasks;
+    }
+    if (selectedView === 'backlog') {
+      return tasks.filter(t => !t.sprintId);
+    }
+    return tasks.filter(t => t.sprintId === selectedView);
+  };
+
+  const getColumnTasks = (status) => {
+    const filteredTasks = getFilteredTasks();
+    return filteredTasks.filter(t => t.status === status);
+  };
+
+  const getCurrentViewName = () => {
+    if (selectedView === 'all') return 'All Tasks';
+    if (selectedView === 'backlog') return 'Product Board';
+    const sprint = sprints.find(s => s._id === selectedView);
+    return sprint?.name || 'Unknown';
+  };
+
+  const navigateView = (direction) => {
+    const views = [];
+    if (includeProductBoard) views.push('backlog');
+    sprints.forEach(s => views.push(s._id));
+
+    if (selectedView === 'all') {
+      // Special case: 'all' shows everything, go to first view
+      if (direction === 'next' && views.length > 0) {
+        setSelectedView(views[0]);
+      }
+      return;
+    }
+
+    const currentIndex = views.indexOf(selectedView);
+    if (direction === 'prev' && currentIndex > 0) {
+      setSelectedView(views[currentIndex - 1]);
+    } else if (direction === 'next' && currentIndex < views.length - 1) {
+      setSelectedView(views[currentIndex + 1]);
+    }
+  };
 
   if (loading) {
     return (
@@ -153,6 +223,8 @@ export default function PublicSharePage() {
   if (!project) {
     return null;
   }
+
+  const filteredTasks = getFilteredTasks();
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -258,6 +330,12 @@ export default function PublicSharePage() {
                       {timeLeft}
                     </span>
                   )}
+                  {shareLink.visitCount !== undefined && (
+                    <span className="flex items-center gap-1 text-gray-600">
+                      <Users className="h-4 w-4" />
+                      {shareLink.visitCount} visit(s)
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -276,19 +354,88 @@ export default function PublicSharePage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Sprint Tabs */}
-        {sprints.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Sprints</h2>
-            <div className="flex flex-wrap gap-3">
-              {sprints.map(sprint => (
-                <div
-                  key={sprint._id}
-                  className="bg-white border border-gray-200 rounded-lg px-4 py-3 min-w-[200px]"
+        {/* View Navigation */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-900">
+              {getCurrentViewName()}
+            </h2>
+            <div className="flex items-center gap-2">
+              {includeProductBoard && (
+                <button
+                  onClick={() => setSelectedView('all')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedView === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
                 >
+                  All Views
+                </button>
+              )}
+              {includeProductBoard && (
+                <button
+                  onClick={() => setSelectedView('backlog')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedView === 'backlog'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  Product Board
+                </button>
+              )}
+              {sprints.map(sprint => (
+                <button
+                  key={sprint._id}
+                  onClick={() => setSelectedView(sprint._id)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    selectedView === sprint._id
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                  }`}
+                >
+                  {sprint.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick navigation arrows */}
+          {(includeProductBoard || sprints.length > 1) && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigateView('prev')}
+                className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 transition-colors"
+                title="Previous view"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-sm text-gray-600 flex-grow text-center">
+                {getCurrentViewName()}
+              </span>
+              <button
+                onClick={() => navigateView('next')}
+                className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 transition-colors"
+                title="Next view"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Sprint Info Cards (when viewing specific sprint) */}
+        {selectedView !== 'all' && selectedView !== 'backlog' && (
+          <div className="mb-8">
+            {(() => {
+              const sprint = sprints.find(s => s._id === selectedView);
+              if (!sprint) return null;
+              return (
+                <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 inline-flex items-center gap-4">
                   <h3 className="font-semibold text-gray-900">{sprint.name}</h3>
                   {(sprint.startDate || sprint.endDate) && (
-                    <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
+                    <div className="text-sm text-gray-500 flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {sprint.startDate && new Date(sprint.startDate).toLocaleDateString()}
                       {sprint.endDate && (
@@ -296,12 +443,12 @@ export default function PublicSharePage() {
                       )}
                     </div>
                   )}
-                  <div className="mt-2 text-sm text-gray-600">
-                    {tasks.filter(t => t.sprintId === sprint._id).length} tasks
+                  <div className="text-sm text-gray-600">
+                    {filteredTasks.length} tasks
                   </div>
                 </div>
-              ))}
-            </div>
+              );
+            })()}
           </div>
         )}
 

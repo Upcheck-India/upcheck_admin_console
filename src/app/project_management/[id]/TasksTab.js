@@ -214,6 +214,7 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
   const [editingSprint, setEditingSprint] = useState(null);
   const [editSprintName, setEditSprintName] = useState('');
   const [sprintMenuOpen, setSprintMenuOpen] = useState(null); // Track which sprint menu is open
+  const [sprintMenuPosition, setSprintMenuPosition] = useState({ x: 0, y: 0 });
   const [showDeleteSprintConfirm, setShowDeleteSprintConfirm] = useState(null); // Sprint to delete
 
   // DnD sensors
@@ -688,11 +689,13 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
                           {s.name}
                         </button>
                         {isManager && (
-                          <div className="relative inline-block">
+                          <>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setSprintMenuPosition({ x: rect.left, y: rect.bottom + 4 });
                                 setSprintMenuOpen(isMenuOpen ? null : s._id);
                               }}
                               className="ml-1 p-1 rounded hover:bg-gray-300 text-gray-500 hover:text-gray-700"
@@ -707,7 +710,10 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
                                   className="fixed inset-0 z-40"
                                   onClick={() => setSprintMenuOpen(null)}
                                 />
-                                <div className="absolute left-0 top-full mt-1 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 min-w-[140px]">
+                                <div
+                                  className="fixed bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 min-w-[140px]"
+                                  style={{ left: sprintMenuPosition.x, top: sprintMenuPosition.y }}
+                                >
                                   <button
                                     onClick={() => {
                                       handleStartRenameSprint(s);
@@ -731,7 +737,7 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
                                 </div>
                               </>
                             )}
-                          </div>
+                          </>
                         )}
                       </div>
                     )}

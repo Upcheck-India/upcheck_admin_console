@@ -1,12 +1,39 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
+import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 /**
  * GET /api/share/s/:slug
  *      Public endpoint to get project data via share link (no auth required)
  *      Returns project details, sprints, and tasks based on share settings
+ *
+ * POST /api/share/s/:slug
+ *      Record visitor information
  */
+
+function parseUserAgent(ua) {
+  const result = { browser: 'Unknown', os: 'Unknown', device: 'Desktop' };
+
+  // Detect browser
+  if (ua.includes('Firefox')) result.browser = 'Firefox';
+  else if (ua.includes('Edg/')) result.browser = 'Edge';
+  else if (ua.includes('Chrome')) result.browser = 'Chrome';
+  else if (ua.includes('Safari')) result.browser = 'Safari';
+  else if (ua.includes('MSIE') || ua.includes('Trident')) result.browser = 'IE';
+
+  // Detect OS
+  if (ua.includes('Win')) result.os = 'Windows';
+  else if (ua.includes('Mac')) result.os = 'macOS';
+  else if (ua.includes('Linux')) result.os = 'Linux';
+  else if (ua.includes('Android')) result.os = 'Android';
+  else if (ua.includes('iOS')) result.os = 'iOS';
+
+  // Detect device
+  if (/mobile|android|iphone|ipad/i.test(ua)) result.device = 'Mobile';
+  else if (/tablet|ipad/i.test(ua)) result.device = 'Tablet';
+
+  return result;
+}
 
 export async function GET(request, { params }) {
   try {
@@ -37,10 +64,12 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Get sprints (filtered if settings specify)
+    // Get sprints - separate backlog from sprint sprints
     let sprintsQuery = { projectId: shareLink.projectId };
-    if (shareLink.settings.showSprints && shareLink.settings.showSprints.length > 0) {
-      sprintsQuery._id = { $in: shareLink.settings.showSprints.map(id => new ObjectId(id)) };
+    const selectedSprintIds = shareLink.settings?.showSprints || [];
+
+    if (selectedSprintIds.length > 0) {
+      sprintsQuery._id = { $in: selectedSprintIds.map(id => new ObjectId(id)) };
     }
 
     const sprints = await db.collection('project_sprints')
@@ -48,12 +77,12 @@ export async function GET(request, { params }) {
       .sort({ createdAt: 1 })
       .toArray();
 
-    // Get tasks for these sprints
-    const sprintIds = sprints.map(s => s._id);
+    // Get tasks
+    const sprintIds = sprints.map(s => s._id.toString());
     let tasksQuery = { projectId: shareLink.projectId };
 
     if (sprintIds.length > 0) {
-      tasksQuery.sprintId = { $in: [...sprintIds, null] }; // Include backlog tasks
+      tasksQuery.sprintId = { $in: [...sprintIds.map(id => new ObjectId(id)), null] };
     }
 
     const tasks = await db.collection('project_tasks')
@@ -63,14 +92,12 @@ export async function GET(request, { params }) {
     // Process user names based on settings
     let processedTasks = tasks;
     if (!shareLink.settings.showUserNames) {
-      // Anonymize assignees and reporters
       processedTasks = tasks.map(task => ({
         ...task,
         assignees: task.assignees ? task.assignees.map(() => ({ anonymous: true })) : [],
         reporter: task.reporter ? { anonymous: true } : null,
       }));
     } else {
-      // Load user details for assignees and reporters
       const userIds = new Set();
       tasks.forEach(task => {
         if (task.assignees) task.assignees.forEach(id => userIds.add(id));
@@ -89,6 +116,9 @@ export async function GET(request, { params }) {
         reporter: task.reporter ? userMap.get(task.reporter.toString()) || { username: 'Unknown' } : null,
       }));
     }
+
+    // Get visitor count for this link
+    const visitCount = await db.collection('project_share_visits').countDocuments({ shareLinkId: shareLink._id });
 
     // Format response
     const responseData = {
@@ -119,12 +149,67 @@ export async function GET(request, { params }) {
         name: shareLink.name,
         expiresAt: shareLink.expiresAt,
         settings: shareLink.settings,
+        visitCount,
       },
+      includeProductBoard: shareLink.settings.includeProductBoard !== false,
     };
 
     return NextResponse.json(responseData);
   } catch (err) {
     console.error('Failed to fetch shared project:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function POST(request, { params }) {
+  try {
+    const { slug } = params;
+    const { name, email } = await request.json();
+
+    if (!slug) {
+      return NextResponse.json({ error: 'Invalid share link' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    // Find the share link
+    const shareLink = await db.collection('project_share_links').findOne({ slug, isActive: true });
+
+    if (!shareLink) {
+      return NextResponse.json({ error: 'Share link not found or inactive' }, { status: 404 });
+    }
+
+    // Get visitor info from headers
+    const headers = request.headers;
+    const userAgent = headers.get('user-agent') || '';
+    const forwardedFor = headers.get('x-forwarded-for');
+    const ip = forwardedFor ? forwardedFor.split(',')[0].trim() : 'Unknown';
+
+    const uaInfo = parseUserAgent(userAgent);
+
+    // Get approximate location from IP (using a simple method - in production use a geolocation service)
+    const location = 'Unknown'; // Would need external API for real location
+
+    // Save visit record
+    const visit = {
+      shareLinkId: shareLink._id,
+      projectId: shareLink.projectId,
+      name: name || 'Anonymous',
+      email: email || 'Anonymous',
+      ip,
+      browser: uaInfo.browser,
+      os: uaInfo.os,
+      device: uaInfo.device,
+      location,
+      visitedAt: new Date(),
+    };
+
+    await db.collection('project_share_visits').insertOne(visit);
+
+    return NextResponse.json({ success: true, visitId: visit._id });
+  } catch (err) {
+    console.error('Failed to record visitor:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

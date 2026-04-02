@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, Copy, Link2, Clock, Calendar, Users, FileText, CheckCircle, Trash2, Loader2 } from 'lucide-react';
+import { X, Copy, Link2, Clock, Calendar, Users, FileText, CheckCircle, Trash2, Loader2, Eye, ExternalLink, Globe, Monitor, Tablet, Smartphone } from 'lucide-react';
 
 const ShareLinksModal = ({ projectId, onClose }) => {
   const [shareLinks, setShareLinks] = useState([]);
@@ -10,12 +10,16 @@ const ShareLinksModal = ({ projectId, onClose }) => {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [viewingVisitors, setViewingVisitors] = useState(null); // Share link ID to view visitors
+  const [visitors, setVisitors] = useState([]);
+  const [visitorsLoading, setVisitorsLoading] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
     name: '',
     expiresAt: '',
     showSprints: [],
+    includeProductBoard: true,
     showUserNames: true,
     showDescriptions: true,
     showDueDates: true,
@@ -89,6 +93,7 @@ const ShareLinksModal = ({ projectId, onClose }) => {
         name: '',
         expiresAt: '',
         showSprints: sprints.map(s => s._id),
+        includeProductBoard: true,
         showUserNames: true,
         showDescriptions: true,
         showDueDates: true,
@@ -97,6 +102,25 @@ const ShareLinksModal = ({ projectId, onClose }) => {
       setSubmitError(err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const fetchVisitors = async (shareLink) => {
+    setVisitorsLoading(true);
+    try {
+      const res = await fetch(`/api/share/s/${shareLink.slug}/visitors`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      if (!res.ok) throw new Error('Failed to fetch visitors');
+      const data = await res.json();
+      setVisitors(data);
+      setViewingVisitors(shareLink);
+    } catch (err) {
+      alert(`Error fetching visitors: ${err.message}`);
+    } finally {
+      setVisitorsLoading(false);
     }
   };
 
@@ -243,6 +267,17 @@ const ShareLinksModal = ({ projectId, onClose }) => {
                     <FileText className="h-4 w-4 inline mr-1" />
                     Sprints to Include
                   </label>
+                  <div className="mb-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.includeProductBoard}
+                        onChange={(e) => setFormData(prev => ({ ...prev, includeProductBoard: e.target.checked }))}
+                        className="rounded text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 font-medium">Include Product Board (Backlog tasks)</span>
+                    </label>
+                  </div>
                   <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-300 rounded-md p-2 bg-white">
                     {sprints.map(sprint => (
                       <label key={sprint._id} className="flex items-center gap-2 cursor-pointer">
@@ -389,6 +424,13 @@ const ShareLinksModal = ({ projectId, onClose }) => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => fetchVisitors(link)}
+                        className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors"
+                        title="View visitors"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => handleCopyLink(link.slug)}
                         className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                         title="Copy link"
@@ -418,6 +460,91 @@ const ShareLinksModal = ({ projectId, onClose }) => {
             )}
           </div>
         </div>
+
+        {/* Visitors Modal */}
+        {viewingVisitors && (
+          <div
+            className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setViewingVisitors(null);
+            }}
+          >
+            <div
+              className="bg-white rounded-lg shadow-xl w-full max-w-3xl relative flex flex-col"
+              style={{ maxHeight: '90vh' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex justify-between items-center p-6 border-b">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Visitors</h2>
+                  <p className="text-sm text-gray-500">{viewingVisitors.name} - {visitors.length} visit(s)</p>
+                </div>
+                <button onClick={() => setViewingVisitors(null)} className="text-gray-500 hover:text-gray-800">
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="p-6 overflow-y-auto flex-grow">
+                {visitorsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  </div>
+                ) : visitors.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No visitors yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {visitors.map((visit, index) => (
+                      <div
+                        key={visit._id || index}
+                        className="p-4 border border-gray-200 rounded-lg bg-gray-50"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-grow">
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-gray-500" />
+                              <span className="font-semibold text-gray-900">
+                                {visit.name || 'Anonymous'}
+                                {visit.email && visit.email !== 'Anonymous' && (
+                                  <span className="text-gray-500 font-normal"> - {visit.email}</span>
+                                )}
+                              </span>
+                            </div>
+                            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Globe className="h-4 w-4" />
+                                <span>IP: {visit.ip || 'Unknown'}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Monitor className="h-4 w-4" />
+                                <span>{visit.browser} on {visit.os}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-gray-600">
+                                {visit.device === 'Mobile' ? (
+                                  <Smartphone className="h-4 w-4" />
+                                ) : visit.device === 'Tablet' ? (
+                                  <Tablet className="h-4 w-4" />
+                                ) : (
+                                  <Monitor className="h-4 w-4" />
+                                )}
+                                <span>{visit.device}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <Clock className="h-4 w-4" />
+                                <span>{new Date(visit.visitedAt).toLocaleString()}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
