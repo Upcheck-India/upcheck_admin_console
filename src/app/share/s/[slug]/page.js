@@ -1,30 +1,172 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Head from 'next/head';
 import {
-  Clock, Calendar, Users, FileText, AlertCircle, CheckCircle, X, User, Mail,
-  Loader2, Eye, ChevronLeft, ChevronRight, RefreshCw
+  Clock, Calendar, Users, FileText, AlertCircle, X, User, Mail,
+  Loader2, Eye, ChevronLeft, ChevronRight, RefreshCw, Shield,
+  Tag, LayoutGrid, Layers,
 } from 'lucide-react';
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
 const STATUS_CONFIG = {
-  Backlog: { label: 'Backlog', color: 'bg-gray-100 text-gray-800' },
-  'To Do': { label: 'To Do', color: 'bg-blue-100 text-blue-800' },
-  'In Progress': { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800' },
-  Done: { label: 'Done', color: 'bg-green-100 text-green-800' },
+  Backlog:       { label: 'Backlog',      color: 'bg-slate-100 text-slate-600 border-slate-200',      dot: 'bg-slate-400' },
+  'To Do':       { label: 'To Do',        color: 'bg-sky-50 text-sky-700 border-sky-200',             dot: 'bg-sky-500' },
+  'In Progress': { label: 'In Progress',  color: 'bg-amber-50 text-amber-700 border-amber-200',       dot: 'bg-amber-500' },
+  Done:          { label: 'Done',         color: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
 };
 
-const TYPE_COLORS = {
-  Feature: 'bg-blue-500',
-  Bug: 'bg-red-500',
-  Chore: 'bg-yellow-500',
-  Epic: 'bg-purple-500',
+const TYPE_CONFIG = {
+  Feature: { bg: 'bg-blue-100',   text: 'text-blue-700' },
+  Bug:     { bg: 'bg-red-100',    text: 'text-red-700' },
+  Chore:   { bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  Epic:    { bg: 'bg-purple-100', text: 'text-purple-700' },
 };
+
+const ORDERED_STATUSES = ['Backlog', 'To Do', 'In Progress', 'Done'];
+
+// ─── TaskCard ─────────────────────────────────────────────────────────────────
+
+function TaskCard({ task, settings }) {
+  const typeConfig = TYPE_CONFIG[task.type] ?? { bg: 'bg-gray-100', text: 'text-gray-700' };
+
+  return (
+    <div className="group bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200">
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <h4 className="text-sm font-semibold text-slate-800 leading-snug flex-1 min-w-0">
+          {task.title}
+        </h4>
+        <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${typeConfig.bg} ${typeConfig.text}`}>
+          <Tag className="h-2.5 w-2.5" />
+          {task.type}
+        </span>
+      </div>
+
+      {settings.showDescriptions !== false && task.description && (
+        <p className="text-xs text-slate-500 mb-3 line-clamp-2 leading-relaxed">
+          {task.description}
+        </p>
+      )}
+
+      {(settings.showDueDates !== false || (task.assignees && task.assignees.length > 0)) && (
+        <div className="flex items-center justify-between gap-2 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-500">
+          {settings.showDueDates !== false && task.dueDate ? (
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+              {new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            </span>
+          ) : <span />}
+
+          {task.assignees && task.assignees.length > 0 && (
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3 flex-shrink-0" />
+              {settings.showUserNames
+                ? task.assignees.map(a => a.username ?? 'Anonymous').join(', ')
+                : `${task.assignees.length} assignee${task.assignees.length !== 1 ? 's' : ''}`}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── VisitorModal ─────────────────────────────────────────────────────────────
+
+function VisitorModal({ onSubmit }) {
+  const [info, setInfo] = useState({ name: '', email: '' });
+  const canSubmit = info.name.trim() !== '' && info.email.trim() !== '';
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 backdrop-blur-sm flex justify-center items-center z-50 p-4"
+      onClick={() => onSubmit(null)}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 border border-slate-100"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-start mb-5">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900">Welcome</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Help the team know who's visiting</p>
+          </div>
+          <button
+            onClick={() => onSubmit(null)}
+            className="text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+              Your Name
+            </label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                value={info.name}
+                onChange={e => setInfo(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                placeholder="Jane Smith"
+                autoFocus
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1.5 uppercase tracking-wide">
+              Email Address
+            </label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <input
+                type="email"
+                value={info.email}
+                onChange={e => setInfo(prev => ({ ...prev, email: e.target.value }))}
+                className="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                placeholder="jane@company.com"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={() => onSubmit(null)}
+            className="flex-1 py-2.5 text-sm font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+          >
+            Skip
+          </button>
+          <button
+            onClick={() => onSubmit(info)}
+            disabled={!canSubmit}
+            className="flex-1 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Continue
+          </button>
+        </div>
+
+        <p className="text-xs text-slate-400 text-center mt-3">
+          <Shield className="h-3 w-3 inline mr-1" />
+          Optional — your info is only shared with the project team
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PublicSharePage() {
   const params = useParams();
-  const { slug } = params;
+  const slug = params?.slug;
 
   const [project, setProject] = useState(null);
   const [sprints, setSprints] = useState([]);
@@ -35,24 +177,17 @@ export default function PublicSharePage() {
   const [expired, setExpired] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Available views based on share settings
   const [availableViews, setAvailableViews] = useState([]);
-
-  // Navigation state
   const [selectedView, setSelectedView] = useState(null);
-  const [visitorSubmitted, setVisitorSubmitted] = useState(false);
-
-  // Visitor info modal
   const [showVisitorModal, setShowVisitorModal] = useState(true);
-  const [visitorInfo, setVisitorInfo] = useState({ name: '', email: '' });
+  const selectedViewRef = useRef(null);
 
-  // Fetch shared project data
-  const fetchSharedProject = async (silent = false) => {
+  // ── Data fetching ──────────────────────────────────────────────────────────
+
+  const fetchSharedProject = useCallback(async (silent = false) => {
+    if (!slug) return false;
     try {
-      if (!silent) {
-        setLoading(true);
-      }
+      if (!silent) setLoading(true);
       setError(null);
 
       const res = await fetch(`/api/share/s/${slug}`);
@@ -65,7 +200,7 @@ export default function PublicSharePage() {
         } else if (res.status === 404) {
           setError('Share link not found or inactive');
         } else {
-          setError(data.error || 'Failed to load shared project');
+          setError(data.error ?? 'Failed to load shared project');
         }
         setLoading(false);
         return false;
@@ -76,174 +211,133 @@ export default function PublicSharePage() {
       setTasks(data.tasks);
       setShareLink(data.shareLink);
 
-      // Build available views based on share settings
       const views = [];
-
-      // Use the processed includeProductBoard from API response (handles old data correctly)
       if (data.includeProductBoard === true) {
-        views.push({ id: 'backlog', name: 'Product Board' });
+        views.push({ id: 'backlog', name: 'Product Board', type: 'backlog' });
       }
-
-      // Add selected sprints only
       data.sprints.forEach(sprint => {
-        views.push({ id: sprint._id, name: sprint.name });
+        views.push({ id: sprint._id, name: sprint.name, type: 'sprint' });
       });
-
       setAvailableViews(views);
 
-      // Set initial view
-      if (views.length > 0 && !selectedView) {
+      if (views.length > 0 && !selectedViewRef.current) {
+        selectedViewRef.current = views[0].id;
         setSelectedView(views[0].id);
       }
 
-      // Update countdown
       if (data.shareLink?.expiresAt) {
         updateCountdown(new Date(data.shareLink.expiresAt));
       }
 
       setLoading(false);
       return true;
-    } catch (err) {
-      console.error('Error fetching shared project:', err);
+    } catch {
       setError('Failed to load shared project');
       setLoading(false);
       return false;
     }
-  };
-
-  useEffect(() => {
-    if (slug) {
-      fetchSharedProject();
-    }
   }, [slug]);
 
-  // Polling - check link validity every 10 seconds
+  useEffect(() => {
+    fetchSharedProject();
+  }, [fetchSharedProject]);
+
   useEffect(() => {
     const interval = setInterval(() => {
-      if (!expired && !loading) {
-        fetchSharedProject(true); // silent refresh
-      }
-    }, 10000); // 10 seconds
-
+      if (!expired) fetchSharedProject(true);
+    }, 30_000);
     return () => clearInterval(interval);
-  }, [expired, loading, slug]);
+  }, [expired, fetchSharedProject]);
 
-  // Countdown timer for expiration
-  const updateCountdown = (endDate) => {
-    const end = new Date(endDate);
-    const now = new Date();
-    const diff = end - now;
+  // ── Countdown ──────────────────────────────────────────────────────────────
 
-    if (diff <= 0) {
-      setExpired(true);
-      setTimeLeft('Expired');
-      return;
-    }
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-
-    if (days > 0) {
-      setTimeLeft(`${days}d ${hours}h ${minutes}m remaining`);
-    } else if (hours > 0) {
-      setTimeLeft(`${hours}h ${minutes}m remaining`);
-    } else {
-      setTimeLeft(`${minutes}m remaining`);
-    }
+  const updateCountdown = (end) => {
+    const diff = end.getTime() - Date.now();
+    if (diff <= 0) { setExpired(true); setTimeLeft('Expired'); return; }
+    const d = Math.floor(diff / 86_400_000);
+    const h = Math.floor((diff % 86_400_000) / 3_600_000);
+    const m = Math.floor((diff % 3_600_000) / 60_000);
+    setTimeLeft(d > 0 ? `${d}d ${h}h left` : h > 0 ? `${h}h ${m}m left` : `${m}m left`);
   };
 
   useEffect(() => {
     if (!shareLink?.expiresAt) return;
-
     updateCountdown(new Date(shareLink.expiresAt));
-    const interval = setInterval(() => {
-      updateCountdown(new Date(shareLink.expiresAt));
-    }, 60000); // Update every minute
-
-    return () => clearInterval(interval);
+    const t = setInterval(() => updateCountdown(new Date(shareLink.expiresAt)), 60_000);
+    return () => clearInterval(t);
   }, [shareLink?.expiresAt]);
 
-  // Record visitor info
-  useEffect(() => {
-    if (visitorSubmitted && !showVisitorModal) {
-      const recordVisit = async () => {
-        try {
-          await fetch(`/api/share/s/${slug}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(visitorInfo),
-          });
-        } catch (err) {
-          console.error('Failed to record visit:', err);
-        }
-      };
-      recordVisit();
-    }
-  }, [visitorSubmitted, showVisitorModal, slug, visitorInfo]);
+  // ── Visitor tracking ───────────────────────────────────────────────────────
 
-  const handleVisitorSubmit = (skip) => {
-    if (!skip && (!visitorInfo.name || !visitorInfo.email)) {
-      return;
-    }
-    setVisitorSubmitted(true);
+  const handleVisitorSubmit = async (info) => {
     setShowVisitorModal(false);
+    if (!info) return;
+    try {
+      await fetch(`/api/share/s/${slug}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(info),
+      });
+    } catch {
+      // silently ignore
+    }
   };
 
-  // Filter tasks based on selected view
-  const getFilteredTasks = () => {
-    if (selectedView === 'backlog') {
-      return tasks.filter(t => !t.sprintId);
-    }
+  // ── View helpers ───────────────────────────────────────────────────────────
+
+  const getFilteredTasks = useCallback(() => {
+    if (selectedView === 'backlog') return tasks.filter(t => !t.sprintId);
     return tasks.filter(t => t.sprintId === selectedView);
-  };
+  }, [tasks, selectedView]);
 
-  const getColumnTasks = (status) => {
-    const filteredTasks = getFilteredTasks();
-    return filteredTasks.filter(t => t.status === status);
-  };
+  const getCurrentViewName = () =>
+    availableViews.find(v => v.id === selectedView)?.name ?? '';
 
-  const getCurrentViewName = () => {
-    const view = availableViews.find(v => v.id === selectedView);
-    return view?.name || 'All Tasks';
-  };
+  const currentViewIndex = availableViews.findIndex(v => v.id === selectedView);
 
-  const navigateView = (direction) => {
-    const currentIndex = availableViews.findIndex(v => v.id === selectedView);
-    if (direction === 'prev' && currentIndex > 0) {
-      setSelectedView(availableViews[currentIndex - 1].id);
-    } else if (direction === 'next' && currentIndex < availableViews.length - 1) {
-      setSelectedView(availableViews[currentIndex + 1].id);
+  const navigateView = (dir) => {
+    if (dir === 'prev' && currentViewIndex > 0) {
+      const id = availableViews[currentViewIndex - 1].id;
+      selectedViewRef.current = id;
+      setSelectedView(id);
+    } else if (dir === 'next' && currentViewIndex < availableViews.length - 1) {
+      const id = availableViews[currentViewIndex + 1].id;
+      selectedViewRef.current = id;
+      setSelectedView(id);
     }
   };
 
-  // Manual refresh handler
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchSharedProject();
+    await fetchSharedProject(false);
     setRefreshing(false);
   };
 
+  // ── States ─────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="h-9 w-9 text-blue-600 animate-spin" />
+        <p className="text-sm text-slate-500 animate-pulse">Loading project…</p>
       </div>
     );
   }
 
   if (error || expired) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            {expired ? 'Link Expired' : 'Link Not Available'}
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-sm w-full bg-white rounded-2xl shadow-xl border border-slate-100 p-8 text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-red-50 rounded-full mb-4">
+            <AlertCircle className="h-8 w-8 text-red-500" />
+          </div>
+          <h1 className="text-xl font-bold text-slate-900 mb-2">
+            {expired ? 'Link Expired' : 'Not Available'}
           </h1>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <p className="text-sm text-slate-500">{error}</p>
           {shareLink?.expiresAt && (
-            <p className="text-sm text-gray-500">
-              This link expired on {new Date(shareLink.expiresAt).toLocaleDateString()}
+            <p className="text-xs text-slate-400 mt-3">
+              Expired on {new Date(shareLink.expiresAt).toLocaleDateString()}
             </p>
           )}
         </div>
@@ -251,296 +345,198 @@ export default function PublicSharePage() {
     );
   }
 
-  if (!project) {
-    return null;
-  }
+  if (!project) return null;
 
   const filteredTasks = getFilteredTasks();
+  const settings = shareLink?.settings ?? {};
+  const currentSprint = selectedView && selectedView !== 'backlog'
+    ? sprints.find(s => s._id === selectedView)
+    : null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50 font-sans">
       <Head>
-        <title>{project.name} - Shared Project</title>
+        <title>{project.name} — Shared Project</title>
         <meta name="description" content={`Viewing shared project: ${project.name}`} />
+        <meta name="robots" content="noindex" />
       </Head>
 
-      {/* Visitor Info Modal */}
-      {showVisitorModal && !visitorSubmitted && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) handleVisitorSubmit(true);
-          }}
-        >
-          <div
-            className="bg-white rounded-lg shadow-xl w-full max-w-md p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Visitor Information</h3>
-              <button
-                onClick={() => handleVisitorSubmit(true)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <p className="text-sm text-gray-600 mb-4">
-              Optional: Please provide your name and email to help the project team track visitors.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <User className="h-4 w-4 inline mr-1" />
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={visitorInfo.name}
-                  onChange={(e) => setVisitorInfo(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Your name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  <Mail className="h-4 w-4 inline mr-1" />
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={visitorInfo.email}
-                  onChange={(e) => setVisitorInfo(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="your@email.com"
-                />
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => handleVisitorSubmit(true)}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Skip
-                </button>
-                <button
-                  onClick={() => handleVisitorSubmit(false)}
-                  disabled={!visitorInfo.name || !visitorInfo.email}
-                  className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-300"
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {showVisitorModal && <VisitorModal onSubmit={handleVisitorSubmit} />}
 
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3">
-                <Eye className="h-8 w-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center shadow-sm">
+                <Eye className="h-5 w-5 text-white" />
               </div>
-              {project.description && (
-                <p className="text-gray-600 mt-2">{project.description}</p>
-              )}
-              {shareLink && (
-                <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
-                  <span className="flex items-center gap-1 text-gray-600">
-                    <FileText className="h-4 w-4" />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-lg font-bold text-slate-900 truncate">{project.name}</h1>
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    project.status === 'active'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : project.status === 'paused'
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-slate-100 text-slate-600'
+                  }`}>
+                    {project.status ?? 'Active'}
+                  </span>
+                </div>
+                {project.description && (
+                  <p className="text-xs text-slate-500 mt-0.5 truncate">{project.description}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="hidden sm:flex items-center gap-3 text-xs text-slate-500">
+                {shareLink?.name && (
+                  <span className="flex items-center gap-1">
+                    <FileText className="h-3.5 w-3.5" />
                     {shareLink.name}
                   </span>
-                  {shareLink.expiresAt && (
-                    <span className={`flex items-center gap-1 ${
-                      timeLeft === 'Expired' ? 'text-red-600' : 'text-amber-600'
-                    }`}>
-                      <Clock className="h-4 w-4" />
-                      {timeLeft}
-                    </span>
-                  )}
-                  {shareLink.visitCount !== undefined && (
-                    <span className="flex items-center gap-1 text-gray-600">
-                      <Users className="h-4 w-4" />
-                      {shareLink.visitCount} visit(s)
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="flex items-center gap-4">
+                )}
+                {timeLeft && (
+                  <span className={`flex items-center gap-1 font-medium ${
+                    timeLeft === 'Expired' ? 'text-red-600' : 'text-amber-600'
+                  }`}>
+                    <Clock className="h-3.5 w-3.5" />
+                    {timeLeft}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={handleRefresh}
                 disabled={refreshing}
-                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors disabled:opacity-50"
-                title="Refresh data"
+                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-40"
+                title="Refresh"
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </button>
-              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                project.status === 'active' ? 'bg-green-100 text-green-700' :
-                project.status === 'paused' ? 'bg-yellow-100 text-yellow-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {project.status || 'Active'}
-              </span>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* View Navigation - Only show selected views */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+
+        {/* ── View Navigation ─────────────────────────────────────────────── */}
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {getCurrentViewName()}
-            </h2>
-            <div className="flex items-center gap-2 flex-wrap">
-              {availableViews.map((view) => (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-2 flex-wrap flex-1">
+              {availableViews.map(view => (
                 <button
                   key={view.id}
-                  onClick={() => setSelectedView(view.id)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  onClick={() => {
+                    selectedViewRef.current = view.id;
+                    setSelectedView(view.id);
+                  }}
+                  className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
                     selectedView === view.id
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:border-blue-300 hover:text-blue-700'
                   }`}
                 >
+                  {view.type === 'backlog'
+                    ? <LayoutGrid className="h-3.5 w-3.5" />
+                    : <Layers className="h-3.5 w-3.5" />}
                   {view.name}
                 </button>
               ))}
             </div>
+
+            {availableViews.length > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => navigateView('prev')}
+                  disabled={currentViewIndex <= 0}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Previous view"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => navigateView('next')}
+                  disabled={currentViewIndex >= availableViews.length - 1}
+                  className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Next view"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Quick navigation arrows */}
-          {availableViews.length > 1 && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateView('prev')}
-                className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 transition-colors"
-                title="Previous view"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="text-sm text-gray-600 flex-grow text-center">
-                {getCurrentViewName()}
+          {currentSprint && (
+            <div className="mt-4 inline-flex items-center gap-4 bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm shadow-sm">
+              <span className="font-semibold text-slate-800">{currentSprint.name}</span>
+              {(currentSprint.startDate || currentSprint.endDate) && (
+                <span className="flex items-center gap-1 text-slate-500">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {currentSprint.startDate && new Date(currentSprint.startDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  {currentSprint.endDate && (
+                    <> — {new Date(currentSprint.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</>
+                  )}
+                </span>
+              )}
+              <span className="text-slate-500">
+                {filteredTasks.length} task{filteredTasks.length !== 1 ? 's' : ''}
               </span>
-              <button
-                onClick={() => navigateView('next')}
-                className="p-2 rounded-md bg-gray-200 hover:bg-gray-300 transition-colors"
-                title="Next view"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
             </div>
           )}
         </div>
 
-        {/* Sprint Info Cards (when viewing specific sprint) */}
-        {selectedView && selectedView !== 'backlog' && (
-          <div className="mb-8">
-            {(() => {
-              const sprint = sprints.find(s => s._id === selectedView);
-              if (!sprint) return null;
-              return (
-                <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 inline-flex items-center gap-4">
-                  <h3 className="font-semibold text-gray-900">{sprint.name}</h3>
-                  {(sprint.startDate || sprint.endDate) && (
-                    <div className="text-sm text-gray-500 flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {sprint.startDate && new Date(sprint.startDate).toLocaleDateString()}
-                      {sprint.endDate && (
-                        <> - {new Date(sprint.endDate).toLocaleDateString()}</>
-                      )}
-                    </div>
-                  )}
-                  <div className="text-sm text-gray-600">
-                    {filteredTasks.length} tasks
-                  </div>
-                </div>
-              );
-            })()}
+        {/* ── Kanban Board ────────────────────────────────────────────────── */}
+        {availableViews.length === 0 ? (
+          <div className="text-center py-20 text-slate-400">
+            <LayoutGrid className="h-10 w-10 mx-auto mb-3 opacity-50" />
+            <p className="text-sm">No views have been shared in this link.</p>
           </div>
-        )}
-
-        {/* Tasks Board */}
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Tasks Board</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-            {Object.entries(STATUS_CONFIG).map(([status, config]) => {
-              const columnTasks = getColumnTasks(status);
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+            {ORDERED_STATUSES.map(status => {
+              const config = STATUS_CONFIG[status];
+              const columnTasks = filteredTasks.filter(t => t.status === status);
               return (
-                <div key={status} className="bg-gray-100 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-700 mb-4 flex items-center justify-between">
-                    {config.label}
-                    <span className="text-sm font-normal bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">
-                      {columnTasks.length}
-                    </span>
-                  </h3>
-                  <div className="space-y-3">
+                <div key={status} className="flex flex-col">
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-t-xl border ${config.color}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${config.dot}`} />
+                      <span className="text-xs font-semibold uppercase tracking-wide">{config.label}</span>
+                    </div>
+                    <span className="text-xs font-bold tabular-nums opacity-70">{columnTasks.length}</span>
+                  </div>
+
+                  <div className="flex-1 bg-slate-100/70 rounded-b-xl border border-t-0 border-slate-200 p-3 space-y-3 min-h-[120px]">
                     {columnTasks.map(task => (
-                      <TaskCard key={task._id} task={task} showUserNames={shareLink?.settings?.showUserNames} />
+                      <TaskCard key={task._id} task={task} settings={settings} />
                     ))}
                     {columnTasks.length === 0 && (
-                      <p className="text-sm text-gray-500 text-center py-4">No tasks</p>
+                      <div className="flex items-center justify-center h-16 text-xs text-slate-400 select-none">
+                        No tasks
+                      </div>
                     )}
                   </div>
                 </div>
               );
             })}
           </div>
-        </div>
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <p className="text-sm text-gray-500 text-center">
-            This is a public view of the project. Some information may be hidden based on share settings.
-            Link validity is not guaranteed.
-          </p>
+      {/* ── Footer ───────────────────────────────────────────────────────────── */}
+      <footer className="mt-16 border-t border-slate-200 bg-white">
+        <div className="max-w-7xl mx-auto px-4 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-400">
+          <span>Read-only shared view · Some details may be hidden per share settings</span>
+          {shareLink?.expiresAt && timeLeft && timeLeft !== 'Expired' && (
+            <span className="flex items-center gap-1 text-amber-500">
+              <Clock className="h-3.5 w-3.5" /> Link expires in {timeLeft}
+            </span>
+          )}
         </div>
       </footer>
-    </div>
-  );
-}
-
-function TaskCard({ task, showUserNames }) {
-  const typeColor = TYPE_COLORS[task.type] || 'bg-gray-500';
-
-  return (
-    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-      <div className="flex items-start justify-between mb-2">
-        <h4 className="font-semibold text-gray-800 text-sm pr-2">{task.title}</h4>
-        <span className={`${typeColor} text-white text-xs px-2 py-0.5 rounded-full flex-shrink-0`}>
-          {task.type}
-        </span>
-      </div>
-
-      {task.description && (
-        <p className="text-xs text-gray-600 mb-3 line-clamp-2">{task.description}</p>
-      )}
-
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        {task.dueDate && (
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            {new Date(task.dueDate).toLocaleDateString()}
-          </span>
-        )}
-        {task.assignees && task.assignees.length > 0 && (
-          <span className="flex items-center gap-1">
-            <Users className="h-3 w-3" />
-            {showUserNames
-              ? task.assignees.map(a => a.username || 'Anonymous').join(', ')
-              : `${task.assignees.length} assignee(s)`}
-          </span>
-        )}
-      </div>
     </div>
   );
 }
