@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Save, FileText, Upload, Calendar, AlertCircle } from 'lucide-react';
+import { X, Save, FileText, Upload, Calendar, AlertCircle, Shield, HardDrive } from 'lucide-react';
 
 export default function DocumentationSettingsModal({ isOpen, onClose }) {
   const [settings, setSettings] = useState({
@@ -12,15 +12,26 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
     fileNameRegex: '.*',
     uploadDeadline: '',
     allowedProjectsForDownload: ['general'],
-    allowedDocuments: {} // { projectId: { docId: true } }
+    allowedDocuments: {},
+    // New settings
+    enableVirusScanning: false,
+    defaultStorageProvider: 'server'
   });
-  
+
   const [projects, setProjects] = useState([{ _id: 'general', name: 'General' }]);
-  const [documents, setDocuments] = useState({}); // { projectId: [{ _id, name }] }
+  const [documents, setDocuments] = useState({});
   const [expandedProjects, setExpandedProjects] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState({ type: '', message: '' });
   const [isLoadingDocuments, setIsLoadingDocuments] = useState({});
+
+  const STORAGE_PROVIDERS = [
+    { id: 'server', name: 'Server Storage', description: 'Store on application server (GridFS)' },
+    { id: 'google-drive', name: 'Google Drive', description: 'Store on Google Drive' },
+    { id: 'onedrive', name: 'Microsoft OneDrive', description: 'Store on OneDrive' },
+    { id: 'mega', name: 'Mega', description: 'Store on Mega cloud' },
+    { id: 'mediafire', name: 'MediaFire', description: 'Store on MediaFire' },
+  ];
 
   useEffect(() => {
     if (isOpen) {
@@ -35,7 +46,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
 
   const fetchDocuments = async (projectId) => {
     if (!projectId || documents[projectId]) return;
-    
+
     setIsLoadingDocuments(prev => ({ ...prev, [projectId]: true }));
     try {
       const response = await fetch(`/api/resources?projectId=${projectId}`, {
@@ -45,22 +56,22 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
           'Pragma': 'no-cache'
         }
       });
-      
+
       if (!response.ok) {
         console.warn(`Failed to fetch documents for project ${projectId}:`, response.status);
         setDocuments(prev => ({ ...prev, [projectId]: [] }));
         return;
       }
-      
+
       const data = await response.json();
-      
+
       // Transform resources to match expected document format
       const docs = Array.isArray(data) ? data.map(doc => ({
         _id: doc._id || doc.id,
         name: doc.name || doc.filename || 'Unnamed Document',
         filename: doc.filename || doc.name || 'document'
       })) : [];
-      
+
       setDocuments(prev => ({
         ...prev,
         [projectId]: docs
@@ -81,7 +92,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
       ...prev,
       [projectId]: !prev[projectId]
     }));
-    
+
     if (!documents[projectId]) {
       await fetchDocuments(projectId);
     }
@@ -105,17 +116,17 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
           }
         })
       ]);
-      
+
       console.log('Settings response status:', settingsRes.status);
       console.log('Projects response status:', projectsRes.status);
-      
+
       if (settingsRes.ok) {
         const settingsData = await settingsRes.json();
         console.log('Fetched settings data:', settingsData);
-        
+
         // Handle both direct data and wrapped data formats
         const data = settingsData.data || settingsData;
-        
+
         if (data && (data._id || data.allowInternUpload !== undefined)) {
           setSettings({
             allowInternUpload: data.allowInternUpload || false,
@@ -125,7 +136,10 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
             fileNameRegex: data.fileNameRegex || '.*',
             uploadDeadline: data.uploadDeadline ? new Date(data.uploadDeadline).toISOString().split('T')[0] : '',
             allowedProjectsForDownload: Array.isArray(data.allowedProjectsForDownload) ? data.allowedProjectsForDownload : ['general'],
-            allowedDocuments: data.allowedDocuments || {}
+            allowedDocuments: data.allowedDocuments || {},
+            // New settings
+            enableVirusScanning: data.enableVirusScanning || false,
+            defaultStorageProvider: data.defaultStorageProvider || 'server'
           });
           console.log('Settings state updated');
         } else {
@@ -135,29 +149,29 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
         console.error('Failed to fetch settings:', settingsRes.status, settingsRes.statusText);
         const errorData = await settingsRes.json().catch(() => ({}));
         console.error('Settings error details:', errorData);
-        setSaveStatus({ 
-          type: 'error', 
-          message: errorData.error || 'Failed to load settings' 
+        setSaveStatus({
+          type: 'error',
+          message: errorData.error || 'Failed to load settings'
         });
       }
-      
+
       if (projectsRes.ok) {
         const projectsData = await projectsRes.json();
         console.log('Fetched projects data:', projectsData);
-        
+
         if (Array.isArray(projectsData)) {
           // Ensure we have an array of { _id, name } objects
           const formattedProjects = projectsData.map(project => ({
             _id: project._id || project.name?.toLowerCase() || '',
             name: project.name || project._id || ''
           }));
-          
+
           // Make sure General is always included
           const generalExists = formattedProjects.some(p => p._id.toLowerCase() === 'general');
           if (!generalExists) {
             formattedProjects.unshift({ _id: 'general', name: 'General' });
           }
-          
+
           setProjects(formattedProjects);
           console.log('Projects state updated:', formattedProjects);
         } else {
@@ -179,13 +193,13 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaveStatus({ type: 'saving', message: 'Saving settings...' });
-    
+
     try {
       // Prepare the settings data to match the server's expected format
       const settingsToSave = {
         allowInternUpload: settings.allowInternUpload,
         allowInternDownload: settings.allowInternDownload,
-        allowedFileTypes: Array.isArray(settings.allowedFileTypes) 
+        allowedFileTypes: Array.isArray(settings.allowedFileTypes)
           ? settings.allowedFileTypes.map(t => t.trim()).filter(t => t.startsWith('.'))
           : [],
         maxFileSize: Number(settings.maxFileSize) || 10,
@@ -194,17 +208,19 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
         allowedProjectsForDownload: Array.isArray(settings.allowedProjectsForDownload)
           ? settings.allowedProjectsForDownload
           : ['general'],
-        // Clean up allowedDocuments to only include selected projects
         allowedDocuments: Object.entries(settings.allowedDocuments || {}).reduce((acc, [projectId, docs]) => {
           if (settings.allowedProjectsForDownload?.includes(projectId) && docs && typeof docs === 'object') {
             acc[projectId] = docs;
           }
           return acc;
-        }, {})
+        }, {}),
+        // New settings
+        enableVirusScanning: settings.enableVirusScanning,
+        defaultStorageProvider: settings.defaultStorageProvider
       };
 
       console.log('Sending settings:', JSON.stringify(settingsToSave, null, 2));
-      
+
       const response = await fetch('/api/server-settings', {
         method: 'POST',
         headers: {
@@ -213,13 +229,13 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
         credentials: 'include',
         body: JSON.stringify(settingsToSave)
       });
-      
+
       console.log('Response status:', response.status);
-      
+
       // Try to get the response text first for debugging
       const responseText = await response.text();
       console.log('Raw response:', responseText);
-      
+
       let responseData;
       try {
         responseData = JSON.parse(responseText);
@@ -227,41 +243,41 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
         console.error('Failed to parse response as JSON:', e);
         throw new Error(`Invalid server response: ${responseText.substring(0, 200)}`);
       }
-      
+
       if (!response.ok) {
         console.error('Server error:', responseData);
         throw new Error(
-          responseData.error || 
-          responseData.message || 
+          responseData.error ||
+          responseData.message ||
           `Server responded with status ${response.status}: ${response.statusText}`
         );
       }
-      
+
       if (!responseData.success) {
         console.error('Operation failed:', responseData);
         throw new Error(responseData.error || 'Failed to save settings');
       }
-      
+
       console.log('Settings saved successfully:', responseData);
       setSaveStatus({ type: 'success', message: 'Settings saved successfully!' });
-      
+
       // Update the local state with the saved data to reflect any server-side changes
       if (responseData.data) {
         setSettings(prev => ({
           ...prev,
           ...responseData.data,
-          uploadDeadline: responseData.data.uploadDeadline ? 
+          uploadDeadline: responseData.data.uploadDeadline ?
             new Date(responseData.data.uploadDeadline).toISOString().split('T')[0] : ''
         }));
       }
-      
+
       // Close the modal after a short delay
       setTimeout(() => onClose(), 1500);
     } catch (error) {
       console.error('Error saving settings:', error);
-      setSaveStatus({ 
-        type: 'error', 
-        message: error.message || 'Failed to save settings. Please try again.' 
+      setSaveStatus({
+        type: 'error',
+        message: error.message || 'Failed to save settings. Please try again.'
       });
     } finally {
       // Clear status after 3 seconds
@@ -279,16 +295,16 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
       e.target.value = '';
     }
   };
-  
+
   const toggleProjectForDownload = (projectId) => {
     setSettings(prev => {
-      const currentProjects = Array.isArray(prev.allowedProjectsForDownload) 
-        ? [...prev.allowedProjectsForDownload] 
+      const currentProjects = Array.isArray(prev.allowedProjectsForDownload)
+        ? [...prev.allowedProjectsForDownload]
         : [];
-      
+
       const index = currentProjects.indexOf(projectId);
       let newAllowedDocs = { ...prev.allowedDocuments };
-      
+
       if (index === -1) {
         currentProjects.push(projectId);
       } else {
@@ -298,7 +314,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
           delete newAllowedDocs[projectId];
         }
       }
-      
+
       return {
         ...prev,
         allowedProjectsForDownload: currentProjects,
@@ -310,11 +326,11 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
   const toggleDocumentForDownload = (projectId, docId) => {
     setSettings(prev => {
       const newAllowedDocs = { ...prev.allowedDocuments };
-      
+
       if (!newAllowedDocs[projectId]) {
         newAllowedDocs[projectId] = {};
       }
-      
+
       if (newAllowedDocs[projectId][docId]) {
         delete newAllowedDocs[projectId][docId];
         // Clean up empty project entries
@@ -327,14 +343,14 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
           [docId]: true
         };
       }
-      
+
       return {
         ...prev,
         allowedDocuments: newAllowedDocs
       };
     });
   };
-  
+
   const isDocumentAllowed = (projectId, docId) => {
     return settings.allowedDocuments[projectId]?.[docId] || false;
   };
@@ -357,9 +373,9 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity duration-300">
+      <div className="bg-white shadow-2xl w-full max-w-2xl h-[100vh] sm:h-[90vh] sm:rounded-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:slide-in-from-bottom-8 duration-300">
+        <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-white z-10">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold flex items-center">
               <FileText className="mr-2 h-5 w-5" />
@@ -408,9 +424,80 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                   </label>
                 </div>
 
+                {/* Security Settings Section */}
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <Shield className="w-4 h-4" />
+                    Security Settings
+                  </h3>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        id="enableVirusScanning"
+                        checked={settings.enableVirusScanning}
+                        onChange={(e) => setSettings(prev => ({
+                          ...prev,
+                          enableVirusScanning: e.target.checked
+                        }))}
+                        className="h-4 w-4 text-blue-600 rounded mt-0.5"
+                      />
+                      <div className="ml-2">
+                        <label htmlFor="enableVirusScanning" className="text-sm font-medium text-gray-700">
+                          Enable Virus Scanning
+                        </label>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Scan uploaded files for viruses and malware using Cloudmersive API (requires API key in .env.local)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Storage Settings Section */}
+                <div className="border-t pt-4">
+                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <HardDrive className="w-4 h-4" />
+                    Storage Settings
+                  </h3>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Default Storage Provider
+                      </label>
+                      <div className="space-y-2">
+                        {STORAGE_PROVIDERS.map(provider => (
+                          <label
+                            key={provider.id}
+                            className="flex items-center p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
+                          >
+                            <input
+                              type="radio"
+                              name="storageProvider"
+                              value={provider.id}
+                              checked={settings.defaultStorageProvider === provider.id}
+                              onChange={(e) => setSettings(prev => ({
+                                ...prev,
+                                defaultStorageProvider: e.target.value
+                              }))}
+                              className="h-4 w-4 text-blue-600"
+                            />
+                            <div className="ml-3">
+                              <p className="text-sm font-medium text-gray-700">{provider.name}</p>
+                              <p className="text-xs text-gray-500">{provider.description}</p>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="border-t pt-4">
                   <h3 className="text-sm font-medium text-gray-700 mb-2">Advanced Settings</h3>
-                  
+
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="maxFileSize" className="block text-sm font-medium text-gray-700 mb-1">
@@ -527,7 +614,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                         ))}
                       </div>
                     </div>
-                    
+
                     {/* Allow Intern Download */}
                     <div className="pt-4 border-t">
                       <div className="flex items-start">
@@ -550,7 +637,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                           <p className="text-gray-500">
                             When enabled, interns can download documents from allowed projects
                           </p>
-                          
+
                           {settings.allowInternDownload && (
                             <div className="mt-3">
                               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -564,7 +651,7 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                                   const projectAllowed = settings.allowedProjectsForDownload?.includes(projectId);
                                   const projectDocs = documents[projectId] || [];
                                   const isLoading = isLoadingDocuments[projectId];
-                                  
+
                                   return (
                                     <div key={projectId} className="space-y-1">
                                       <div className="flex items-center">
@@ -583,14 +670,14 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                                           onChange={() => toggleProjectForDownload(projectId)}
                                           className="h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                                         />
-                                        <label 
-                                          htmlFor={`project-${projectId}`} 
+                                        <label
+                                          htmlFor={`project-${projectId}`}
                                           className={`ml-2 block text-sm ${projectAllowed ? 'font-medium' : 'text-gray-700'}`}
                                         >
                                           {projectName}
                                         </label>
                                       </div>
-                                      
+
                                       {isExpanded && (
                                         <div className="ml-6 pl-2 border-l-2 border-gray-200">
                                           {isLoading ? (
@@ -606,8 +693,8 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                                                   disabled={!projectAllowed}
                                                   className={`h-3.5 w-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 ${!projectAllowed ? 'opacity-50' : ''}`}
                                                 />
-                                                <label 
-                                                  htmlFor={`doc-${doc._id}`} 
+                                                <label
+                                                  htmlFor={`doc-${doc._id}`}
                                                   className={`ml-2 text-xs ${isDocumentAllowed(projectId, doc._id) ? 'text-blue-700' : 'text-gray-600'} ${!projectAllowed ? 'opacity-50' : ''}`}
                                                 >
                                                   {doc.name || doc.filename}
@@ -636,11 +723,10 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
               </div>
 
               {saveStatus.message && (
-                <div className={`p-3 rounded-md ${
-                  saveStatus.type === 'error' ? 'bg-red-50 text-red-700' :
+                <div className={`p-3 rounded-md ${saveStatus.type === 'error' ? 'bg-red-50 text-red-700' :
                   saveStatus.type === 'success' ? 'bg-green-50 text-green-700' :
-                  'bg-blue-50 text-blue-700'
-                }`}>
+                    'bg-blue-50 text-blue-700'
+                  }`}>
                   <div className="flex items-center">
                     {saveStatus.type === 'error' ? (
                       <AlertCircle className="h-5 w-5 mr-2" />
@@ -656,38 +742,43 @@ export default function DocumentationSettingsModal({ isOpen, onClose }) {
                 </div>
               )}
 
-              <div className="flex justify-end space-x-3 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saveStatus.type === 'saving'}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-75"
-                >
-                  {saveStatus.type === 'saving' ? (
-                    <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="-ml-1 mr-2 h-4 w-4" />
-                      Save Changes
-                    </>
-                  )}
-                </button>
-              </div>
             </form>
           )}
         </div>
+
+        {/* Fixed Footer with Actions */}
+        {!isLoading && (
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-3 mt-auto">
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              onClick={handleSubmit}
+              disabled={saveStatus.type === 'saving'}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-75 transition-colors"
+            >
+              {saveStatus.type === 'saving' ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="-ml-1 mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

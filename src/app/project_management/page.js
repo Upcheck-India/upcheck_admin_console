@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { FolderKanban, Plus, User, Search, Briefcase, Loader2, AlertTriangle, X, ShieldCheck, Trash2, HelpCircle } from 'lucide-react';
+import { FolderKanban, Plus, User, Search, Briefcase, Loader2, AlertTriangle, X, ShieldCheck, Trash2, HelpCircle, Share2 } from 'lucide-react';
 import HelpModal from './HelpModal';
+import ShareLinksModal from '../project_management/[id]/ShareLinksModal';
 
 const ProjectManagementPage = () => {
   const router = useRouter();
@@ -17,6 +18,7 @@ const ProjectManagementPage = () => {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [deleteConfirmationName, setDeleteConfirmationName] = useState('');
   const [showHelp, setShowHelp] = useState(false);
+  const [shareModalProjectId, setShareModalProjectId] = useState(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -130,20 +132,30 @@ const ProjectManagementPage = () => {
           <MemberList members={otherMembers} roleName="Members" />
 
           <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
-            <button 
+            <button
               onClick={() => router.push(`/project_management/${project._id}`)}
-              className="w-full text-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-2 px-4 rounded-md transition-colors duration-200 text-sm"
+              className="flex-1 text-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-2 px-4 rounded-md transition-colors duration-200 text-sm"
             >
               View Project
             </button>
             {currentUser && (project.superManager === currentUser.username || project.members?.some(m => m.user === currentUser.username && m.role === 'Project Manager')) && (
-              <button
-                onClick={() => handleDeleteClick(project)}
-                className="p-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-md transition-colors duration-200"
-                aria-label="Delete project"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              <>
+                <button
+                  onClick={() => setShareModalProjectId(project._id)}
+                  className="p-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-md transition-colors duration-200"
+                  aria-label="Share links"
+                  title="Share links"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleDeleteClick(project)}
+                  className="p-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-md transition-colors duration-200"
+                  aria-label="Delete project"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -268,7 +280,15 @@ const ProjectManagementPage = () => {
 
       {/* Global Help Modal */}
       <HelpModal open={showHelp} onClose={() => setShowHelp(false)} />
-      
+
+      {/* Share Links Modal */}
+      {shareModalProjectId && (
+        <ShareLinksModal
+          projectId={shareModalProjectId}
+          onClose={() => setShareModalProjectId(null)}
+        />
+      )}
+
       {/* Floating Help Button */}
       {!showHelp && (
         <button 

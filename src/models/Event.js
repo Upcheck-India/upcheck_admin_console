@@ -36,7 +36,7 @@ const RecurrenceInstanceSchema = new mongoose.Schema({
     type: Date,
     required: true
   },
-  isModified: {
+  wasModified: {
     type: Boolean,
     default: false
   },
@@ -274,7 +274,7 @@ EventSchema.virtual('effectiveDuration').get(function() {
 // Method to apply instance-specific overrides
 EventSchema.methods.applyOverrides = function(overrides) {
   this.overrides = { ...this.overrides, ...overrides };
-  this.recurrenceInstance.isModified = true;
+  this.recurrenceInstance.wasModified = true;
   return this.save();
 };
 

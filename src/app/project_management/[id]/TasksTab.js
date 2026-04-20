@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye } from 'lucide-react';
+import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
 import TaskDetailsModal from './TaskDetailsModal';
 import AddSprintModal from './AddSprintModal';
+import ShareLinksModal from './ShareLinksModal';
 import { useAuth } from '../../../hooks/useAuth';
 import { 
   DndContext, 
@@ -13,10 +15,11 @@ import {
   useSensors, 
   useDroppable 
 } from '@dnd-kit/core';
-import { 
-  SortableContext, 
-  useSortable, 
-  verticalListSortingStrategy 
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -195,6 +198,7 @@ const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete, onView
 
 const TasksTab = ({ projectId, project, allUsers = [] }) => {
   const { user: currentUser } = useAuth();
+  const router = useRouter();
   const [tasks, setTasks] = useState([]);
   const [sprints, setSprints] = useState([]);
   const [currentSprintId, setCurrentSprintId] = useState(null);
@@ -204,6 +208,14 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
   const [isSprintModalOpen, setIsSprintModalOpen] = useState(false);
   const [currentTask, setCurrentTask] = useState(null);
   const [detailsTask, setDetailsTask] = useState(null);
+  const [isShareLinksModalOpen, setIsShareLinksModalOpen] = useState(false);
+
+  // Sprint management state
+  const [editingSprint, setEditingSprint] = useState(null);
+  const [editSprintName, setEditSprintName] = useState('');
+  const [sprintMenuOpen, setSprintMenuOpen] = useState(null); // Track which sprint menu is open
+  const [sprintMenuPosition, setSprintMenuPosition] = useState({ x: 0, y: 0 });
+  const [showDeleteSprintConfirm, setShowDeleteSprintConfirm] = useState(null); // Sprint to delete
 
   // DnD sensors
   const sensors = useSensors(
@@ -217,6 +229,18 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     if (project.superManager === currentUser.username) return true;
     const memberInfo = project.members.find(m => m.user === currentUser.username);
     return memberInfo?.role === 'Project Manager';
+  }, [currentUser, project]);
+
+  // Check if user can access documentation (project members or admins can access)
+  const canAccessDocumentation = useMemo(() => {
+    if (!currentUser || !project) return false;
+    // Admin and Console admin can access everything
+    if (['Admin', 'Console admin'].includes(currentUser.role)) return true;
+    // Project members can access
+    return (
+      project.superManager === currentUser.username ||
+      project.members?.some(m => m.user === currentUser.username)
+    );
   }, [currentUser, project]);
 
   // Map of userId -> user object
@@ -365,6 +389,91 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     closeSprintModal();
   };
 
+  // Sprint rename handlers
+  const handleStartRenameSprint = (sprint) => {
+    setEditingSprint(sprint);
+    setEditSprintName(sprint.name);
+    setSprintMenuOpen(null);
+  };
+
+  const handleRenameSprint = async () => {
+    if (!editSprintName.trim()) {
+      alert('Sprint name cannot be empty');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sprints`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          sprintId: editingSprint._id,
+          name: editSprintName.trim(),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to rename sprint');
+      }
+
+      const updatedSprint = await res.json();
+      setSprints(prev => prev.map(s => s._id === updatedSprint._id ? updatedSprint : s));
+      setEditingSprint(null);
+      setEditSprintName('');
+    } catch (e) {
+      console.error('Error renaming sprint:', e);
+      alert(`Error renaming sprint: ${e.message}`);
+    }
+  };
+
+  const handleCancelRename = () => {
+    setEditingSprint(null);
+    setEditSprintName('');
+  };
+
+  // Sprint delete handler
+  const handleDeleteSprint = async (sprint) => {
+    if (!window.confirm(`Are you sure you want to delete "${sprint.name}"? Tasks in this sprint will be moved to the Product Backlog.`)) {
+      setShowDeleteSprintConfirm(null);
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/projects/${projectId}/sprints`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ sprintId: sprint._id }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to delete sprint');
+      }
+
+      setSprints(prev => prev.filter(s => s._id !== sprint._id));
+      if (currentSprintId === sprint._id) {
+        setCurrentSprintId(null); // Go back to product backlog
+      }
+      setShowDeleteSprintConfirm(null);
+    } catch (e) {
+      console.error('Error deleting sprint:', e);
+      alert(`Error deleting sprint: ${e.message}`);
+      setShowDeleteSprintConfirm(null);
+    }
+  };
+
+  // Navigate to documentation
+  const handleGoToDocumentation = () => {
+    router.push(`/documentation/${projectId}`);
+  };
+
   // Delete task function
   const handleDeleteTask = async (taskId) => {
     if (!window.confirm('Are you sure you want to delete this task?')) {
@@ -394,9 +503,10 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
 
     const activeTask = tasks.find(t => t._id === active.id);
     if (!activeTask) return;
-    
-    let newStatus = over.id;
+
+    // Check if dropped on a column or a task
     const validStatuses = ['Backlog', 'To Do', 'In Progress', 'Done'];
+    let newStatus = over.id;
     const isColumn = validStatuses.includes(newStatus);
 
     if (!isColumn) {
@@ -410,20 +520,59 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
       }
     }
 
-    if (activeTask.status === newStatus) return;
+    // Handle reordering within the same column
+    if (activeTask.status === newStatus) {
+      // Find the indices
+      const oldIndex = tasks.findIndex(t => t._id === active.id);
+      const newIndex = tasks.findIndex(t => t._id === over.id);
 
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        // Reorder tasks locally
+        const newTasks = arrayMove(tasks, oldIndex, newIndex);
+        setTasks(newTasks);
+
+        // Update order on server
+        try {
+          const response = await fetch(`/api/projects/${projectId}/tasks/${active.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            },
+            body: JSON.stringify({
+              ...activeTask,
+              order: newIndex,
+              tasks: newTasks.map(t => ({ _id: t._id, order: newTasks.indexOf(t) }))
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error || `Failed to reorder task: ${response.status}`);
+          }
+        } catch (error) {
+          console.error('Failed to reorder task:', error);
+          // Revert on error
+          setTasks(tasks);
+          alert(`Failed to reorder task: ${error.message}`);
+        }
+      }
+      return;
+    }
+
+    // Handle moving to different column (status change)
     const updatedTask = { ...activeTask, status: newStatus };
     const originalTasks = [...tasks];
-    
+
     // Optimistically update the UI
-    setTasks(currentTasks => 
+    setTasks(currentTasks =>
       currentTasks.map(t => t._id === active.id ? updatedTask : t)
     );
 
     try {
       const response = await fetch(`/api/projects/${projectId}/tasks/${active.id}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
@@ -486,26 +635,115 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
               <button
                 onClick={() => setCurrentSprintId(null)}
                 className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
-                  currentSprintId === null 
-                    ? 'bg-blue-600 text-white' 
+                  currentSprintId === null
+                    ? 'bg-blue-600 text-white'
                     : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
                 }`}
               >
                 Product Board
               </button>
-              {sprints.map(s => (
-                <button
-                  key={s._id}
-                  onClick={() => setCurrentSprintId(s._id)}
-                  className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
-                    currentSprintId === s._id 
-                      ? 'bg-blue-600 text-white' 
-                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
-                  }`}
-                >
-                  {s.name}
-                </button>
-              ))}
+              {sprints.map(s => {
+                const isEditing = editingSprint?._id === s._id;
+                const isMenuOpen = sprintMenuOpen === s._id;
+
+                return (
+                  <div key={s._id} className="relative">
+                    {isEditing ? (
+                      <div className="flex items-center space-x-1 bg-white rounded-md border-2 border-blue-500 px-2 py-1">
+                        <input
+                          type="text"
+                          value={editSprintName}
+                          onChange={(e) => setEditSprintName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameSprint();
+                            if (e.key === 'Escape') handleCancelRename();
+                          }}
+                          className="text-sm border-none outline-none focus:ring-0 min-w-[100px]"
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleRenameSprint}
+                          className="text-green-600 hover:text-green-700 p-0.5"
+                          title="Save"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </button>
+                        <button
+                          onClick={handleCancelRename}
+                          className="text-gray-500 hover:text-gray-700 p-0.5"
+                          title="Cancel"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => setCurrentSprintId(s._id)}
+                          className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
+                            currentSprintId === s._id
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                          }`}
+                        >
+                          {s.name}
+                        </button>
+                        {isManager && (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setSprintMenuPosition({ x: rect.left, y: rect.bottom + 4 });
+                                setSprintMenuOpen(isMenuOpen ? null : s._id);
+                              }}
+                              className="ml-1 p-1 rounded hover:bg-gray-300 text-gray-500 hover:text-gray-700"
+                              title="Sprint options"
+                              type="button"
+                            >
+                              <MoreVertical className="h-3 w-3" />
+                            </button>
+                            {isMenuOpen && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-40"
+                                  onClick={() => setSprintMenuOpen(null)}
+                                />
+                                <div
+                                  className="fixed bg-white rounded-md shadow-lg border border-gray-200 py-1 z-50 min-w-[140px]"
+                                  style={{ left: sprintMenuPosition.x, top: sprintMenuPosition.y }}
+                                >
+                                  <button
+                                    onClick={() => {
+                                      handleStartRenameSprint(s);
+                                      setSprintMenuOpen(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                                  >
+                                    <Edit className="h-3 w-3 mr-2" />
+                                    Rename
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setShowDeleteSprintConfirm(s);
+                                      setSprintMenuOpen(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                                  >
+                                    <Trash2 className="h-3 w-3 mr-2" />
+                                    Delete
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {isManager && (
                 <button
                   onClick={openSprintModal}
@@ -524,10 +762,34 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
 
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-bold text-gray-800">Project Tasks</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-bold text-gray-800">Project Tasks</h2>
+              {canAccessDocumentation && (
+                <button
+                  onClick={handleGoToDocumentation}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                  type="button"
+                  title="View project documentation"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Documentation
+                </button>
+              )}
+              {isManager && (
+                <button
+                  onClick={() => setIsShareLinksModalOpen(true)}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                  type="button"
+                  title="Share project"
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share Links
+                </button>
+              )}
+            </div>
             {isManager && (
-              <button 
-                onClick={() => handleOpenModal()} 
+              <button
+                onClick={() => handleOpenModal()}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 type="button"
               >
@@ -565,6 +827,51 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
           projectId={projectId}
           onClose={closeSprintModal}
           onSave={handleSaveSprint}
+        />
+      )}
+
+      {showDeleteSprintConfirm && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowDeleteSprintConfirm(null);
+          }}
+        >
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center mb-4">
+              <AlertTriangle className="h-6 w-6 text-red-500 mr-3" />
+              <h3 className="text-lg font-bold text-gray-900">Delete Sprint</h3>
+            </div>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to delete "<strong>{showDeleteSprintConfirm.name}</strong>"?
+            </p>
+            <p className="text-sm text-gray-500 mb-6">
+              All tasks in this sprint will be moved to the Product Backlog.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteSprintConfirm(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSprint(showDeleteSprintConfirm)}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700"
+              >
+                Delete Sprint
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isShareLinksModalOpen && (
+        <ShareLinksModal
+          projectId={projectId}
+          onClose={() => setIsShareLinksModalOpen(false)}
         />
       )}
     </>

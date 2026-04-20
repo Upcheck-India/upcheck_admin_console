@@ -169,6 +169,14 @@ class JobScheduler {
    */
   async processJobs() {
     try {
+      // Import mongoose to check connection state
+      const mongoose = (await import('mongoose')).default;
+      
+      // Skip if DB not connected (readyState: 1 = connected)
+      if (mongoose.connection.readyState !== 1) {
+        return; // Silently skip, connection may still be initializing
+      }
+      
       await connectToDatabase();
       
       const pendingJobs = await ScheduledJob.getPendingJobs(this.config.batchSize);
@@ -285,13 +293,26 @@ class JobScheduler {
   }
 
   /**
-   * Clean up old completed jobs
+   * Clean up old completed/failed jobs
    */
   async cleanupOldJobs() {
     try {
+      // Import mongoose to check connection state
+      const mongoose = (await import('mongoose')).default;
+      
+      // Skip if DB not connected
+      if (mongoose.connection.readyState !== 1) {
+        return;
+      }
+      
       await connectToDatabase();
       
-      const result = await ScheduledJob.cleanupOldJobs(this.config.jobRetentionDays);
+      const cutoffDate = new Date(Date.now() - this.config.maxJobAgeMs);
+      
+      const result = await ScheduledJob.deleteMany({
+        status: { $in: ['completed', 'failed', 'cancelled'] },
+        'scheduling.completedAt': { $lt: cutoffDate }
+      });
       
       if (result.deletedCount > 0) {
         console.log(`Cleaned up ${result.deletedCount} old jobs`);

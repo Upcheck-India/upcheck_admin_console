@@ -120,10 +120,10 @@ const AdminLandingPage = () => {
       bgLight: "bg-blue-50"
     },
     {
-      title: "Documentation",
-      description: "Internal announcements, documents and procedure guides",
+      title: "Data Management",
+      description: "Secure virtual data room for confidential document sharing",
       icon: <BookOpen className="w-6 h-6 text-white" />,
-      link: "/documentation",
+      link: "/dms",
       gradient: "from-green-400 via-teal-500 to-blue-400",
       bgLight: "bg-green-50"
     }

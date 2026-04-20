@@ -1,14 +1,31 @@
 import { NextResponse } from 'next/server';
-import { startJobProcessing } from '../../../../lib/jobHandlers.js';
 import { connectToDatabase } from '../../../../lib/mongodb.js';
 import ScheduledJob from '../../../../models/ScheduledJob.js';
 
-// Initialize job processing
+// Initialize job processing - async with DB connection first
 let initialized = false;
-if (!initialized) {
-  startJobProcessing();
-  initialized = true;
+let initPromise = null;
+
+async function initializeAsync() {
+  if (initialized) return;
+  if (initPromise) return initPromise;
+  
+  initPromise = (async () => {
+    try {
+      await connectToDatabase();
+      const { startJobProcessing } = await import('../../../../lib/jobHandlers.js');
+      startJobProcessing();
+      initialized = true;
+    } catch (error) {
+      console.error('Failed to initialize job processing:', error);
+      initPromise = null;
+    }
+  })();
+  
+  return initPromise;
 }
+
+initializeAsync();
 
 export async function POST() {
   try {

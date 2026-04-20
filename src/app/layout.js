@@ -3,6 +3,7 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { ThemeProvider } from './utils/ThemeContext';
+import { ClerkProvider } from '@clerk/nextjs';
 import useHeartbeat from '../hooks/useHeartbeat';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -13,9 +14,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <ClerkProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

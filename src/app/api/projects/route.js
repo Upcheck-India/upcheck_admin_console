@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject } from '../../../lib/projectPermissions';
+
+// Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
+function sanitizeTag(tag) {
+  if (typeof tag !== 'string') return null;
+  const sanitized = tag.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return sanitized.slice(0, 20) || null;
+}
+
+// Sanitize tags array
+function sanitizeTags(tags) {
+  if (!Array.isArray(tags)) return [];
+  const sanitized = tags.map(sanitizeTag).filter(Boolean);
+  // Remove duplicates
+  return [...new Set(sanitized)];
+}
 
 // GET - Fetch projects
 export async function GET(req) {
@@ -21,9 +37,15 @@ export async function GET(req) {
     const projectsCollection = db.collection('projects');
     const { searchParams } = new URL(req.url);
     const tab = searchParams.get('tab');
+    const tag = searchParams.get('tag');
 
+    // Always filter projects by user permissions unless Admin/Console admin
+    const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
+
+    // Fetch all projects based on query
     let query = {};
-    if (tab === 'my') {
+    if (!isAdmin) {
+      // Non-admins can only see projects they have access to
       query = {
         $or: [
           { superManager: user.username },
@@ -32,8 +54,28 @@ export async function GET(req) {
       };
     }
 
-    const projects = await projectsCollection.find(query).sort({ createdAt: -1 }).toArray();
-    return NextResponse.json(projects);
+    const allProjects = await projectsCollection.find(query).sort({ createdAt: -1 }).toArray();
+
+    // Filter projects by permission settings
+    const accessibleProjects = allProjects.filter(project => canAccessProject(user, project));
+
+    // Further filter if 'my' tab specified
+    if (tab === 'my' && isAdmin) {
+      const myProjects = accessibleProjects.filter(p =>
+        p.superManager === user.username || p.members?.some(m => m.user === user.username)
+      );
+      return NextResponse.json(myProjects);
+    }
+
+    // Filter by tag if provided
+    if (tag) {
+      const sanitizedTag = sanitizeTag(tag);
+      if (sanitizedTag) {
+        return NextResponse.json(accessibleProjects.filter(p => p.tags?.includes(sanitizedTag)));
+      }
+    }
+
+    return NextResponse.json(accessibleProjects);
   } catch (error) {
     console.error('Error fetching projects:', error);
     return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 });
@@ -61,11 +103,18 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Forbidden: Interns cannot create projects' }, { status: 403 });
     }
 
-    const { name, description, logo, members: newMembers = [] } = await req.json();
+    const { name, description, logo, members: newMembers = [], status = 'active', tags = [] } = await req.json();
 
     if (!name || typeof name !== 'string' || name.trim() === '') {
       return NextResponse.json({ error: 'Project name is required' }, { status: 400 });
     }
+
+    // Validate status
+    const validStatuses = ['active', 'ideation', 'paused', 'shelved', 'dismissed'];
+    const projectStatus = validStatuses.includes(status) ? status : 'active';
+
+    // Sanitize tags
+    const sanitizedTags = sanitizeTags(tags);
 
     const projectsCollection = db.collection('projects');
     const existingProject = await projectsCollection.findOne({ name: { $regex: `^${name.trim()}$`, $options: 'i' } });
@@ -83,8 +132,10 @@ export async function POST(req) {
       name: name.trim(),
       description: description?.trim() || '',
       logo: logo || '',
+      status: projectStatus,
       superManager: user.username,
       members: finalMembers,
+      tags: sanitizedTags,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

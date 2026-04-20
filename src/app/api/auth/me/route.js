@@ -22,7 +22,12 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Invalid session' }, { status: 401 });
     }
 
-    return NextResponse.json(user);
+    // Ensure username field exists (some records may have 'name' instead)
+    if (!user.username && user.name) {
+      user.username = user.name;
+    }
+
+    return NextResponse.json({ user });
   } catch (error) {
     console.error('Error fetching current user:', error);
     return NextResponse.json({ error: 'Failed to fetch user data' }, { status: 500 });

@@ -4,36 +4,56 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../lib/mongodb';
-import { startJobProcessing } from '../../../lib/jobHandlers.js';
+import { connectToDatabase } from '../../../lib/mongodb';
 
-// Initialize job processing system once
+// Initialize job processing system once - ASYNC
 let jobSystemInitialized = false;
-if (!jobSystemInitialized) {
-  try {
-    startJobProcessing();
-    jobSystemInitialized = true;
-    console.log('Job processing system initialized via heartbeat');
-  } catch (error) {
-    console.error('Failed to initialize job processing system:', error);
-  }
+let initializationPromise = null;
+
+async function initializeJobSystemAsync() {
+  if (jobSystemInitialized) return;
+  if (initializationPromise) return initializationPromise;
+  
+  initializationPromise = (async () => {
+    try {
+      // Wait for database connection first
+      await connectToDatabase();
+      
+      // Then start job processing
+      const { startJobProcessing } = await import('../../../lib/jobHandlers.js');
+      startJobProcessing();
+      
+      jobSystemInitialized = true;
+      console.log('Job processing system initialized via heartbeat');
+    } catch (error) {
+      console.error('Failed to initialize job processing system:', error);
+      initializationPromise = null; // Reset so we can retry
+    }
+  })();
+  
+  return initializationPromise;
 }
+
+// Initialize in background (non-blocking)
+initializeJobSystemAsync();
 
 // POST  /api/heartbeat
 // Updates the lastHeartbeat timestamp for the currently authenticated user.
 // Auth: requires valid admin_token cookie
-function extractAdminToken(req) {
+async function extractAdminToken(req) {
   try {
     const raw = req.cookies?.get?.('admin_token');
     if (raw) return typeof raw === 'string' ? raw : raw.value;
   } catch (_) { /* ignore */ }
   // Fallback to server-side cookies helper
-  return cookies().get('admin_token')?.value;
+  const cookieStore = await cookies();
+  return cookieStore.get('admin_token')?.value;
 }
 
 async function handleHeartbeat(req) {
   try {
     // First attempt to read from the incoming request cookies (App Router style)
-    const token = extractAdminToken(req);
+    const token = await extractAdminToken(req);
     if (!token) {
       console.warn('Heartbeat: No admin_token cookie found');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

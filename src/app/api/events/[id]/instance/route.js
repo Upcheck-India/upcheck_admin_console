@@ -132,7 +132,7 @@ export async function PUT(request, { params }) {
     }
 
     if (hasChanges) {
-      updateData['recurrenceInstance.isModified'] = true;
+      updateData['recurrenceInstance.wasModified'] = true;
       updateData['recurrenceInstance.modificationReason'] = 'Instance-specific changes';
     }
 

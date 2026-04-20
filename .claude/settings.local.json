@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"require\\(''fs''\\).readFileSync\\(''src/app/documentation/components/ProjectSettings.js'', ''utf8''\\)\")",
+      "Bash(npx next:*)",
+      "Bash(node --check /d/Projects/upcheck_admin/upcheck_admin/src/app/documentation/[projectId]/page.js)",
+      "Bash(powershell -Command \"Remove-Item -Path ''.next'' -Recurse -Force\")",
+      "Bash(npm install:*)",
+      "Bash(ls -la \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\login\"\" && ls -la \"d:Projectsupcheck_adminupcheck_adminsrcappdataroomexternalregister\"\")",
+      "Bash(mkdir -p \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\login\\\\[[...catchall]]\")",
+      "Bash(mv \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\login\\\\[[...catchall]].js\" \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\login\\\\[[...catchall]]\\\\page.js\")",
+      "Bash(mkdir -p \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\register\\\\[[...catchall]]\")",
+      "Bash(mv \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\register\\\\[[...catchall]].js\" \"d:\\\\Projects\\\\upcheck_admin\\\\upcheck_admin\\\\src\\\\app\\\\dataroom\\\\external\\\\register\\\\[[...catchall]]\\\\page.js\")",
+      "Bash(yarn add:*)",
+      "Bash(node --check src/app/api/projects/[id]/sprints/route.js)",
+      "Bash(node --check src/app/api/share/s/[slug]/route.js)",
+      "Bash(node --check src/app/api/share/s/[slug]/visitors/route.js)",
+      "Bash(ls -la src/app/api/projects/[id]/share-links/)",
+      "Bash(node --check src/app/api/projects/[id]/share-links/route.js)",
+      "Bash(node --check src/app/api/projects/[id]/share-links/[shareId]/route.js)",
+      "Bash(npm run:*)",
+      "Bash(Select-String -Pattern \"Share link settings\" -Context 2)",
+      "Bash(Select-Object -First 20)"
+    ]
+  }
+}

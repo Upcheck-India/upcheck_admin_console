@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, ExternalLink } from 'lucide-react';
 
-export default function JoinMeetingInterstitial() {
+function JoinMeetingContent() {
   const params = useParams();
   const sp = useSearchParams();
   const router = useRouter();
@@ -86,5 +86,17 @@ export default function JoinMeetingInterstitial() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function JoinMeetingInterstitial() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+      </div>
+    }>
+      <JoinMeetingContent />
+    </Suspense>
   );
 }
