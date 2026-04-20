@@ -35,7 +35,7 @@
     "marked": "^17.0.5",
     "mongodb": "^6.12.0",
     "mongoose": "^9.0.0",
-    "next": "15.1.9",
+    "next": "15.1.11",
     "next-auth": "^4.24.11",
     "nodemailer": "^6.9.16",
     "papaparse": "^5.5.3",
