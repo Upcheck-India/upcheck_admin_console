@@ -520,17 +520,7 @@ export default function JovanChat() {
                 </div>
               </div>
 
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <p className="text-sm text-blue-800 font-medium mb-2">New Location:</p>
-                <a 
-                  href="https://jovan-ai.vercel.app" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:text-blue-700 font-mono text-sm break-all underline"
-                >
-                  https://jovan-ai.vercel.app
-                </a>
-              </div>
+              
 
               {/* Don't show again checkbox */}
               <label className="flex items-center gap-3 cursor-pointer group">
@@ -552,15 +542,9 @@ export default function JovanChat() {
                 onClick={handleCloseDiscontinuationModal}
                 className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
               >
-                Continue Here
+                Okay
               </button>
-              <button
-                onClick={handleVisitNewSite}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:opacity-90 transition-all font-medium flex items-center justify-center gap-2 shadow-lg shadow-blue-500/30"
-              >
-                Visit New Site
-                <ExternalLink className="w-4 h-4" />
-              </button>
+              
             </div>
           </div>
         </div>
