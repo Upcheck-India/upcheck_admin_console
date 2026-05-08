@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import DocumentationSettingsModal from './components/DocumentationSettingsModal';
 import ExternalUsersTab from './components/ExternalUsersTab';
+import TeamsTab from './components/TeamsTab';
 
 // Add this function outside of the component
 const preventFocusLoss = (e) => e.target.select();
@@ -742,37 +743,15 @@ const UserManagement = () => {
     );
   }
 
-  if (currentUser.role === 'Intern') {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-          <div className="text-center mb-6">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Restricted</h2>
-            <p className="text-gray-600">
-              You don't have permission to access this page.
-            </p>
-          </div>
-          <div className="space-y-4 text-sm text-gray-600">
-            <p className="flex items-center">
-              <CodeXml className="h-4 w-4 mr-2" />
-              Please contact the admin if you think this is a mistake.
-            </p>
-          </div>
-          <div className="mt-6">
-            <button
-              onClick={() => router.push('/console')}
-              className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-            >
-              Return to Dashboard
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  // Members and Interns can only see Teams tab, so redirect there directly
+  if (currentUser.role === 'Intern' || currentUser.role === 'Member') {
+    // Set active tab to teams directly
+    if (activeTab !== 'teams') {
+      setActiveTab('teams');
+    }
   }
 
-  if (loading) {
+  if (loading && currentUser.role !== 'Intern' && currentUser.role !== 'Member') {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-pulse flex space-x-4">
@@ -803,91 +782,103 @@ const UserManagement = () => {
             </div>
             
             {/* Tab Navigation */}
-            {(currentUser.role === 'Admin' || currentUser.role === 'Console admin') && (
-              <div className="flex space-x-2 border-b border-gray-200">
-                <button
-                  onClick={() => setActiveTab('internal')}
-                  className={`px-4 py-2 font-medium text-sm transition-colors ${
-                    activeTab === 'internal'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Internal Users
-                </button>
-                <button
-                  onClick={() => setActiveTab('external')}
-                  className={`px-4 py-2 font-medium text-sm transition-colors relative ${
-                    activeTab === 'external'
-                      ? 'text-blue-600 border-b-2 border-blue-600'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  External Users
-                  {pendingCount > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                      {pendingCount}
-                    </span>
-                  )}
-                </button>
-              </div>
-            )}
+            <div className="flex space-x-2 border-b border-gray-200">
+              {(currentUser.role === 'Admin' || currentUser.role === 'Console admin') && (
+                <>
+                  <button
+                    onClick={() => setActiveTab('internal')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors ${
+                      activeTab === 'internal'
+                        ? 'text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    Internal Users
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('external')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors relative ${
+                      activeTab === 'external'
+                        ? 'text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    External Users
+                    {pendingCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                        {pendingCount}
+                      </span>
+                    )}
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setActiveTab('teams')}
+                className={`px-4 py-2 font-medium text-sm transition-colors ${
+                  activeTab === 'teams'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Teams
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <div className="relative flex-grow md:flex-grow-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search users..."
-                value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
-                className="pl-10 pr-4 py-2 w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+          {/* Show user search and Add User button only for Admins/Console admins */}
+            {(currentUser.role === 'Admin' || currentUser.role === 'Console admin') && activeTab !== 'teams' && (
+              <>
+                <div className="relative flex-grow md:flex-grow-0">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={filters.search}
+                    onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                    className="pl-10 pr-4 py-2 w-full rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
 
-            <div className="flex gap-3">
-              {ROLES_HIERARCHY[currentUser?.role]?.length > 0 && (
-                <button
-                  onClick={() => {
-                    setModalMode('add');
-                    setIsModalOpen(true);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
-                >
-                  <Plus className="h-5 w-5 mr-2" />
-                  Add User
-                </button>
-              )}
+                <div className="flex gap-3">
+                  {ROLES_HIERARCHY[currentUser?.role]?.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setModalMode('add');
+                        setIsModalOpen(true);
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
+                    >
+                      <Plus className="h-5 w-5 mr-2" />
+                      Add User
+                    </button>
+                  )}
 
-              {/* Settings Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setSettingsDropdownOpen(!settingsDropdownOpen)}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
-                >
-                  <SettingsIcon className="h-5 w-5 mr-2" />
-                  Settings
-                  <svg
-                    className={`ml-2 w-4 h-4 transition-transform ${settingsDropdownOpen ? 'transform rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                  {/* Settings Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setSettingsDropdownOpen(!settingsDropdownOpen)}
+                      className="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 flex items-center"
+                    >
+                      <SettingsIcon className="h-5 w-5 mr-2" />
+                      Settings
+                      <svg
+                        className={`ml-2 w-4 h-4 transition-transform ${settingsDropdownOpen ? 'transform rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
 
-                {/* Dropdown Menu */}
-                {settingsDropdownOpen && (
-                  <div
-                    className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200"
-                    ref={dropdownRef}
-                  >
-                    <div className="py-1">
-                      {(currentUser?.role === 'Admin' || currentUser?.role === 'Console admin') && (
-                        <>
+                    {/* Dropdown Menu */}
+                    {settingsDropdownOpen && (
+                      <div
+                        className="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200"
+                        ref={dropdownRef}
+                      >
+                        <div className="py-1">
                           <button
                             onClick={() => {
                               setShowDocSettings(true);
@@ -899,17 +890,16 @@ const UserManagement = () => {
                             Documentation Settings
                           </button>
                           <div className="border-t border-gray-100 my-1"></div>
-                        </>
-                      )}
-                      <div className="px-4 py-2 text-xs text-gray-500">
-                        More settings coming soon...
+                          <div className="px-4 py-2 text-xs text-gray-500">
+                            More settings coming soon...
+                          </div>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
+                </div>
+              </>
+            )}
         </div>
 
         {error && (
@@ -973,7 +963,7 @@ const UserManagement = () => {
 
             <PaginationControls totalUsers={sortUsers(filterUsers(users)).length} />
           </div>
-        ) : (
+        ) : activeTab === 'external' ? (
           <ExternalUsersTab
             users={externalUsers}
             onApprove={handleApproveExternalUser}
@@ -981,6 +971,8 @@ const UserManagement = () => {
             onDelete={handleDeleteExternalUser}
             loading={loadingExternal}
           />
+        ) : (
+          <TeamsTab currentUser={currentUser} onRefresh={fetchUsers} />
         )}
       </div>
 

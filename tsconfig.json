@@ -28,7 +28,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-, "src/app/organization/funds/page.js"  ],
+, "src/app/organization/funds/page.js", "src/app/project_management/[id]/ShareLinksModal.js", "src/app/share/s/[slug]/page.js"  ],
   "exclude": [
     "node_modules"
   ]
