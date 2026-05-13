@@ -3,6 +3,21 @@ import { NextResponse } from 'next/server';
 import clientPromise from "../../../../../lib/mongodb";
 import { ObjectId, GridFSBucket } from 'mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canCreateInProject, canReadFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../../lib/projectPermissions';
+
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
 
 export async function POST(req, { params }) {
   try {
@@ -35,12 +50,43 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Resource not found" }, { status: 404 });
     }
 
-    // Verify user has permission to duplicate this resource
-    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
-    const isOwner = originalResource.uploadedBy?.username === user?.username;
-    const isProjectMember = originalResource.projectId && await isMemberOfProject(db, originalResource.projectId, user.username);
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
 
-    if (!isAdmin && !isOwner && !isProjectMember) {
+    // Verify user has permission to duplicate this resource
+    let canDuplicate = false;
+
+    if (originalResource.projectId === 'general') {
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (canAccessGeneralSpace(user, permSettings)) {
+        const perms = getGeneralSpacePermissionLevel(user, permSettings);
+        if (perms && perms.readScope !== 'none' && perms.writeScope !== 'none') {
+          if (perms.readScope === 'all' && perms.writeScope === 'all') {
+            canDuplicate = true;
+          } else if (perms.readScope === 'own' && perms.writeScope === 'own') {
+            canDuplicate = originalResource.uploadedBy?.username === user?.username;
+          } else if (perms.readScope === 'all' && perms.writeScope === 'own') {
+            // Can read but only write own
+            canDuplicate = originalResource.uploadedBy?.username === user?.username;
+          } else if (perms.readScope === 'own' && perms.writeScope === 'all') {
+            // Can read own but write all (unusual but possible)
+            canDuplicate = originalResource.uploadedBy?.username === user?.username;
+          }
+        }
+      }
+    } else if (originalResource.projectId) {
+      const project = await db.collection('projects').findOne({ _id: new ObjectId(originalResource.projectId) });
+      if (project && canAccessProject(user, project, userTeams)) {
+        // Must be able to read the file AND create new files in the project
+        const canRead = canReadFile(user, project, originalResource, userTeams);
+        const canCreate = canCreateInProject(user, project, userTeams);
+        canDuplicate = canRead && canCreate;
+      }
+    }
+
+    if (!canDuplicate) {
       return NextResponse.json({ error: 'Not authorized to duplicate this resource' }, { status: 403 });
     }
 
@@ -144,16 +190,3 @@ export async function POST(req, { params }) {
   }
 }
 
-async function isMemberOfProject(db, projectId, username) {
-  try {
-    const project = await db.collection('projects').findOne({
-      _id: ObjectId.isValid(projectId) ? new ObjectId(projectId) : projectId
-    });
-    return project && (
-      project.superManager === username ||
-      project.members?.some(m => m.user === username)
-    );
-  } catch {
-    return false;
-  }
-}

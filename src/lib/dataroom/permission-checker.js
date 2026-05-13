@@ -118,6 +118,32 @@ export async function hasPermission({
       if (groupPermission) return true;
     }
 
+    // 3. Check team permissions
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { 'members': user._id?.toString() || user.id },
+          { 'lead': user._id?.toString() || user.id },
+        ],
+      })
+      .toArray();
+
+    if (userTeams.length > 0) {
+      const teamIds = userTeams.map(t => t._id.toString());
+      const teamPermission = await db.collection('dataroom_permissions').findOne({
+        resourceType: type,
+        resourceId: id.toString(),
+        teamId: { $in: teamIds },
+        permissions: { $in: permsToCheck },
+        $or: [
+          { expiresAt: null },
+          { expiresAt: { $gt: new Date() } },
+        ],
+      });
+
+      if (teamPermission) return true;
+    }
+
     return false;
   };
 
@@ -179,7 +205,7 @@ export async function hasPermission({
  * Get all permissions for a resource
  * @param {string} resourceType - Resource type
  * @param {string} resourceId - Resource ID
- * @returns {Promise<Array>} Array of permission records
+ * @returns {Promise<Array>} Array of permission records with enriched names
  */
 export async function getResourcePermissions(resourceType, resourceId) {
   const client = await clientPromise;
@@ -192,7 +218,20 @@ export async function getResourcePermissions(resourceType, resourceId) {
     })
     .toArray();
 
-  return permissions;
+  // Enrich permissions with team/group names if not stored
+  const enrichedPermissions = await Promise.all(permissions.map(async (perm) => {
+    if (perm.teamId && !perm.teamName) {
+      const team = await db.collection('teams').findOne({ _id: new ObjectId(perm.teamId) });
+      perm.teamName = team?.name || null;
+    }
+    if (perm.groupId && !perm.groupName) {
+      const group = await db.collection('dataroom_user_groups').findOne({ _id: new ObjectId(perm.groupId) });
+      perm.groupName = group?.name || null;
+    }
+    return perm;
+  }));
+
+  return enrichedPermissions;
 }
 
 /**
@@ -207,12 +246,27 @@ export async function grantPermission({
   userId = null,
   userEmail = null,
   groupId = null,
+  teamId = null,
   permissions = [],
   expiresAt = null,
   grantedBy,
 }) {
   const client = await clientPromise;
   const db = client.db('resources');
+
+  // Fetch team name if teamId provided
+  let teamName = null;
+  if (teamId) {
+    const team = await db.collection('teams').findOne({ _id: new ObjectId(teamId) });
+    teamName = team?.name || null;
+  }
+
+  // Fetch group name if groupId provided
+  let groupName = null;
+  if (groupId) {
+    const group = await db.collection('dataroom_user_groups').findOne({ _id: new ObjectId(groupId) });
+    groupName = group?.name || null;
+  }
 
   const permissionDoc = {
     resourceType,
@@ -221,6 +275,9 @@ export async function grantPermission({
     userId: userId?.toString() || null,
     userEmail: userEmail || null,
     groupId: groupId?.toString() || null,
+    groupName,
+    teamId: teamId?.toString() || null,
+    teamName,
     permissions,
     expiresAt: expiresAt ? new Date(expiresAt) : null,
     grantedBy: {
@@ -231,16 +288,19 @@ export async function grantPermission({
     updatedAt: new Date(),
   };
 
+  // Build the filter for upsert - handle user/group/team separately
+  const filterConditions = [];
+  if (userId?.toString()) filterConditions.push({ userId: userId?.toString() });
+  if (userEmail) filterConditions.push({ userEmail: userEmail });
+  if (groupId?.toString()) filterConditions.push({ groupId: groupId?.toString() });
+  if (teamId?.toString()) filterConditions.push({ teamId: teamId?.toString() });
+
   // Upsert to avoid duplicates
   const result = await db.collection('dataroom_permissions').updateOne(
     {
       resourceType,
       resourceId: resourceId.toString(),
-      $or: [
-        { userId: userId?.toString() },
-        { userEmail: userEmail },
-        { groupId: groupId?.toString() },
-      ].filter(Boolean),
+      $or: filterConditions,
     },
     {
       $set: permissionDoc,
@@ -359,13 +419,38 @@ export async function getUserAccessibleRooms(user) {
     return db.collection('dataroom_rooms').find({}).toArray();
   }
 
-  // Get rooms where user has permission
+  // Get user's teams and groups for permission lookup
+  const userTeams = await db.collection('teams')
+    .find({
+      $or: [
+        { 'members': user._id?.toString() || user.id },
+        { 'lead': user._id?.toString() || user.id },
+      ],
+    })
+    .toArray();
+
+  const userGroups = await db.collection('dataroom_user_groups')
+    .find({
+      $or: [
+        { 'members.userId': user._id?.toString() || user.id },
+        { 'members.email': user.email },
+      ],
+    })
+    .toArray();
+
+  // Build array of IDs for permission lookup
+  const teamIds = userTeams.map(t => t._id.toString());
+  const groupIds = userGroups.map(g => g._id.toString());
+
+  // Get rooms where user has permission (direct, group, or team)
   const permissions = await db.collection('dataroom_permissions')
     .find({
       resourceType: 'room',
       $or: [
         { userId: user._id?.toString() || user.id },
         { userEmail: user.email },
+        { groupId: { $in: groupIds } },
+        { teamId: { $in: teamIds } },
       ],
     })
     .toArray();

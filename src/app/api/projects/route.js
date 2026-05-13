@@ -3,6 +3,20 @@ import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject } from '../../../lib/projectPermissions';
 
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
+
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
 function sanitizeTag(tag) {
   if (typeof tag !== 'string') return null;
@@ -34,6 +48,10 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
+    const userTeamIds = userTeams.map(t => t._id?.toString());
+
     const projectsCollection = db.collection('projects');
     const { searchParams } = new URL(req.url);
     const tab = searchParams.get('tab');
@@ -46,18 +64,28 @@ export async function GET(req) {
     let query = {};
     if (!isAdmin) {
       // Non-admins can only see projects they have access to
+      // Build query to include team-based access
+      const teamAccessConditions = userTeamIds.map(teamId => ({
+        'permissionSettings.allowedTeams': teamId
+      }));
+
       query = {
         $or: [
           { superManager: user.username },
-          { 'members.user': user.username }
+          { 'members.user': user.username },
+          // Role-based access for user's role
+          { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': user.role },
+          { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': 'Everyone' },
+          // Team-based access for user's teams
+          ...teamAccessConditions.map(cond => ({ 'permissionSettings.accessMode': 'teams_based', ...cond }))
         ]
       };
     }
 
     const allProjects = await projectsCollection.find(query).sort({ createdAt: -1 }).toArray();
 
-    // Filter projects by permission settings
-    const accessibleProjects = allProjects.filter(project => canAccessProject(user, project));
+    // Filter projects by permission settings (additional validation)
+    const accessibleProjects = allProjects.filter(project => canAccessProject(user, project, userTeams));
 
     // Further filter if 'my' tab specified
     if (tab === 'my' && isAdmin) {

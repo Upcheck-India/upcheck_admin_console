@@ -16,6 +16,8 @@ const GENERAL_DEFAULT_PERMISSIONS = {
     'Member': { readScope: 'all', writeScope: 'own', downloadScope: 'own' },
     'Intern': { readScope: 'none', writeScope: 'none', downloadScope: 'none' },
   },
+  allowedTeams: [],
+  teamPermissions: {},
   managedBy: ['superManager', 'projectManager'],
 };
 
@@ -40,6 +42,20 @@ async function updateGeneralSpacePermissions(db, permissionSettings, user) {
     },
     { upsert: true }
   );
+}
+
+// Helper to get user's teams
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  const teams = await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+  return teams;
 }
 
 // GET /api/projects/[id]/permissions - Fetch permission settings for a project
@@ -189,7 +205,7 @@ export async function PUT(req, { params }) {
     }
 
     // Validate permission settings structure
-    const validAccessModes = ['members_only', 'roles_based'];
+    const validAccessModes = ['members_only', 'roles_based', 'teams_based'];
     if (!validAccessModes.includes(permissionSettings.accessMode)) {
       return NextResponse.json({ error: 'Invalid access mode' }, { status: 400 });
     }
@@ -217,6 +233,30 @@ export async function PUT(req, { params }) {
           }
           if (perms.downloadScope && !validScopes.includes(perms.downloadScope)) {
             return NextResponse.json({ error: `Invalid downloadScope for role ${role}` }, { status: 400 });
+          }
+        }
+      }
+    }
+
+    if (permissionSettings.accessMode === 'teams_based') {
+      // Validate allowedTeams
+      if (!Array.isArray(permissionSettings.allowedTeams)) {
+        return NextResponse.json({ error: 'allowedTeams must be an array' }, { status: 400 });
+      }
+
+      // Validate teamPermissions structure
+      if (permissionSettings.teamPermissions && typeof permissionSettings.teamPermissions === 'object') {
+        const validScopes = ['all', 'own', 'none'];
+
+        for (const [teamId, perms] of Object.entries(permissionSettings.teamPermissions)) {
+          if (perms.readScope && !validScopes.includes(perms.readScope)) {
+            return NextResponse.json({ error: `Invalid readScope for team ${teamId}` }, { status: 400 });
+          }
+          if (perms.writeScope && !validScopes.includes(perms.writeScope)) {
+            return NextResponse.json({ error: `Invalid writeScope for team ${teamId}` }, { status: 400 });
+          }
+          if (perms.downloadScope && !validScopes.includes(perms.downloadScope)) {
+            return NextResponse.json({ error: `Invalid downloadScope for team ${teamId}` }, { status: 400 });
           }
         }
       }

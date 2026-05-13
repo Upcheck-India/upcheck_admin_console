@@ -3,6 +3,20 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject, canCreateInProject, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../lib/projectPermissions';
 
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
+
 // GET - Fetch folders for a project
 export async function GET(req) {
   try {
@@ -42,7 +56,10 @@ export async function GET(req) {
         _id: new ObjectId(projectId)
       });
 
-      if (project && !canAccessProject(user, project)) {
+      // Fetch user teams for team-based permission checking
+      const userTeams = await getUserTeams(db, user);
+
+      if (project && !canAccessProject(user, project, userTeams)) {
         return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
       }
     }
@@ -116,13 +133,16 @@ export async function POST(req) {
         return NextResponse.json({ error: 'Project not found' }, { status: 404 });
       }
 
+      // Fetch user teams for team-based permission checking
+      const userTeams = await getUserTeams(db, user);
+
       // Check if user can access the project
-      if (!canAccessProject(user, project)) {
+      if (!canAccessProject(user, project, userTeams)) {
         return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
       }
 
       // Check if user can create folders in this project
-      if (!canCreateInProject(user, project)) {
+      if (!canCreateInProject(user, project, userTeams)) {
         return NextResponse.json({ error: 'Access denied: You do not have permission to create folders' }, { status: 403 });
       }
     }

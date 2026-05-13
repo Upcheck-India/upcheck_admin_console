@@ -243,8 +243,19 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    // Fetch user's teams for team-based permission checking
+    const userIdStr = user._id?.toString();
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { members: userIdStr },
+          { lead: userIdStr },
+        ],
+      })
+      .toArray();
+
     // Check if user can access the project using permission system
-    if (!canAccessProject(user, project)) {
+    if (!canAccessProject(user, project, userTeams)) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

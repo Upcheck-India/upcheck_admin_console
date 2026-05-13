@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Calendar, Users, User, Shield } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Users, User, Shield, UsersRound } from 'lucide-react';
 
-export default function PermissionManager({ 
-  resourceType, 
-  resourceId, 
+export default function PermissionManager({
+  resourceType,
+  resourceId,
   roomId,
-  isOpen, 
-  onClose 
+  isOpen,
+  onClose
 }) {
   const [permissions, setPermissions] = useState([]);
   const [users, setUsers] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -20,6 +21,7 @@ export default function PermissionManager({
     userId: '',
     userEmail: '',
     groupId: '',
+    teamId: '',
     permissions: [],
     expiresAt: '',
   });
@@ -38,6 +40,7 @@ export default function PermissionManager({
       fetchPermissions();
       fetchUsers();
       fetchGroups();
+      fetchTeams();
     }
   }, [isOpen, resourceType, resourceId]);
 
@@ -79,6 +82,29 @@ export default function PermissionManager({
     }
   }
 
+  async function fetchTeams() {
+    try {
+      const response = await fetch('/api/teams', {
+        headers: {
+          'x-user-role': 'Admin', // Assume admin for permission manager
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // API returns array directly or wrapped in teams
+        const teamsArray = Array.isArray(data) ? data : (data.teams || []);
+        // Add leadName for display
+        setTeams(teamsArray.map(team => ({
+          ...team,
+          leadName: team.lead?.username || team.leadName || 'Unknown',
+          _id: team._id?.toString() || team._id,
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch teams:', error);
+    }
+  }
+
   async function handleAddPermission() {
     try {
       const payload = {
@@ -92,8 +118,10 @@ export default function PermissionManager({
       if (formData.targetType === 'user') {
         if (formData.userId) payload.userId = formData.userId;
         if (formData.userEmail) payload.userEmail = formData.userEmail;
-      } else {
+      } else if (formData.targetType === 'group') {
         payload.groupId = formData.groupId;
+      } else if (formData.targetType === 'team') {
+        payload.teamId = formData.teamId;
       }
 
       const response = await fetch('/api/dataroom/permissions', {
@@ -109,6 +137,7 @@ export default function PermissionManager({
           userId: '',
           userEmail: '',
           groupId: '',
+          teamId: '',
           permissions: [],
           expiresAt: '',
         });
@@ -192,10 +221,14 @@ export default function PermissionManager({
                       <div key={perm._id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                         <div className="flex-1">
                           <div className="flex items-center space-x-2">
-                            {perm.userId ? <User className="w-4 h-4 text-blue-600" /> : <Users className="w-4 h-4 text-green-600" />}
+                            {perm.userId ? <User className="w-4 h-4 text-blue-600" /> :
+                             perm.groupId ? <Users className="w-4 h-4 text-green-600" /> :
+                             perm.teamId ? <UsersRound className="w-4 h-4 text-purple-600" /> : null}
                             <span className="font-medium text-slate-900">
-                              {perm.userEmail || perm.groupId || 'Unknown'}
+                              {perm.userEmail || perm.groupName || perm.teamName || perm.groupId || perm.teamId || 'Unknown'}
                             </span>
+                            {perm.teamId && <span className="text-xs text-purple-600 ml-1">(Team)</span>}
+                            {perm.groupId && !perm.teamId && <span className="text-xs text-green-600 ml-1">(Group)</span>}
                           </div>
                           <div className="flex flex-wrap gap-1 mt-2">
                             {perm.permissions.map((p) => (
@@ -255,16 +288,26 @@ export default function PermissionManager({
                         onClick={() => setFormData({ ...formData, targetType: 'group' })}
                         className={`flex-1 px-4 py-2 rounded-lg border ${
                           formData.targetType === 'group'
-                            ? 'bg-blue-50 border-blue-600 text-blue-700'
+                            ? 'bg-green-50 border-green-600 text-green-700'
                             : 'bg-white border-slate-300 text-slate-700'
                         }`}
                       >
                         Group
                       </button>
+                      <button
+                        onClick={() => setFormData({ ...formData, targetType: 'team' })}
+                        className={`flex-1 px-4 py-2 rounded-lg border ${
+                          formData.targetType === 'team'
+                            ? 'bg-purple-50 border-purple-600 text-purple-700'
+                            : 'bg-white border-slate-300 text-slate-700'
+                        }`}
+                      >
+                        Team
+                      </button>
                     </div>
                   </div>
 
-                  {/* User/Group Selector */}
+                  {/* User/Group/Team Selector */}
                   {formData.targetType === 'user' ? (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-slate-700 mb-2">Select User</label>
@@ -284,7 +327,7 @@ export default function PermissionManager({
                         ))}
                       </select>
                     </div>
-                  ) : (
+                  ) : formData.targetType === 'group' ? (
                     <div className="mb-4">
                       <label className="block text-sm font-medium text-slate-700 mb-2">Select Group</label>
                       <select
@@ -296,6 +339,22 @@ export default function PermissionManager({
                         {groups.map((group) => (
                           <option key={group._id} value={group._id}>
                             {group.name} ({group.members?.length || 0} members)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Select Team</label>
+                      <select
+                        value={formData.teamId}
+                        onChange={(e) => setFormData({ ...formData, teamId: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                      >
+                        <option value="">Select a team...</option>
+                        {teams.map((team) => (
+                          <option key={team._id} value={team._id}>
+                            {team.name} ({team.members?.length || 0} members) - Lead: {team.leadName || 'N/A'}
                           </option>
                         ))}
                       </select>
@@ -344,7 +403,7 @@ export default function PermissionManager({
                     </button>
                     <button
                       onClick={handleAddPermission}
-                      disabled={!formData.permissions.length || (formData.targetType === 'user' ? !formData.userId : !formData.groupId)}
+                      disabled={!formData.permissions.length || (formData.targetType === 'user' ? !formData.userId : formData.targetType === 'group' ? !formData.groupId : !formData.teamId)}
                       className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Add Permission

@@ -3,6 +3,21 @@ import { NextResponse } from 'next/server';
 import clientPromise from "../../../../../lib/mongodb";
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canWriteFile, canCreateInProject, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../../lib/projectPermissions';
+
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
 
 export async function PATCH(req, { params }) {
   try {
@@ -35,11 +50,34 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ error: 'Resource not found' }, { status: 404 });
     }
 
-    // Verify user has permission to move this resource
-    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
-    const isOwner = resource.uploadedBy?.username === user?.username;
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
 
-    if (!isAdmin && !isOwner) {
+    // Verify user has permission to move this resource
+    let canMove = false;
+
+    if (resource.projectId === 'general') {
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (canAccessGeneralSpace(user, permSettings)) {
+        const perms = getGeneralSpacePermissionLevel(user, permSettings);
+        if (perms && perms.writeScope !== 'none') {
+          if (perms.writeScope === 'all') {
+            canMove = true;
+          } else if (perms.writeScope === 'own') {
+            canMove = resource.uploadedBy?.username === user?.username;
+          }
+        }
+      }
+    } else if (resource.projectId) {
+      const project = await db.collection('projects').findOne({ _id: new ObjectId(resource.projectId) });
+      if (project && canAccessProject(user, project, userTeams)) {
+        canMove = canWriteFile(user, project, resource, userTeams);
+      }
+    }
+
+    if (!canMove) {
       return NextResponse.json({ error: 'Not authorized to move this resource' }, { status: 403 });
     }
 

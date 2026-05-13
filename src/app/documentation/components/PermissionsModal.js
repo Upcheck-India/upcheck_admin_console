@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   X, Shield, Users, Lock, AlertTriangle, CheckCircle2,
-  Save, Loader2, ChevronDown, ChevronUp, Info, XCircle
+  Save, Loader2, ChevronDown, ChevronUp, Info, XCircle, UserCheck
 } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -65,6 +65,8 @@ const DEFAULT_ROLE_PERMISSIONS = {
   'Intern':        'no_access', // No access by default
 };
 
+const DEFAULT_TEAM_PERMISSION = 'read_all'; // Teams get viewer access by default
+
 function presetForRole(role) {
   const key = DEFAULT_ROLE_PERMISSIONS[role] || 'no_access';
   return PERMISSION_PRESETS.find(p => p.value === key) || PERMISSION_PRESETS[5];
@@ -114,6 +116,10 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
   const [allowedRoles,     setAllowedRoles]      = useState([]);
   const [rolePermissions,  setRolePermissions]   = useState({});
   const [expandedRole,     setExpandedRole]      = useState(null);
+  const [teams,            setTeams]             = useState([]);
+  const [allowedTeams,     setAllowedTeams]      = useState([]);
+  const [teamPermissions,  setTeamPermissions]   = useState({});
+  const [expandedTeam,     setExpandedTeam]      = useState(null);
   const [loading,          setLoading]           = useState(false);
   const [fetching,         setFetching]          = useState(false);
   const [error,            setError]             = useState(null);
@@ -124,7 +130,24 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
   const initialStateRef = useRef(null);
   const abortRef        = useRef(null);
 
-  // ── Fetch ─────────────────────────────────────────────────────────────────
+  // ── Fetch Teams ─────────────────────────────────────────────────────────────
+
+  const fetchTeams = useCallback(async () => {
+    try {
+      const res = await fetch('/api/teams', {
+        headers: { 'x-user-role': 'Admin' }, // Admin to get all teams
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const teamsArray = Array.isArray(data) ? data : (data.teams || []);
+        setTeams(teamsArray);
+      }
+    } catch (err) {
+      console.error('Failed to fetch teams:', err);
+    }
+  }, []);
+
+  // ── Fetch Permissions ─────────────────────────────────────────────────────────
 
   const fetchPermissions = useCallback(async () => {
     if (!project?._id) return;
@@ -146,7 +169,15 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
       setAccessMode(s.accessMode || 'members_only');
       setAllowedRoles(s.allowedRoles || []);
       setRolePermissions(s.rolePermissions || {});
-      initialStateRef.current = JSON.stringify({ accessMode: s.accessMode, allowedRoles: s.allowedRoles, rolePermissions: s.rolePermissions });
+      setAllowedTeams(s.allowedTeams || []);
+      setTeamPermissions(s.teamPermissions || {});
+      initialStateRef.current = JSON.stringify({
+        accessMode: s.accessMode,
+        allowedRoles: s.allowedRoles,
+        rolePermissions: s.rolePermissions,
+        allowedTeams: s.allowedTeams,
+        teamPermissions: s.teamPermissions,
+      });
     } catch (err) {
       if (err.name !== 'AbortError') setError('Failed to load permissions.');
     } finally {
@@ -157,11 +188,13 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
   useEffect(() => {
     if (isOpen && project) {
       fetchPermissions();
+      fetchTeams();
       setSaveSuccess(false);
       setExpandedRole(null);
+      setExpandedTeam(null);
     }
     return () => abortRef.current?.abort();
-  }, [isOpen, project, fetchPermissions]);
+  }, [isOpen, project, fetchPermissions, fetchTeams]);
 
   // Escape to close (but not while saving)
   useEffect(() => {
@@ -174,16 +207,24 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
   // Track unsaved changes by comparing to initial snapshot
   useEffect(() => {
     if (!initialStateRef.current) return;
-    const current = JSON.stringify({ accessMode, allowedRoles, rolePermissions });
+    const current = JSON.stringify({ accessMode, allowedRoles, rolePermissions, allowedTeams, teamPermissions });
     setHasUnsavedChanges(current !== initialStateRef.current);
-  }, [accessMode, allowedRoles, rolePermissions]);
+  }, [accessMode, allowedRoles, rolePermissions, allowedTeams, teamPermissions]);
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleAccessModeChange = (mode) => {
     setAccessMode(mode);
     if (mode === 'members_only') {
-      // Clear role selections when switching back
+      // Clear role and team selections when switching back
+      setAllowedRoles([]);
+      setAllowedTeams([]);
+      setExpandedRole(null);
+      setExpandedTeam(null);
+    } else if (mode === 'roles_based') {
+      setAllowedTeams([]);
+      setExpandedTeam(null);
+    } else if (mode === 'teams_based') {
       setAllowedRoles([]);
       setExpandedRole(null);
     }
@@ -208,10 +249,35 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
     });
   };
 
+  const handleTeamToggle = (teamId) => {
+    setAllowedTeams(prev => {
+      if (prev.includes(teamId)) {
+        if (expandedTeam === teamId) setExpandedTeam(null);
+        return prev.filter(t => t !== teamId);
+      }
+      // Add default permissions when first selecting a team
+      if (!teamPermissions[teamId]) {
+        const preset = PERMISSION_PRESETS.find(p => p.value === DEFAULT_TEAM_PERMISSION) || PERMISSION_PRESETS[2];
+        setTeamPermissions(p => ({
+          ...p,
+          [teamId]: { readScope: preset.readScope, writeScope: preset.writeScope, downloadScope: preset.downloadScope },
+        }));
+      }
+      return [...prev, teamId];
+    });
+  };
+
   const applyPreset = (role, preset) => {
     setRolePermissions(prev => ({
       ...prev,
       [role]: { readScope: preset.readScope, writeScope: preset.writeScope, downloadScope: preset.downloadScope },
+    }));
+  };
+
+  const applyTeamPreset = (teamId, preset) => {
+    setTeamPermissions(prev => ({
+      ...prev,
+      [teamId]: { readScope: preset.readScope, writeScope: preset.writeScope, downloadScope: preset.downloadScope },
     }));
   };
 
@@ -222,16 +288,28 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
     }));
   };
 
-  // Bug fix: strip permissions for roles not in allowedRoles before saving
+  const handleTeamScopeChange = (teamId, field, value) => {
+    setTeamPermissions(prev => ({
+      ...prev,
+      [teamId]: { ...prev[teamId], [field]: value },
+    }));
+  };
+
+  // Bug fix: strip permissions for roles/teams not selected before saving
   const handleSave = async () => {
     setLoading(true);
     setError(null);
     setSaveSuccess(false);
 
-    // Only save permissions for currently selected roles
-    const cleanedPermissions = {};
+    // Only save permissions for currently selected roles/teams
+    const cleanedRolePermissions = {};
     allowedRoles.forEach(role => {
-      if (rolePermissions[role]) cleanedPermissions[role] = rolePermissions[role];
+      if (rolePermissions[role]) cleanedRolePermissions[role] = rolePermissions[role];
+    });
+
+    const cleanedTeamPermissions = {};
+    allowedTeams.forEach(teamId => {
+      if (teamPermissions[teamId]) cleanedTeamPermissions[teamId] = teamPermissions[teamId];
     });
 
     try {
@@ -239,7 +317,13 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
         method:  'PUT',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({
-          permissionSettings: { accessMode, allowedRoles, rolePermissions: cleanedPermissions },
+          permissionSettings: {
+            accessMode,
+            allowedRoles,
+            rolePermissions: cleanedRolePermissions,
+            allowedTeams,
+            teamPermissions: cleanedTeamPermissions,
+          },
         }),
       });
 
@@ -247,7 +331,13 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
         const data = await res.json();
         setSaveSuccess(true);
         setHasUnsavedChanges(false);
-        initialStateRef.current = JSON.stringify({ accessMode, allowedRoles, rolePermissions: cleanedPermissions });
+        initialStateRef.current = JSON.stringify({
+          accessMode,
+          allowedRoles,
+          rolePermissions: cleanedRolePermissions,
+          allowedTeams,
+          teamPermissions: cleanedTeamPermissions,
+        });
         if (typeof onUpdate === 'function') onUpdate(data.permissionSettings);
         setTimeout(() => { setSaveSuccess(false); onClose(); }, 800);
       } else {
@@ -266,6 +356,7 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
   if (!isOpen) return null;
 
   const allRolesSelected = allowedRoles.length === AVAILABLE_ROLES.length;
+  const allTeamsSelected = allowedTeams.length === teams.length;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -357,6 +448,12 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
                           icon: <Shield className="w-4 h-4" />,
                           title: 'Role-Based Access',
                           desc: 'Grant access to all users with specific organization roles. Set different permission levels per role.',
+                        },
+                        {
+                          value: 'teams_based',
+                          icon: <UserCheck className="w-4 h-4" />,
+                          title: 'Team-Based Access',
+                          desc: 'Grant access to all members of specific teams. Set different permission levels per team.',
                         },
                       ].map(opt => (
                         <button
@@ -622,6 +719,237 @@ export default function PermissionsModal({ project, isOpen, onClose, onUpdate, i
                         <Info className="w-4 h-4 text-gray-400 shrink-0" />
                         <p className="text-xs text-gray-500">
                           Select at least one role above to grant access. Until then, only project members can access this project.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* ── Teams-based access mode ── */}
+                {accessMode === 'teams_based' && (
+                  <>
+                    {/* Info banner */}
+                    <div className="flex items-start gap-2.5 px-3.5 py-3 bg-amber-50 border border-amber-200 rounded-xl animate-slide-in">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-700 leading-relaxed">
+                        <span className="font-semibold">Team-based access</span> grants access to <em>all members</em> of selected teams, not just project members. Set different permission levels per team.
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          <UserCheck className="w-3.5 h-3.5" /> Teams with access
+                        </label>
+                        {/* Select/deselect all */}
+                        <button
+                          onClick={() => {
+                            if (allTeamsSelected) {
+                              setAllowedTeams([]);
+                              setExpandedTeam(null);
+                            } else {
+                              const missing = teams.filter(t => !allowedTeams.includes(t._id?.toString()));
+                              const newPerms = { ...teamPermissions };
+                              missing.forEach(t => {
+                                const tid = t._id?.toString();
+                                if (!newPerms[tid]) {
+                                  const p = PERMISSION_PRESETS.find(p => p.value === DEFAULT_TEAM_PERMISSION) || PERMISSION_PRESETS[2];
+                                  newPerms[tid] = { readScope: p.readScope, writeScope: p.writeScope, downloadScope: p.downloadScope };
+                                }
+                              });
+                              setTeamPermissions(newPerms);
+                              setAllowedTeams(teams.map(t => t._id?.toString()));
+                            }
+                          }}
+                          className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                        >
+                          {allTeamsSelected ? 'Deselect all' : 'Select all'}
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2">
+                        {teams.length === 0 ? (
+                          <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl">
+                            <Info className="w-4 h-4 text-gray-400 shrink-0" />
+                            <p className="text-xs text-gray-500">
+                              No teams available. Create teams in the User Management page first.
+                            </p>
+                          </div>
+                        ) : (
+                          teams.map(team => {
+                            const teamId = team._id?.toString();
+                            const isSelected = allowedTeams.includes(teamId);
+                            const teamName = team.name || 'Unnamed Team';
+                            const memberCount = team.members?.length || 0;
+
+                            return (
+                              <button
+                                key={teamId}
+                                onClick={() => handleTeamToggle(teamId)}
+                                className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border-2 transition-all ${
+                                  isSelected
+                                    ? 'border-blue-400 bg-blue-50/60'
+                                    : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className={`w-3.5 h-3.5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                                    isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                                  }`}>
+                                    {isSelected && (
+                                      <svg className="w-2 h-2 text-white" fill="none" viewBox="0 0 12 12">
+                                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                      </svg>
+                                    )}
+                                  </div>
+                                  <span className={`text-sm font-medium truncate ${
+                                    isSelected ? 'text-blue-700' : 'text-gray-700'
+                                  }`}>
+                                    {teamName}
+                                  </span>
+                                  <span className="text-xs text-gray-400">
+                                    ({memberCount} members)
+                                  </span>
+                                </div>
+                                {isSelected && (
+                                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                                    (presetFromScopes(teamPermissions[teamId]) || PERMISSION_PRESETS[2]).badge
+                                  }`}>
+                                    {(presetFromScopes(teamPermissions[teamId]) || { label: 'Custom' }).label}
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Permission levels per team ── */}
+                    {allowedTeams.length > 0 && (
+                      <div>
+                        <label className="flex items-center gap-2 text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                          <Shield className="w-3.5 h-3.5" /> Team permission levels
+                        </label>
+
+                        <div className="space-y-2">
+                          {allowedTeams.map(teamId => {
+                            const team = teams.find(t => t._id?.toString() === teamId);
+                            const teamName = team?.name || 'Team';
+                            const perms = teamPermissions[teamId];
+                            const activePreset = presetFromScopes(perms) || PERMISSION_PRESETS[2];
+                            const isExpanded = expandedTeam === teamId;
+
+                            return (
+                              <div
+                                key={teamId}
+                                className={`rounded-xl border-2 overflow-hidden transition-all ${
+                                  isExpanded ? 'border-blue-300' : 'border-gray-100'
+                                }`}
+                              >
+                                {/* Team row */}
+                                <button
+                                  onClick={() => setExpandedTeam(isExpanded ? null : teamId)}
+                                  className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="text-sm font-semibold text-gray-900">{teamName}</span>
+                                    <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+                                      activePreset.badge
+                                    }`}>
+                                      {activePreset.label}
+                                    </span>
+                                  </div>
+                                  {isExpanded
+                                    ? <ChevronUp className="w-4 h-4 text-gray-400" />
+                                    : <ChevronDown className="w-4 h-4 text-gray-400" />
+                                  }
+                                </button>
+
+                                {/* Expanded permission editor */}
+                                {isExpanded && (
+                                  <div className="px-4 pb-4 pt-3 bg-white border-t border-gray-100 space-y-4 animate-slide-in">
+                                    {/* Preset picker */}
+                                    <div>
+                                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-2">Quick preset</p>
+                                      <div className="grid grid-cols-1 gap-1.5">
+                                        {PERMISSION_PRESETS.map(preset => {
+                                          const isActive = activePreset?.value === preset.value;
+                                          return (
+                                            <button
+                                              key={preset.value}
+                                              type="button"
+                                              onClick={() => applyTeamPreset(teamId, preset)}
+                                              className={`flex items-center justify-between px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
+                                                isActive
+                                                  ? 'border-blue-400 bg-blue-50/60 shadow-sm'
+                                                  : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
+                                              }`}
+                                            >
+                                              <div className="flex items-center gap-2.5">
+                                                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${preset.badge}`}>
+                                                  {preset.label}
+                                                </span>
+                                                <span className="text-xs text-gray-500">{preset.description}</span>
+                                              </div>
+                                              {isActive && <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0" />}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+
+                                    {/* Fine-grained controls */}
+                                    <div className="pt-2 border-t border-gray-100 space-y-3">
+                                      <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
+                                        Fine-tune {activePreset ? '(overrides preset)' : ''}
+                                      </p>
+                                      <ScopeSelect
+                                        label="Read"
+                                        value={perms?.readScope || 'all'}
+                                        options={[
+                                          { value: 'all', label: 'All files' },
+                                          { value: 'own', label: 'Own only' },
+                                          { value: 'none', label: 'Disabled' },
+                                        ]}
+                                        onChange={v => handleTeamScopeChange(teamId, 'readScope', v)}
+                                      />
+                                      <ScopeSelect
+                                        label="Write"
+                                        value={perms?.writeScope || 'none'}
+                                        options={[
+                                          { value: 'all', label: 'All files' },
+                                          { value: 'own', label: 'Own only' },
+                                          { value: 'none', label: 'Disabled' },
+                                        ]}
+                                        onChange={v => handleTeamScopeChange(teamId, 'writeScope', v)}
+                                      />
+                                      <ScopeSelect
+                                        label="Download"
+                                        value={perms?.downloadScope || 'all'}
+                                        options={[
+                                          { value: 'all', label: 'All files' },
+                                          { value: 'own', label: 'Own only' },
+                                          { value: 'none', label: 'Disabled' },
+                                        ]}
+                                        onChange={v => handleTeamScopeChange(teamId, 'downloadScope', v)}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Empty state when teams_based but no teams selected */}
+                    {allowedTeams.length === 0 && teams.length > 0 && (
+                      <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl">
+                        <Info className="w-4 h-4 text-gray-400 shrink-0" />
+                        <p className="text-xs text-gray-500">
+                          Select at least one team above to grant access. Until then, only project members can access this project.
                         </p>
                       </div>
                     )}

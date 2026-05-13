@@ -5,6 +5,21 @@ import { GridFSBucket, ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 import { canAccessProject, canReadFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../lib/projectPermissions';
 
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  if (!user) return [];
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
+
 export async function GET(req) {
   try {
     const client = await clientPromise;
@@ -18,6 +33,9 @@ export async function GET(req) {
     if (token) {
       user = await db.collection('admin_users').findOne({ sessionToken: token });
     }
+
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
 
     // Get query parameters
     const { searchParams } = new URL(req.url);
@@ -84,7 +102,7 @@ export async function GET(req) {
     // Filter resources by project access permissions
     if (projectId && projectId !== 'general') {
       const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
-      if (project && !canAccessProject(user, project)) {
+      if (project && !canAccessProject(user, project, userTeams)) {
         // User doesn't have access to this project
         return NextResponse.json([]);
       }
@@ -121,12 +139,12 @@ export async function GET(req) {
         }
       } else if (resource.projectId) {
         const project = await db.collection('projects').findOne({ _id: new ObjectId(resource.projectId) });
-        if (project && !canAccessProject(user, project)) {
+        if (project && !canAccessProject(user, project, userTeams)) {
           continue; // Skip this resource - user doesn't have access to project
         }
 
         // Check file-level read permissions
-        if (project && !canReadFile(user, project, resource)) {
+        if (project && !canReadFile(user, project, resource, userTeams)) {
           continue; // Skip this resource - user cannot read this file
         }
       }

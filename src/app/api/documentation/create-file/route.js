@@ -3,6 +3,21 @@ import { NextResponse } from 'next/server';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import clientPromise from '../../../../lib/mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canCreateInProject, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../lib/projectPermissions';
+
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
 
 // Helper function to create a simple DOCX file
 // This creates a minimal valid DOCX with the content
@@ -60,6 +75,9 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
+
     // Parse request body
     const { name, type, content, projectId, folderId } = await req.json();
 
@@ -81,27 +99,34 @@ export async function POST(req) {
     }
 
     // Check project access if not general
-    if (projectId !== 'general') {
+    if (projectId === 'general') {
+      // For General space, fetch permissions from database
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: 'Access denied to General space' }, { status: 403 });
+      }
+
+      // Check if user can create files in General space
+      const perms = getGeneralSpacePermissionLevel(user, permSettings);
+      if (!perms || perms.writeScope === 'none') {
+        return NextResponse.json({ error: 'Access denied: You do not have permission to create files in General space' }, { status: 403 });
+      }
+    } else {
       const project = await db.collection('projects').findOne({
         _id: new ObjectId(projectId)
       });
 
       if (project) {
-        const isMember = project.members?.some(m => m.user === user.username);
-        const isSuperManager = project.superManager === user.username;
-        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-
-        if (!isMember && !isSuperManager && !isAdmin) {
+        // Check if user can access the project
+        if (!canAccessProject(user, project, userTeams)) {
           return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
         }
 
-        // Check if user has permission to create files (not Viewer role)
-        const memberRecord = project.members?.find(m => m.user === user.username);
-        const memberRole = memberRecord?.role;
-        const canCreate = memberRole === 'Project Manager' || memberRole === 'Contributor';
-
-        if (!isAdmin && !canCreate) {
-          return NextResponse.json({ error: 'You do not have permission to create files' }, { status: 403 });
+        // Check if user can create files in this project
+        if (!canCreateInProject(user, project, userTeams)) {
+          return NextResponse.json({ error: 'Access denied: You do not have permission to create files' }, { status: 403 });
         }
       }
     }

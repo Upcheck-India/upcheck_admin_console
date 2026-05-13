@@ -72,6 +72,7 @@ export async function POST(request) {
       userId,
       userEmail,
       groupId,
+      teamId,
       permissions,
       expiresAt,
     } = body;
@@ -84,8 +85,8 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid resourceType' }, { status: 400 });
     }
 
-    if (!userId && !userEmail && !groupId) {
-      return NextResponse.json({ error: 'Either userId, userEmail, or groupId is required' }, { status: 400 });
+    if (!userId && !userEmail && !groupId && !teamId) {
+      return NextResponse.json({ error: 'Either userId, userEmail, groupId, or teamId is required' }, { status: 400 });
     }
 
     if (!permissions || !Array.isArray(permissions) || permissions.length === 0) {
@@ -105,6 +106,7 @@ export async function POST(request) {
       userId,
       userEmail,
       groupId,
+      teamId,
       permissions,
       expiresAt,
       grantedBy: user,
@@ -120,6 +122,7 @@ export async function POST(request) {
         targetUserId: userId,
         targetUserEmail: userEmail,
         targetGroupId: groupId,
+        targetTeamId: teamId,
         permissions,
         expiresAt,
       },
@@ -174,6 +177,7 @@ export async function DELETE(request) {
         targetUserId: permission.userId,
         targetUserEmail: permission.userEmail,
         targetGroupId: permission.groupId,
+        targetTeamId: permission.teamId,
       },
       request,
     });

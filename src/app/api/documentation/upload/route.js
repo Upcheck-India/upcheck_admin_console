@@ -2,6 +2,21 @@ import { NextResponse } from 'next/server';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import clientPromise from '../../../../lib/mongodb';
 import bcrypt from 'bcryptjs';
+import { canAccessProject, canCreateInProject, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../lib/projectPermissions';
+
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
 
 export async function POST(req) {
   try {
@@ -19,6 +34,9 @@ export async function POST(req) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
 
     // Parse form data
     const formData = await req.formData();
@@ -38,18 +56,34 @@ export async function POST(req) {
     }
 
     // Check project access if not general
-    if (projectId !== 'general') {
+    if (projectId === 'general') {
+      // For General space, fetch permissions from database
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: 'Access denied to General space' }, { status: 403 });
+      }
+
+      // Check if user can create files in General space
+      const perms = getGeneralSpacePermissionLevel(user, permSettings);
+      if (!perms || perms.writeScope === 'none') {
+        return NextResponse.json({ error: 'Access denied: You do not have permission to upload files in General space' }, { status: 403 });
+      }
+    } else {
       const project = await db.collection('projects').findOne({
         _id: new ObjectId(projectId)
       });
 
       if (project) {
-        const isMember = project.members?.some(m => m.user === user.username);
-        const isSuperManager = project.superManager === user.username;
-        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-
-        if (!isMember && !isSuperManager && !isAdmin) {
+        // Check if user can access the project
+        if (!canAccessProject(user, project, userTeams)) {
           return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
+        }
+
+        // Check if user can create files in this project
+        if (!canCreateInProject(user, project, userTeams)) {
+          return NextResponse.json({ error: 'Access denied: You do not have permission to upload files' }, { status: 403 });
         }
       }
     }

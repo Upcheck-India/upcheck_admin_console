@@ -9,9 +9,10 @@
  * Check if user can access a project based on permission settings
  * @param {Object} user - User object with username and role
  * @param {Object} project - Project object with permissionSettings
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional, fetched separately)
  * @returns {boolean} - True if user can access the project
  */
-export function canAccessProject(user, project) {
+export function canAccessProject(user, project, userTeams = null) {
   if (!user || !project) return false;
 
   // Admin and Console admin always have access
@@ -59,6 +60,32 @@ export function canAccessProject(user, project) {
     }
   }
 
+  // Teams-based access mode
+  if (permSettings.accessMode === 'teams_based') {
+    const allowedTeams = permSettings.allowedTeams || [];
+
+    // If no teams selected, only members have access
+    if (allowedTeams.length === 0) {
+      return (
+        project.superManager === user.username ||
+        (project.members && project.members.some(m => m.user === user.username))
+      );
+    }
+
+    // Check if user belongs to any allowed team
+    if (userTeams && userTeams.length > 0) {
+      const userTeamIds = userTeams.map(t => t._id?.toString() || t);
+      if (allowedTeams.some(teamId => userTeamIds.includes(teamId))) {
+        return true;
+      }
+    }
+
+    // Check if user is a member (members always have access)
+    if (project.members && project.members.some(m => m.user === user.username)) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -66,9 +93,10 @@ export function canAccessProject(user, project) {
  * Get the permission level for a user in a project
  * @param {Object} user - User object with username and role
  * @param {Object} project - Project object with permissionSettings
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {Object} - { level, readScope, writeScope, downloadScope } or null if no access
  */
-export function getUserPermissionLevel(user, project) {
+export function getUserPermissionLevel(user, project, userTeams = null) {
   if (!user || !project) return null;
 
   // Admin and Console admin have full access
@@ -150,6 +178,43 @@ export function getUserPermissionLevel(user, project) {
     }
   }
 
+  // Teams-based access mode
+  if (permSettings.accessMode === 'teams_based') {
+    const teamPermissions = permSettings.teamPermissions || {};
+    const allowedTeams = permSettings.allowedTeams || [];
+
+    // Check if user belongs to any allowed team
+    if (userTeams && userTeams.length > 0) {
+      const userTeamIds = userTeams.map(t => t._id?.toString() || t);
+      for (const teamId of allowedTeams) {
+        if (userTeamIds.includes(teamId)) {
+          // Return team-specific permissions or default
+          if (teamPermissions[teamId]) {
+            return teamPermissions[teamId];
+          }
+          // Default team member permissions
+          return {
+            level: 'read',
+            readScope: 'all',
+            writeScope: 'own',
+            downloadScope: 'own'
+          };
+        }
+      }
+    }
+
+    // User is a member - use member permissions
+    const member = project.members?.find(m => m.user === user.username);
+    if (member) {
+      const projectRolePermissions = {
+        'Project Manager': { level: 'full', readScope: 'all', writeScope: 'all', downloadScope: 'all' },
+        'Contributor': { level: 'write', readScope: 'all', writeScope: 'own', downloadScope: 'own' },
+        'Viewer': { level: 'read', readScope: 'all', writeScope: 'none', downloadScope: 'own' }
+      };
+      return projectRolePermissions[member.role] || { level: 'read', readScope: 'own', writeScope: 'none', downloadScope: 'none' };
+    }
+  }
+
   return null;
 }
 
@@ -158,10 +223,11 @@ export function getUserPermissionLevel(user, project) {
  * @param {Object} user - User object
  * @param {Object} project - Project object
  * @param {Object} file - File/resource object with ownerId or createdBy
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {boolean}
  */
-export function canReadFile(user, project, file) {
-  const perms = getUserPermissionLevel(user, project);
+export function canReadFile(user, project, file, userTeams = null) {
+  const perms = getUserPermissionLevel(user, project, userTeams);
   if (!perms) return false;
 
   // Full access can read everything
@@ -184,10 +250,11 @@ export function canReadFile(user, project, file) {
  * @param {Object} user - User object
  * @param {Object} project - Project object
  * @param {Object} file - File/resource object
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {boolean}
  */
-export function canWriteFile(user, project, file) {
-  const perms = getUserPermissionLevel(user, project);
+export function canWriteFile(user, project, file, userTeams = null) {
+  const perms = getUserPermissionLevel(user, project, userTeams);
   if (!perms) return false;
 
   // Full access can write to everything
@@ -212,10 +279,11 @@ export function canWriteFile(user, project, file) {
  * @param {Object} user - User object
  * @param {Object} project - Project object
  * @param {Object} file - File/resource object
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {boolean}
  */
-export function canDownloadFile(user, project, file) {
-  const perms = getUserPermissionLevel(user, project);
+export function canDownloadFile(user, project, file, userTeams = null) {
+  const perms = getUserPermissionLevel(user, project, userTeams);
   if (!perms) return false;
 
   // Full access can download everything
@@ -238,10 +306,11 @@ export function canDownloadFile(user, project, file) {
  * @param {Object} user - User object
  * @param {Object} project - Project object
  * @param {Object} file - File/resource object
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {boolean}
  */
-export function canDeleteFile(user, project, file) {
-  const perms = getUserPermissionLevel(user, project);
+export function canDeleteFile(user, project, file, userTeams = null) {
+  const perms = getUserPermissionLevel(user, project, userTeams);
   if (!perms) return false;
 
   // Full access can delete everything
@@ -264,10 +333,11 @@ export function canDeleteFile(user, project, file) {
  * Check if user can create files/folders in a project
  * @param {Object} user - User object
  * @param {Object} project - Project object
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {boolean}
  */
-export function canCreateInProject(user, project) {
-  const perms = getUserPermissionLevel(user, project);
+export function canCreateInProject(user, project, userTeams = null) {
+  const perms = getUserPermissionLevel(user, project, userTeams);
   if (!perms) return false;
 
   // Full and write access can create
@@ -321,8 +391,22 @@ export function getDefaultPermissionSettings() {
     accessMode: 'members_only',
     allowedRoles: [],
     rolePermissions: {},
+    allowedTeams: [],
+    teamPermissions: {},
     managedBy: ['superManager', 'projectManager']
   };
+}
+
+/**
+ * Get available access modes
+ * @returns {Array} - Array of access mode options
+ */
+export function getAccessModes() {
+  return [
+    { value: 'members_only', label: 'Members Only', description: 'Only project members can access' },
+    { value: 'roles_based', label: 'Role-Based', description: 'Users with specific organization roles' },
+    { value: 'teams_based', label: 'Team-Based', description: 'Users in specific teams' },
+  ];
 }
 
 /**

@@ -3,6 +3,21 @@ import { NextResponse } from 'next/server';
 import { ObjectId, GridFSBucket } from 'mongodb';
 import clientPromise from '../../../../../lib/mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canReadFile, canWriteFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../../lib/projectPermissions';
+
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
 
 // GET - Fetch file content by ID
 export async function GET(req, { params }) {
@@ -27,6 +42,9 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
+
     // Get the resource
     const resource = await db.collection('resources').findOne({ _id: new ObjectId(id) });
 
@@ -35,17 +53,36 @@ export async function GET(req, { params }) {
     }
 
     // Check project access and permissions
-    if (resource.projectId !== 'general') {
+    if (resource.projectId === 'general') {
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: 'Access denied to General space' }, { status: 403 });
+      }
+
+      const perms = getGeneralSpacePermissionLevel(user, permSettings);
+      if (!perms || perms.readScope === 'none') {
+        return NextResponse.json({ error: 'Access denied to this file' }, { status: 403 });
+      }
+
+      if (perms.readScope === 'own') {
+        const isOwnFile = resource.createdBy === user.username || resource.uploadedBy?.username === user.username;
+        if (!isOwnFile) {
+          return NextResponse.json({ error: 'Access denied to this file' }, { status: 403 });
+        }
+      }
+    } else {
       const project = await db.collection('projects').findOne({
         _id: new ObjectId(resource.projectId)
       });
 
       if (project) {
-        const isMember = project.members?.some(m => m.user === user.username);
-        const isSuperManager = project.superManager === user.username;
-        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
+        if (!canAccessProject(user, project, userTeams)) {
+          return NextResponse.json({ error: 'Access denied to this file' }, { status: 403 });
+        }
 
-        if (!isMember && !isSuperManager && !isAdmin) {
+        if (!canReadFile(user, project, resource, userTeams)) {
           return NextResponse.json({ error: 'Access denied to this file' }, { status: 403 });
         }
       }
@@ -124,6 +161,9 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
+
     // Get the resource
     const resource = await db.collection('resources').findOne({ _id: new ObjectId(id) });
 
@@ -135,23 +175,35 @@ export async function PUT(req, { params }) {
     let canEdit = false;
 
     if (resource.projectId === 'general') {
-      canEdit = true;
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (!canAccessGeneralSpace(user, permSettings)) {
+        return NextResponse.json({ error: 'Access denied to General space' }, { status: 403 });
+      }
+
+      const perms = getGeneralSpacePermissionLevel(user, permSettings);
+      if (!perms || perms.writeScope === 'none') {
+        return NextResponse.json({ error: 'You do not have permission to edit this file' }, { status: 403 });
+      }
+
+      if (perms.writeScope === 'all') {
+        canEdit = true;
+      } else if (perms.writeScope === 'own') {
+        const isOwnFile = resource.createdBy === user.username || resource.uploadedBy?.username === user.username;
+        canEdit = isOwnFile;
+      }
     } else {
       const project = await db.collection('projects').findOne({
         _id: new ObjectId(resource.projectId)
       });
 
       if (project) {
-        const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
-        const isSuperManager = project.superManager === user.username;
-
-        if (isAdmin || isSuperManager) {
-          canEdit = true;
-        } else {
-          const memberRecord = project.members?.find(m => m.user === user.username);
-          const memberRole = memberRecord?.role;
-          canEdit = memberRole === 'Project Manager' || memberRole === 'Contributor';
+        if (!canAccessProject(user, project, userTeams)) {
+          return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 });
         }
+
+        canEdit = canWriteFile(user, project, resource, userTeams);
       }
     }
 

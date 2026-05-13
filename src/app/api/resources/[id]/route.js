@@ -4,6 +4,20 @@ import clientPromise from "../../../../lib/mongodb";
 import { ObjectId, GridFSBucket } from 'mongodb';
 import { canAccessProject, canDeleteFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from "../../../../lib/projectPermissions";
 
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
+
 export async function DELETE(req, { params }) {
   try {
     const token = req.cookies.get('admin_token')?.value;
@@ -18,6 +32,9 @@ export async function DELETE(req, { params }) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
 
     const { id } = params;
 
@@ -65,12 +82,12 @@ export async function DELETE(req, { params }) {
       const project = await db.collection('projects').findOne({ _id: new ObjectId(resource.projectId) });
       if (project) {
         // Check if user can access the project
-        if (!canAccessProject(user, project)) {
+        if (!canAccessProject(user, project, userTeams)) {
           return NextResponse.json({ error: "Access denied to this project" }, { status: 403 });
         }
 
         // Check if user can delete this file
-        if (!canDeleteFile(user, project, resource)) {
+        if (!canDeleteFile(user, project, resource, userTeams)) {
           return NextResponse.json({ error: "You do not have permission to delete this file" }, { status: 403 });
         }
       }

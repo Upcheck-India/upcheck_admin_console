@@ -3,6 +3,21 @@ import { NextResponse } from 'next/server';
 import clientPromise from "../../../../../lib/mongodb";
 import { ObjectId, GridFSBucket } from 'mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, canWriteFile, canAccessGeneralSpace, getGeneralSpacePermissionLevel } from '../../../../../lib/projectPermissions';
+
+// Helper to fetch user's teams for permission checking
+async function getUserTeams(db, user) {
+  const userIdStr = user._id?.toString();
+  if (!userIdStr) return [];
+  return await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+}
 
 export async function PUT(req, { params }) {
   try {
@@ -36,11 +51,34 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: "Resource not found" }, { status: 404 });
     }
 
-    // Verify user has permission to rename this resource
-    const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
-    const isOwner = resource.uploadedBy?.username === user?.username;
+    // Fetch user teams for team-based permission checking
+    const userTeams = await getUserTeams(db, user);
 
-    if (!isAdmin && !isOwner) {
+    // Verify user has permission to rename this resource
+    let canRename = false;
+
+    if (resource.projectId === 'general') {
+      const generalPerms = await db.collection('general_space_permissions').findOne({ _id: 'general' });
+      const permSettings = generalPerms?.permissionSettings;
+
+      if (canAccessGeneralSpace(user, permSettings)) {
+        const perms = getGeneralSpacePermissionLevel(user, permSettings);
+        if (perms && perms.writeScope !== 'none') {
+          if (perms.writeScope === 'all') {
+            canRename = true;
+          } else if (perms.writeScope === 'own') {
+            canRename = resource.uploadedBy?.username === user?.username;
+          }
+        }
+      }
+    } else if (resource.projectId) {
+      const project = await db.collection('projects').findOne({ _id: new ObjectId(resource.projectId) });
+      if (project && canAccessProject(user, project, userTeams)) {
+        canRename = canWriteFile(user, project, resource, userTeams);
+      }
+    }
+
+    if (!canRename) {
       return NextResponse.json({ error: 'Not authorized to rename this resource' }, { status: 403 });
     }
 
