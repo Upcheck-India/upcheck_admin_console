@@ -335,6 +335,53 @@ const UserManagement = () => {
     }
   };
 
+  const handleAddExternalUser = async (userData) => {
+    try {
+      const response = await fetch('/api/user-management/external-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...userData,
+          addedBy: currentUser?.username || currentUser?.name || 'Admin'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add user');
+      }
+
+      await fetchExternalUsers();
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const handleUpdateExternalUser = async (userId, updateData) => {
+    try {
+      const response = await fetch('/api/user-management/external-users', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId, ...updateData })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user');
+      }
+
+      await fetchExternalUsers();
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       username: '',
@@ -969,6 +1016,9 @@ const UserManagement = () => {
             onApprove={handleApproveExternalUser}
             onReject={handleRejectExternalUser}
             onDelete={handleDeleteExternalUser}
+            onAdd={handleAddExternalUser}
+            onUpdate={handleUpdateExternalUser}
+            currentUser={currentUser}
             loading={loadingExternal}
           />
         ) : (

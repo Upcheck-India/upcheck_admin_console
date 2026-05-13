@@ -1,10 +1,208 @@
 // src/app/user_management/components/TeamsTab.js
 'use client';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Users, Plus, Edit2, Trash2, X, UserPlus, UserMinus,
-  Crown, AlertCircle, Search, Check, Loader2, LogOut, AlertTriangle, Shield
+  Crown, AlertCircle, Search, Check, Loader2, LogOut, AlertTriangle, Shield,
+  Filter, CalendarDays, Hash, ChevronDown, HelpCircle
 } from 'lucide-react';
+
+// ─── Filter Parser & Utilities ───────────────────────────────────────────────
+const parseSearchFilters = (searchInput) => {
+  const filters = {
+    text: '',
+    user: null,
+    userAdmin: null,
+    userNot: null,
+    userCount: null,
+    userCountOp: 'eq',
+    teamAge: null,
+    teamAgeOp: 'gt',
+    negateNext: false,
+  };
+
+  // Split by spaces but keep @ patterns together
+  const tokens = searchInput.match(/(@[!]?[\w_]*:[^\s]+)|(@[!])|([^@\s]+)/g) || [];
+
+  tokens.forEach(token => {
+    // Check for negation prefix
+    if (token === '@!') {
+      filters.negateNext = true;
+      return;
+    }
+
+    // Parse @user:name filter
+    if (token.startsWith('@user:') && !token.startsWith('@user_admin:') && !token.startsWith('@user_count:')) {
+      const name = token.replace('@user:', '').toLowerCase();
+      if (filters.negateNext) {
+        filters.userNot = name;
+        filters.negateNext = false;
+      } else {
+        filters.user = name;
+      }
+      return;
+    }
+
+    // Parse @user_admin:name filter
+    if (token.startsWith('@user_admin:')) {
+      const name = token.replace('@user_admin:', '').toLowerCase();
+      if (filters.negateNext) {
+        filters.userAdmin = { name, negate: true };
+        filters.negateNext = false;
+      } else {
+        filters.userAdmin = { name, negate: false };
+      }
+      return;
+    }
+
+    // Parse @user_count:n filter (supports >n, <n, >=n, <=n, =n)
+    if (token.startsWith('@user_count:')) {
+      const value = token.replace('@user_count:', '');
+      const match = value.match(/^([><=!]+)?(\d+)$/);
+      if (match) {
+        const op = match[1] || 'eq';
+        const count = parseInt(match[2], 10);
+        if (filters.negateNext) {
+          // Negate the comparison
+          const negatedOp = { gt: 'lte', gte: 'lt', lt: 'gte', lte: 'gt', eq: 'ne' }[op] || 'ne';
+          filters.userCount = count;
+          filters.userCountOp = negatedOp;
+          filters.negateNext = false;
+        } else {
+          filters.userCount = count;
+          filters.userCountOp = op;
+        }
+      }
+      return;
+    }
+
+    // Parse @team_age:Xd filter (X can be with >, <, >=, <=)
+    if (token.startsWith('@team_age:')) {
+      const value = token.replace('@team_age:', '');
+      const match = value.match(/^([><=!]+)?(\d+)([dwmy])$/);
+      if (match) {
+        const op = match[1] || 'gt';
+        const num = parseInt(match[2], 10);
+        const unit = match[3]; // d=days, w=weeks, m=months, y=years
+        let days = num;
+        if (unit === 'w') days = num * 7;
+        if (unit === 'm') days = num * 30;
+        if (unit === 'y') days = num * 365;
+
+        if (filters.negateNext) {
+          const negatedOp = { gt: 'lte', gte: 'lt', lt: 'gte', lte: 'gt', eq: 'ne' }[op] || 'ne';
+          filters.teamAge = days;
+          filters.teamAgeOp = negatedOp;
+          filters.negateNext = false;
+        } else {
+          filters.teamAge = days;
+          filters.teamAgeOp = op;
+        }
+      }
+      return;
+    }
+
+    // Regular text search
+    if (!token.startsWith('@')) {
+      filters.text += (filters.text ? ' ' : '') + token;
+    }
+  });
+
+  return filters;
+};
+
+const applyFilters = (teams, filters, allUsers) => {
+  return teams.filter(team => {
+    // Text search
+    if (filters.text) {
+      const textLower = filters.text.toLowerCase();
+      const matchesText = team.name.toLowerCase().includes(textLower) ||
+        team.description?.toLowerCase().includes(textLower);
+      if (!matchesText) return false;
+    }
+
+    // @user:name filter - user is a member of the team
+    if (filters.user) {
+      const userName = filters.user;
+      const isMember = team.members?.some(m =>
+        m.username?.toLowerCase().includes(userName) ||
+        m.email?.toLowerCase().includes(userName)
+      ) || team.lead?.username?.toLowerCase().includes(userName);
+      if (!isMember) return false;
+    }
+
+    // @userNot filter - user is NOT in the team
+    if (filters.userNot) {
+      const userName = filters.userNot;
+      const isMember = team.members?.some(m =>
+        m.username?.toLowerCase().includes(userName) ||
+        m.email?.toLowerCase().includes(userName)
+      ) || team.lead?.username?.toLowerCase().includes(userName);
+      if (isMember) return false;
+    }
+
+    // @user_admin:name filter - user is admin/lead of the team
+    if (filters.userAdmin) {
+      const userName = filters.userAdmin.name;
+      const isLead = team.lead?.username?.toLowerCase().includes(userName) ||
+        team.lead?.email?.toLowerCase().includes(userName);
+
+      if (filters.userAdmin.negate) {
+        if (isLead) return false;
+      } else {
+        if (!isLead) return false;
+      }
+    }
+
+    // @user_count filter
+    if (filters.userCount !== null) {
+      const count = team.members?.length || 0;
+      const target = filters.userCount;
+      const op = filters.userCountOp;
+
+      const matches = {
+        eq: count === target,
+        ne: count !== target,
+        gt: count > target,
+        gte: count >= target,
+        lt: count < target,
+        lte: count <= target,
+      }[op] || false;
+
+      if (!matches) return false;
+    }
+
+    // @team_age filter
+    if (filters.teamAge !== null) {
+      const createdDate = new Date(team.createdAt);
+      const now = new Date();
+      const ageDays = Math.floor((now - createdDate) / (1000 * 60 * 60 * 24));
+      const target = filters.teamAge;
+      const op = filters.teamAgeOp;
+
+      const matches = {
+        eq: ageDays === target,
+        ne: ageDays !== target,
+        gt: ageDays > target,
+        gte: ageDays >= target,
+        lt: ageDays < target,
+        lte: ageDays <= target,
+      }[op] || false;
+
+      if (!matches) return false;
+    }
+
+    return true;
+  });
+};
+
+const FILTER_HELP = [
+  { filter: '@user:name', desc: 'Teams where user is a member', example: '@user:harris' },
+  { filter: '@user_admin:name', desc: 'Teams where user is admin/lead', example: '@user_admin:harris' },
+  { filter: '@!', desc: 'Negate next filter', example: '@! @user:harris (user NOT in team)' },
+  { filter: '@user_count:n', desc: 'Teams with n members', example: '@user_count:5, @user_count:>3' },
+  { filter: '@team_age:Xd', desc: 'Teams older than X days/weeks', example: '@team_age:>2d, @team_age:1w' },
+];
 
 // ─── Utilities ───────────────────────────────────────────────────────
 const AVATAR_COLORS = [
@@ -659,6 +857,7 @@ export default function TeamsTab({ currentUser, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilterHelp, setShowFilterHelp] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
 
   // Modal controllers
@@ -855,10 +1054,15 @@ export default function TeamsTab({ currentUser, onRefresh }) {
     return team.lead?._id === currentUserId || team.lead?._id?.toString() === currentUserId;
   };
 
-  const filteredTeams = teams.filter(team =>
-    team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    team.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTeams = useMemo(() => {
+    const filters = parseSearchFilters(searchTerm);
+    return applyFilters(teams, filters, availableUsers);
+  }, [teams, searchTerm, availableUsers]);
+
+  // Parse current filters for display
+  const activeFilters = useMemo(() => {
+    return parseSearchFilters(searchTerm);
+  }, [searchTerm]);
 
   // ── Loading state ──
   if (loading) {
@@ -891,7 +1095,7 @@ export default function TeamsTab({ currentUser, onRefresh }) {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search teams..."
+                placeholder="Search teams... Use @ for filters"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10 pr-9 py-2.5 w-full rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors placeholder:text-gray-400"
@@ -911,6 +1115,83 @@ export default function TeamsTab({ currentUser, onRefresh }) {
               </button>
             )}
           </div>
+
+          {/* Filter Help Dropdown */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowFilterHelp(!showFilterHelp)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Filter syntax
+              <ChevronDown className={`h-3 w-3 transition-transform ${showFilterHelp ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Active Filter Tags */}
+            {(activeFilters.user || activeFilters.userAdmin || activeFilters.userNot ||
+              activeFilters.userCount !== null || activeFilters.teamAge !== null) && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeFilters.user && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                    <Users className="h-3 w-3" /> user:{activeFilters.user}
+                  </span>
+                )}
+                {activeFilters.userAdmin && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs font-medium">
+                    <Crown className="h-3 w-3" /> admin:{activeFilters.userAdmin.name}
+                  </span>
+                )}
+                {activeFilters.userNot && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
+                    <X className="h-3 w-3" /> not:{activeFilters.userNot}
+                  </span>
+                )}
+                {activeFilters.userCount !== null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs font-medium">
+                    <Hash className="h-3 w-3" /> {activeFilters.userCountOp}{activeFilters.userCount} members
+                  </span>
+                )}
+                {activeFilters.teamAge !== null && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-xs font-medium">
+                    <CalendarDays className="h-3 w-3" /> {activeFilters.teamAgeOp}{activeFilters.teamAge}d
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Filter Help Panel */}
+          {showFilterHelp && (
+            <div className="mt-3 p-4 bg-gray-50 border border-gray-200 rounded-lg animate-[slideIn_200ms_ease-out]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {FILTER_HELP.map((help, idx) => (
+                  <div key={idx} className="flex items-start gap-2 p-2 bg-white rounded border border-gray-100">
+                    <code className="text-xs font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded whitespace-nowrap">
+                      {help.filter}
+                    </code>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-700">{help.desc}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        <span className="text-gray-400">Example:</span> {help.example}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-xs text-gray-500">
+                <HelpCircle className="h-3.5 w-3.5" />
+                Combine filters with spaces. Use @! before a filter to negate it.
+              </div>
+            </div>
+          )}
+
+          {/* Info note for non-admins */}
+          {!isAdmin && (
+            <p className="mt-3 text-xs text-gray-500 flex items-center gap-1.5">
+              <Shield className="h-3.5 w-3.5" />
+              Showing teams you belong to. Contact admin for access to other teams.
+            </p>
+          )}
         </div>
 
         {/* Error banner */}
