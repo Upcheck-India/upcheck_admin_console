@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { sendTemplatedEmail, EMAIL_TYPES } from '../../../../../lib/emailService.js';
 
 // POST - Add member to team
 export async function POST(req, { params }) {
@@ -71,6 +72,32 @@ export async function POST(req, { params }) {
         $set: { updatedAt: new Date() }
       }
     );
+
+    // Send email notification to the added member
+    try {
+      // Get the person who added them
+      const adder = await db.collection('admin_users').findOne(
+        { _id: userId ? new ObjectId(userId) : null },
+        { projection: { username: 1, firstName: 1, lastName: 1 } }
+      );
+
+      const addedBy = adder?.firstName || adder?.lastName ? `${adder.firstName} ${adder.lastName}`.trim() : adder?.username || 'an administrator';
+
+      if (user?.email) {
+        await sendTemplatedEmail(EMAIL_TYPES.TEAM_MEMBER_ADDED, {
+          teamName: team.name,
+          memberName: user.firstName || user.lastName ? `${user.firstName} ${user.lastName}`.trim() : user.username,
+          addedBy: addedBy,
+          role: user.role
+        }, {
+          to: user.email
+        });
+        console.log(`Team member added notification sent to ${user.email}`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send team member added email:', emailError.message);
+      // Don't fail the operation if email fails
+    }
 
     return NextResponse.json({
       message: 'Member added successfully',

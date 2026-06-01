@@ -17,6 +17,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@fingerprintjs/fingerprintjs": "^4.6.2",
     "@fingerprintjs/fingerprintjs-pro": "^3.11.10",
+    "@getbrevo/brevo": "^5.0.4",
     "@simplewebauthn/server": "7.2.0",
     "axios": "^1.10.0",
     "bcrypt": "^5.1.1",

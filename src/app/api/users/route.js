@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import bcrypt from 'bcryptjs';
 import { ObjectId } from 'mongodb';
+import { sendTemplatedEmail, EMAIL_TYPES } from '../../../lib/emailService.js';
 
 // Role hierarchy for permission checks
 const ROLES_HIERARCHY = {
@@ -299,6 +300,27 @@ export async function POST(request) {
       actor?.username || 'system',
       { role: newUser.role, department: newUser.department, employmentType: newUser.employmentType }
     );
+
+    // Send welcome email to new user
+    if (newUser.email && data.sendWelcomeEmail !== false) {
+      try {
+        await sendTemplatedEmail(EMAIL_TYPES.WELCOME_USER, {
+          name: newUser.firstName || newUser.lastName ? `${newUser.firstName} ${newUser.lastName}`.trim() : newUser.username,
+          username: newUser.username,
+          email: newUser.email,
+          password: data.password, // Only include password if user should see it
+          role: newUser.role,
+          department: newUser.department
+        }, {
+          to: newUser.email,
+          type: EMAIL_TYPES.WELCOME_USER
+        });
+        console.log(`Welcome email sent to ${newUser.email}`);
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError.message);
+        // Don't fail user creation if email fails
+      }
+    }
 
     // Return user without password
     const { password, ...userWithoutPassword } = newUser;

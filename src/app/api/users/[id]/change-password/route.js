@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import bcrypt from 'bcryptjs';
 import { ObjectId } from 'mongodb';
+import { sendTemplatedEmail, EMAIL_TYPES } from '../../../../../lib/emailService.js';
 
 // Password validation helper
 function validatePassword(password) {
@@ -150,7 +151,7 @@ export async function POST(request, { params }) {
     try {
       const actor = await db.collection('admin_users').findOne(
         { _id: actorId ? new ObjectId(actorId) : null },
-        { projection: { username: 1 } }
+        { projection: { username: 1, firstName: 1, lastName: 1 } }
       );
 
       await db.collection('user_activity_logs').insertOne({
@@ -167,6 +168,34 @@ export async function POST(request, { params }) {
       });
     } catch (logError) {
       console.error('Failed to log password change:', logError);
+    }
+
+    // Send password change notification email
+    try {
+      if (existingUser.email) {
+        const actorInfo = await db.collection('admin_users').findOne(
+          { _id: actorId ? new ObjectId(actorId) : null },
+          { projection: { username: 1, firstName: 1, lastName: 1 } }
+        );
+        const changedBy = actorInfo?.firstName || actorInfo?.lastName
+          ? `${actorInfo.firstName} ${actorInfo.lastName}`.trim()
+          : actorInfo?.username || 'System';
+
+        await sendTemplatedEmail(EMAIL_TYPES.PASSWORD_CHANGE, {
+          name: existingUser.firstName || existingUser.lastName
+            ? `${existingUser.firstName} ${existingUser.lastName}`.trim()
+            : existingUser.username,
+          username: existingUser.username,
+          timestamp: new Date(),
+          changedBy: isSelfChange ? 'You' : changedBy
+        }, {
+          to: existingUser.email
+        });
+        console.log(`Password change notification sent to ${existingUser.email}`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send password change notification:', emailError.message);
+      // Don't fail password change if email fails
     }
 
     return NextResponse.json({

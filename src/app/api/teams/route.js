@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { sendTemplatedEmail, EMAIL_TYPES } from '../../../lib/emailService.js';
 
 // GET - List teams (filtered by user role and membership) with pagination
 export async function GET(req) {
@@ -171,6 +172,37 @@ export async function POST(req) {
     };
 
     const result = await db.collection('teams').insertOne(newTeam);
+
+    // Send email notification to team lead
+    try {
+      // Get team lead info
+      const teamLead = await db.collection('admin_users').findOne(
+        { _id: new ObjectId(userId) },
+        { projection: { username: 1, email: 1, firstName: 1, lastName: 1 } }
+      );
+
+      // Get creator info for "created by"
+      const creator = await db.collection('admin_users').findOne(
+        { _id: new ObjectId(userId) },
+        { projection: { username: 1 } }
+      );
+
+      if (teamLead?.email) {
+        await sendTemplatedEmail(EMAIL_TYPES.TEAM_CREATED, {
+          teamName: newTeam.name,
+          description: newTeam.description,
+          leadName: teamLead.firstName || teamLead.lastName ? `${teamLead.firstName} ${teamLead.lastName}`.trim() : teamLead.username,
+          createdBy: creator?.username || 'Admin',
+          timestamp: newTeam.createdAt
+        }, {
+          to: teamLead.email
+        });
+        console.log(`Team creation notification sent to ${teamLead.email}`);
+      }
+    } catch (emailError) {
+      console.error('Failed to send team creation email:', emailError.message);
+      // Don't fail team creation if email fails
+    }
 
     return NextResponse.json({
       message: 'Team created successfully',

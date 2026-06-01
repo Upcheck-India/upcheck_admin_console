@@ -208,9 +208,11 @@ const UserManagement = () => {
       }
 
       const data = await response.json();
-      console.log('Users fetched:', data.length);
-      console.log('User roles:', data.map(user => user.role));
-      setUsers(data);
+      // API returns { users: [...], pagination: {...} }
+      const usersArray = data.users || [];
+      console.log('Users fetched:', usersArray.length);
+      console.log('User roles:', usersArray.map(user => user.role));
+      setUsers(usersArray);
     } catch (err) {
       console.error('Fetch error:', err);
       setError(err.message);

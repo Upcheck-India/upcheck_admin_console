@@ -3,6 +3,7 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { clerkClient } from '@clerk/nextjs/server';
 import bcrypt from 'bcryptjs';
+import { sendTemplatedEmail, EMAIL_TYPES } from '../../../../lib/emailService.js';
 
 // External user roles - these have no permissions by default
 const EXTERNAL_ROLES = [
@@ -101,6 +102,23 @@ export async function POST(request) {
           }
         );
 
+        // Send approval notification email
+        try {
+          if (user.email) {
+            await sendTemplatedEmail(EMAIL_TYPES.EXTERNAL_USER_APPROVED, {
+              name: user.name || user.email,
+              role: user.role,
+              expiresAt: user.expiresAt
+            }, {
+              to: user.email
+            });
+            console.log(`Approval notification sent to ${user.email}`);
+          }
+        } catch (emailError) {
+          console.error('Failed to send approval email:', emailError.message);
+          // Don't fail approval if email fails
+        }
+
         return NextResponse.json({
           success: true,
           message: 'User approved successfully',
@@ -116,6 +134,22 @@ export async function POST(request) {
             }
           }
         );
+
+        // Send rejection notification email
+        try {
+          if (user.email) {
+            await sendTemplatedEmail(EMAIL_TYPES.EXTERNAL_USER_REJECTED, {
+              name: user.name || user.email,
+              reason: body.reason || null
+            }, {
+              to: user.email
+            });
+            console.log(`Rejection notification sent to ${user.email}`);
+          }
+        } catch (emailError) {
+          console.error('Failed to send rejection email:', emailError.message);
+          // Don't fail rejection if email fails
+        }
 
         return NextResponse.json({
           success: true,
