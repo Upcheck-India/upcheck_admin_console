@@ -901,8 +901,14 @@ export default function TeamsTab({ currentUser, onRefresh }) {
   const fetchTeams = async () => {
     try {
       setLoading(true);
-      const data = await (await apiCall('/api/teams')).json();
-      setTeams(data);
+      const response = await (await apiCall('/api/teams')).json();
+      // Handle new pagination response format
+      if (response.teams) {
+        setTeams(response.teams);
+      } else {
+        // Fallback for old format
+        setTeams(Array.isArray(response) ? response : []);
+      }
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -913,8 +919,14 @@ export default function TeamsTab({ currentUser, onRefresh }) {
 
   const fetchAvailableUsers = async () => {
     try {
-      const data = await (await apiCall('/api/users')).json();
-      setAvailableUsers(data);
+      const response = await (await apiCall('/api/users')).json();
+      // Handle new pagination response format
+      if (response.users) {
+        setAvailableUsers(response.users);
+      } else {
+        // Fallback for old format
+        setAvailableUsers(Array.isArray(response) ? response : []);
+      }
     } catch (err) {
       console.error('Error fetching users:', err);
     }

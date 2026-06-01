@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import {
   Users, Trash2, Edit2, Plus, X, Search, User,
   AlertCircle, Building2, Filter, Mail, MessageCircle,
-  CodeXml, FileText, Settings as SettingsIcon
+  CodeXml, FileText, Settings as SettingsIcon, CheckCircle, ChevronDown
 } from 'lucide-react';
 import DocumentationSettingsModal from './components/DocumentationSettingsModal';
 import ExternalUsersTab from './components/ExternalUsersTab';
@@ -33,8 +33,25 @@ const UserManagement = () => {
     password: '',
     role: '',
     department: 'Unassigned',
-    perms: []
+    perms: [],
+    // HR fields
+    firstName: '',
+    lastName: '',
+    jobTitle: '',
+    employmentType: 'full_time',
+    employmentStatus: 'active',
+    managerId: '',
+    startDate: '',
+    phone: '',
+    location: ''
   });
+
+  // Employment types and statuses
+  const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contractor', 'intern'];
+  const EMPLOYMENT_STATUSES = ['active', 'on_leave', 'suspended', 'terminated'];
+
+  // Password validation state
+  const [passwordValidation, setPasswordValidation] = useState({ valid: true, errors: [] });
   const [formErrors, setFormErrors] = useState({});
   const [showFilters, setShowFilters] = useState(false);
 
@@ -389,10 +406,20 @@ const UserManagement = () => {
       password: '',
       role: '',
       department: 'Unassigned',
-      perms: []
+      perms: [],
+      firstName: '',
+      lastName: '',
+      jobTitle: '',
+      employmentType: 'full_time',
+      employmentStatus: 'active',
+      managerId: '',
+      startDate: '',
+      phone: '',
+      location: ''
     });
     setFormErrors({});
     setSelectedUser(null);
+    setPasswordValidation({ valid: true, errors: [] });
   };
 
   const canModifyUser = (userRole) => {
@@ -515,112 +542,181 @@ const UserManagement = () => {
     );
   };
 
-  const UserTableRow = ({ user }) => (
-    <tr className="hover:bg-gray-50">
-      <td className="px-6 py-4 whitespace-nowrap">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
-            <User className="h-5 w-5 text-gray-400" />
-          </div>
-          <div className="ml-4">
-            <div className="text-sm font-medium text-blue-600 hover:text-blue-800">
-              <button
-                onClick={() => router.push(`/user_management/${user._id}`)}
-                className="hover:underline focus:outline-none"
-              >
-                {user.username}
-              </button>
-            </div>
-            <div className="text-sm text-gray-500">{user.email}</div>
-          </div>
-        </div>
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap">
-        <span className={`px-3 py-1 text-xs font-medium rounded-full ${ROLE_COLORS[user.role]}`}>
-          {user.role}
-        </span>
-      </td>
-      <td className="px-6 py-4">
-        <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-          {user.department || 'Unassigned'}
-        </span>
-      </td>
-      <td className="px-6 py-4 text-sm text-gray-500">
-        {user.email || 'Email is not added'}
-      </td>
-      <td className="px-6 py-4 text-sm text-gray-500">
-        {new Date(user.lastLogin).toLocaleString()}
-      </td>
-      <td className="px-6 py-4">
-        <div className="flex flex-wrap gap-1">
-          {user.perms?.map(perm => (
-            <span key={perm} className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
-              {perm}
-            </span>
-          ))}
-        </div>
-      </td>
-      <td className="px-6 py-4 text-right">
-        <div className="flex justify-end items-center space-x-2">
-          <button
-            onClick={() => router.push(`/messages/${user._id}`)}
-            className="text-gray-600 hover:text-gray-900"
-            title="Send Message"
-          >
-            <MessageCircle className="h-5 w-5" />
-          </button>
-          <button
-            onClick={() => router.push(`/email/${user._id}`)}
-            className="text-gray-600 hover:text-gray-900"
-            title="Send Email"
-          >
-            <Mail className="h-5 w-5" />
-          </button>
-          {canModifyUser(user.role) && (
-            <>
-              <button
-                onClick={() => {
-                  setSelectedUser(user);
-                  setModalMode('edit');
-                  setFormData({
-                    username: user.username,
-                    email: user.email || '',
-                    role: user.role,
-                    department: user.department || 'Unassigned',
-                    perms: user.perms || []
-                  });
-                  setIsModalOpen(true);
-                }}
-                className="text-blue-600 hover:text-blue-900"
-                title="Edit User"
-              >
-                <Edit2 className="h-5 w-5" />
-              </button>
-              <button
-                onClick={() => handleDelete(user._id)}
-                className="text-red-600 hover:text-red-900"
-                title="Delete User"
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
-            </>
-          )}
-        </div>
-      </td>
-    </tr>
-  );
-
-  const UserFormModal = () => {
-    const [localFormData, setLocalFormData] = useState(formData);
-
-    const handleFormSubmit = (e) => {
-      e.preventDefault();
-      handleSubmit(e, localFormData);
+  const UserTableRow = ({ user }) => {
+    // Employment status colors
+    const statusColors = {
+      'active': 'bg-green-100 text-green-800',
+      'on_leave': 'bg-yellow-100 text-yellow-800',
+      'suspended': 'bg-red-100 text-red-800',
+      'terminated': 'bg-gray-100 text-gray-600'
     };
 
     return (
+      <tr className="hover:bg-gray-50">
+        <td className="px-6 py-4 whitespace-nowrap">
+          <div className="flex items-center">
+            <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
+              <User className="h-5 w-5 text-gray-400" />
+            </div>
+            <div className="ml-4">
+              <div className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                <button
+                  onClick={() => router.push(`/user_management/${user._id}`)}
+                  className="hover:underline focus:outline-none"
+                >
+                  {user.firstName || user.lastName
+                    ? `${user.firstName || ''} ${user.lastName || ''}`.trim()
+                    : user.username}
+                </button>
+              </div>
+              <div className="text-sm text-gray-500">{user.email}</div>
+              {user.jobTitle && (
+                <div className="text-xs text-gray-400">{user.jobTitle}</div>
+              )}
+            </div>
+          </div>
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap">
+          <span className={`px-3 py-1 text-xs font-medium rounded-full ${ROLE_COLORS[user.role]}`}>
+            {user.role}
+          </span>
+        </td>
+        <td className="px-6 py-4">
+          <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+            {user.department || 'Unassigned'}
+          </span>
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap">
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${statusColors[user.employmentStatus] || statusColors['active']}`}>
+            {(user.employmentStatus || 'active').charAt(0).toUpperCase() + (user.employmentStatus || 'active').slice(1).replace('_', ' ')}
+          </span>
+        </td>
+        <td className="px-6 py-4 text-sm text-gray-500">
+          {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
+        </td>
+        <td className="px-6 py-4">
+          <div className="flex flex-wrap gap-1">
+            {user.perms?.map(perm => (
+              <span key={perm} className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                {perm}
+              </span>
+            ))}
+          </div>
+        </td>
+        <td className="px-6 py-4 text-right">
+          <div className="flex justify-end items-center space-x-2">
+            <button
+              onClick={() => router.push(`/messages/${user._id}`)}
+              className="text-gray-600 hover:text-gray-900"
+              title="Send Message"
+            >
+              <MessageCircle className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => router.push(`/email/${user._id}`)}
+              className="text-gray-600 hover:text-gray-900"
+              title="Send Email"
+            >
+              <Mail className="h-5 w-5" />
+            </button>
+            {canModifyUser(user.role) && (
+              <>
+                <button
+                  onClick={() => {
+                    setSelectedUser(user);
+                    setModalMode('edit');
+                    setFormData({
+                      username: user.username,
+                      email: user.email || '',
+                      role: user.role,
+                      department: user.department || 'Unassigned',
+                      perms: user.perms || [],
+                      firstName: user.firstName || '',
+                      lastName: user.lastName || '',
+                      jobTitle: user.jobTitle || '',
+                      employmentType: user.employmentType || 'full_time',
+                      employmentStatus: user.employmentStatus || 'active',
+                      managerId: user.managerId?.toString() || '',
+                      startDate: user.startDate ? new Date(user.startDate).toISOString().split('T')[0] : '',
+                      phone: user.phone || '',
+                      location: user.location || ''
+                    });
+                    setIsModalOpen(true);
+                  }}
+                  className="text-blue-600 hover:text-blue-900"
+                  title="Edit User"
+                >
+                  <Edit2 className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => handleDelete(user._id)}
+                  className="text-red-600 hover:text-red-900"
+                  title="Delete User"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+              </>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
+  const UserFormModal = () => {
+    const [localFormData, setLocalFormData] = useState(formData);
+    const [localPasswordValidation, setLocalPasswordValidation] = useState({ valid: true, errors: [] });
+    const [showAdvancedFields, setShowAdvancedFields] = useState(false);
+
+    // Password validation function
+    const validatePassword = (password) => {
+      const errors = [];
+      if (!password || password.length < 8) {
+        errors.push('At least 8 characters');
+      }
+      if (password && !/[A-Z]/.test(password)) {
+        errors.push('At least one uppercase letter');
+      }
+      if (password && !/[a-z]/.test(password)) {
+        errors.push('At least one lowercase letter');
+      }
+      if (password && !/[0-9]/.test(password)) {
+        errors.push('At least one number');
+      }
+      return { valid: errors.length === 0, errors };
+    };
+
+    const handlePasswordChange = (password) => {
+      setLocalFormData(prev => ({ ...prev, password }));
+      if (modalMode === 'add' || password) {
+        setLocalPasswordValidation(validatePassword(password));
+      }
+    };
+
+    const handleFormSubmit = (e) => {
+      e.preventDefault();
+
+      // Validate password for new users
+      if (modalMode === 'add' && localFormData.password) {
+        const validation = validatePassword(localFormData.password);
+        if (!validation.valid) {
+          setPasswordValidation(validation);
+          return;
+        }
+      }
+
+      handleSubmit(e, localFormData);
+    };
+
+    // Get managers list (users with Admin or Console admin role)
+    const managerOptions = users.filter(u =>
+      (u.role === 'Admin' || u.role === 'Console admin') &&
+      u._id !== selectedUser?._id
+    );
+
+    return (
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
           <div className="flex-shrink-0 px-6 py-4 border-b border-gray-100 bg-white z-10">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold text-gray-900">
@@ -634,81 +730,255 @@ const UserManagement = () => {
 
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <form id="user-form" onSubmit={handleFormSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                <input
-                  type="text"
-                  value={localFormData.username}
-                  onChange={(e) => setLocalFormData(prev => ({ ...prev, username: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+              {/* Basic Information Section */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Basic Information</h3>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={localFormData.email}
-                  onChange={(e) => setLocalFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+                    <input
+                      type="text"
+                      value={localFormData.firstName}
+                      onChange={(e) => setLocalFormData(prev => ({ ...prev, firstName: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+                    <input
+                      type="text"
+                      value={localFormData.lastName}
+                      onChange={(e) => setLocalFormData(prev => ({ ...prev, lastName: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
 
-              {modalMode === 'add' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Username <span className="text-red-500">*</span></label>
                   <input
-                    type="password"
-                    value={localFormData.password}
-                    onChange={(e) => setLocalFormData(prev => ({ ...prev, password: e.target.value }))}
+                    type="text"
+                    value={localFormData.username}
+                    onChange={(e) => setLocalFormData(prev => ({ ...prev, username: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
                   />
                 </div>
-              )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                <select
-                  value={localFormData.role}
-                  onChange={(e) => {
-                    const selectedRole = e.target.value;
-                    const defaultPerms = {
-                      'Admin': ['users.manage', 'content.manage'],
-                      'Member': [],
-                      'Intern': []
-                    }[selectedRole] || [];
-
-                    setLocalFormData({
-                      ...localFormData,
-                      role: selectedRole,
-                      perms: defaultPerms
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select Role</option>
-                  {getAvailableRoles().map(role => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                <select
-                  value={localFormData.department}
-                  onChange={(e) => setLocalFormData({ ...localFormData, department: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {DEPARTMENTS.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-
-              {currentUser?.role === 'Console admin' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Permissions</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
+                  <input
+                    type="email"
+                    value={localFormData.email}
+                    onChange={(e) => setLocalFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                </div>
+
+                {modalMode === 'add' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password <span className="text-red-500">*</span></label>
+                    <input
+                      type="password"
+                      value={localFormData.password}
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                      className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        !localPasswordValidation.valid ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      required
+                    />
+                    {/* Password requirements */}
+                    <div className="mt-2 space-y-1">
+                      {localFormData.password && localPasswordValidation.errors.length > 0 && (
+                        <div className="text-xs text-red-600">
+                          <p className="font-medium">Password requirements:</p>
+                          {localPasswordValidation.errors.map((err, idx) => (
+                            <p key={idx}>• {err}</p>
+                          ))}
+                        </div>
+                      )}
+                      {!localFormData.password && (
+                        <div className="text-xs text-gray-500">
+                          <p>Password must have: 8+ characters, uppercase, lowercase, and number</p>
+                        </div>
+                      )}
+                      {localFormData.password && localPasswordValidation.valid && (
+                        <div className="text-xs text-green-600 flex items-center gap-1">
+                          <CheckCircle className="h-3 w-3" /> Password meets all requirements
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Role & Department Section */}
+              <div className="space-y-4 pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Role & Department</h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Role <span className="text-red-500">*</span></label>
+                    <select
+                      value={localFormData.role}
+                      onChange={(e) => {
+                        const selectedRole = e.target.value;
+                        const defaultPerms = {
+                          'Admin': ['users.manage', 'content.manage'],
+                          'Member': [],
+                          'Intern': []
+                        }[selectedRole] || [];
+
+                        setLocalFormData({
+                          ...localFormData,
+                          role: selectedRole,
+                          perms: defaultPerms,
+                          // Set employment type based on role
+                          employmentType: selectedRole === 'Intern' ? 'intern' : 'full_time'
+                        });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Select Role</option>
+                      {getAvailableRoles().map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                    <select
+                      value={localFormData.department}
+                      onChange={(e) => setLocalFormData({ ...localFormData, department: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {DEPARTMENTS.map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* HR Information Section */}
+              <div className="space-y-4 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFields(!showAdvancedFields)}
+                  className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700"
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showAdvancedFields ? 'rotate-180' : ''}`} />
+                  HR Information (Optional)
+                </button>
+
+                {showAdvancedFields && (
+                  <div className="space-y-4 animate-[slideIn_200ms_ease-out]">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Job Title</label>
+                        <input
+                          type="text"
+                          value={localFormData.jobTitle}
+                          onChange={(e) => setLocalFormData(prev => ({ ...prev, jobTitle: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="e.g. Software Engineer"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Manager</label>
+                        <select
+                          value={localFormData.managerId}
+                          onChange={(e) => setLocalFormData(prev => ({ ...prev, managerId: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">No manager assigned</option>
+                          {managerOptions.map(user => (
+                            <option key={user._id} value={user._id}>{user.username} ({user.role})</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employment Type</label>
+                        <select
+                          value={localFormData.employmentType}
+                          onChange={(e) => setLocalFormData(prev => ({ ...prev, employmentType: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {EMPLOYMENT_TYPES.map(type => (
+                            <option key={type} value={type}>
+                              {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Employment Status</label>
+                        <select
+                          value={localFormData.employmentStatus}
+                          onChange={(e) => setLocalFormData(prev => ({ ...prev, employmentStatus: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          {EMPLOYMENT_STATUSES.map(status => (
+                            <option key={status} value={status}>
+                              {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                        <input
+                          type="date"
+                          value={localFormData.startDate}
+                          onChange={(e) => setLocalFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          value={localFormData.phone}
+                          onChange={(e) => setLocalFormData(prev => ({ ...prev, phone: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Phone number"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                      <input
+                        type="text"
+                        value={localFormData.location}
+                        onChange={(e) => setLocalFormData(prev => ({ ...prev, location: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="e.g. Chennai, India"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Permissions Section (Console admin only) */}
+              {currentUser?.role === 'Console admin' && (
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">Permissions</h3>
                   <div className="space-y-2">
                     {['users.manage', 'content.manage', 'department.manage', 'department.assign'].map(perm => (
                       <label key={perm} className="flex items-center space-x-2">
@@ -754,7 +1024,8 @@ const UserManagement = () => {
             <button
               type="submit"
               form="user-form"
-              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+              disabled={modalMode === 'add' && !localPasswordValidation.valid}
+              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {modalMode === 'add' ? 'Create User' : 'Update User'}
             </button>
@@ -985,7 +1256,7 @@ const UserManagement = () => {
                           Department
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                          Email
+                          Status
                         </th>
                         <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                           Last Login

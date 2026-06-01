@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
-// GET - List teams (filtered by user role and membership)
+// GET - List teams (filtered by user role and membership) with pagination
 export async function GET(req) {
   try {
     const client = await clientPromise;
@@ -17,6 +17,12 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get query parameters for pagination
+    const { searchParams } = new URL(req.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const skip = (page - 1) * limit;
+
     // Build query based on role
     let query = {};
 
@@ -28,30 +34,62 @@ export async function GET(req) {
       }
       query = {
         $or: [
+          { members: userId },
+          { lead: userId },
           { members: new ObjectId(userId) },
           { lead: new ObjectId(userId) }
         ]
       };
     }
 
+    // Get total count for pagination
+    const totalCount = await db.collection('teams').countDocuments(query);
+
+    // Fetch teams with pagination
     const teams = await db.collection('teams')
       .find(query)
       .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
       .toArray();
 
-    // Populate lead and member info for each team
-    const populatedTeams = await Promise.all(teams.map(async (team) => {
-      // Get lead info
-      const lead = team.lead ? await db.collection('admin_users')
-        .findOne({ _id: team.lead }, { projection: { password: 0 } }) : null;
+    // Collect all unique lead and member IDs
+    const allUserIds = new Set();
+    teams.forEach(team => {
+      if (team.lead) allUserIds.add(team.lead.toString());
+      if (team.members) {
+        team.members.forEach(m => {
+          if (m) allUserIds.add(m.toString());
+        });
+      }
+    });
 
-      // Get members info
-      const members = team.members && team.members.length > 0
-        ? await db.collection('admin_users')
-          .find({ _id: { $in: team.members } })
-          .project({ password: 0 })
-          .toArray()
-        : [];
+    // Single query to fetch all users (fixes N+1)
+    const userIdArray = Array.from(allUserIds).map(id => {
+      try {
+        return new ObjectId(id);
+      } catch {
+        return id;
+      }
+    });
+
+    const allUsers = await db.collection('admin_users')
+      .find({ _id: { $in: userIdArray } })
+      .project({ password: 0, username: 1, email: 1, role: 1, firstName: 1, lastName: 1, department: 1, jobTitle: 1 })
+      .toArray();
+
+    // Create a lookup map
+    const userLookup = new Map();
+    allUsers.forEach(user => {
+      userLookup.set(user._id.toString(), user);
+    });
+
+    // Populate lead and member info using lookup
+    const populatedTeams = teams.map(team => {
+      const lead = team.lead ? userLookup.get(team.lead.toString()) : null;
+      const members = (team.members || [])
+        .map(mId => userLookup.get(mId?.toString() || mId))
+        .filter(Boolean);
 
       return {
         ...team,
@@ -59,9 +97,18 @@ export async function GET(req) {
         members,
         memberCount: members.length
       };
-    }));
+    });
 
-    return NextResponse.json(populatedTeams);
+    return NextResponse.json({
+      teams: populatedTeams,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+        hasMore: skip + limit < totalCount
+      }
+    });
   } catch (error) {
     console.error('Error fetching teams:', error);
     return NextResponse.json(
