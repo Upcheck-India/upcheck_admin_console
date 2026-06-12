@@ -76,7 +76,7 @@ export async function GET(req) {
 
     const allUsers = await db.collection('admin_users')
       .find({ _id: { $in: userIdArray } })
-      .project({ password: 0, username: 1, email: 1, role: 1, firstName: 1, lastName: 1, department: 1, jobTitle: 1 })
+      .project({ username: 1, email: 1, role: 1, firstName: 1, lastName: 1, department: 1, jobTitle: 1 })
       .toArray();
 
     // Create a lookup map

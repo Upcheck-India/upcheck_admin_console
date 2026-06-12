@@ -11,6 +11,32 @@ export const DEFAULT_LEAVE_TYPES = [
   { name: 'Unpaid Leave', code: 'LWP', defaultAllocation: 0, color: '#6b7280', paid: false, requiresApproval: true, carryForward: false },
 ];
 
+// Default Indian national / gazetted holidays that fall on fixed Gregorian
+// dates. These are seeded per-year the first time a year is viewed, and can be
+// edited or deleted by an admin afterwards. Variable-date festivals
+// (Diwali, Holi, Eid, etc.) shift every year, so they are intentionally left
+// for admins to add per year rather than hardcoding incorrect dates.
+export const DEFAULT_HOLIDAYS = [
+  { month: 1, day: 1, name: "New Year's Day", type: 'optional', description: 'New Year' },
+  { month: 1, day: 26, name: 'Republic Day', type: 'public', description: 'National holiday' },
+  { month: 5, day: 1, name: 'Labour Day', type: 'optional', description: 'May Day' },
+  { month: 8, day: 15, name: 'Independence Day', type: 'public', description: 'National holiday' },
+  { month: 10, day: 2, name: 'Gandhi Jayanti', type: 'public', description: 'National holiday' },
+  { month: 12, day: 25, name: 'Christmas Day', type: 'public', description: 'National holiday' },
+];
+
+// Build concrete default holiday documents for a given calendar year.
+export function buildDefaultHolidaysForYear(year) {
+  return DEFAULT_HOLIDAYS.map((h) => ({
+    name: h.name,
+    date: new Date(Date.UTC(year, h.month - 1, h.day)),
+    type: h.type,
+    recurring: true,
+    description: h.description || '',
+    source: 'default',
+  }));
+}
+
 // Normalize a date to UTC midnight (date-only comparisons).
 export function toDateOnly(value) {
   const d = new Date(value);
