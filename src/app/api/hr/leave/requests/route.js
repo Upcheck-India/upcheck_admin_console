@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
-import { requireAuth, isAdminRole, logActivity } from '../../../../../lib/serverAuth';
+import { requireAuth, canManageUsers, logActivity } from '../../../../../lib/serverAuth';
 import { toDateOnly, countWorkingDays, dateKey } from '../../../../../lib/hr/leave';
 import { computeBalances } from '../../../../../lib/hr/leaveBalance';
 
@@ -13,26 +13,15 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const view = searchParams.get('view') || 'mine';
   const status = searchParams.get('status');
-  const admin = isAdminRole(user.role);
+  const canManage = canManageUsers(user);
 
   const query = {};
   if (status) query.status = status;
 
-  if (view === 'all') {
-    if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  } else if (view === 'approvals') {
-    if (admin) {
-      // admins approve everything; default to pending unless status specified
-      if (!status) query.status = 'pending';
-    } else {
-      // managers approve their direct reports
-      const reports = await db.collection('admin_users')
-        .find({ managerId: user._id }, { projection: { _id: 1 } }).toArray();
-      const reportIds = reports.map((r) => r._id);
-      if (reportIds.length === 0) return NextResponse.json({ requests: [] });
-      query.userId = { $in: reportIds };
-      if (!status) query.status = 'pending';
-    }
+  if (view === 'all' || view === 'approvals') {
+    // Viewing/approving others' leave requires Console admin or users.manage.
+    if (!canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (view === 'approvals' && !status) query.status = 'pending';
   } else {
     // mine
     query.userId = user._id;
@@ -58,7 +47,7 @@ export async function POST(req) {
   // Admins may file on behalf of another user.
   let targetUser = user;
   if (data.userId && data.userId !== String(user._id)) {
-    if (!isAdminRole(user.role)) {
+    if (!canManageUsers(user)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (!ObjectId.isValid(data.userId)) {

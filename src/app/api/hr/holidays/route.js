@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAdmin, logActivity } from '../../../../lib/serverAuth';
+import { requireAuth, requireManageUsers, logActivity } from '../../../../lib/serverAuth';
 import { HOLIDAY_TYPES, toDateOnly, dateKey } from '../../../../lib/hr/leave';
 
 // GET - list holidays, optionally filtered by year
@@ -20,9 +20,9 @@ export async function GET(req) {
   return NextResponse.json({ holidays });
 }
 
-// POST - create a holiday (admin only)
+// POST - create a holiday (Console admin or users.manage)
 export async function POST(req) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
-import { requireAuth, requireAdmin, isAdminRole, logActivity } from '../../../../../lib/serverAuth';
+import { requireAuth, requireManageUsers, canManageUsers, logActivity } from '../../../../../lib/serverAuth';
 import { computeBalances } from '../../../../../lib/hr/leaveBalance';
 
 // GET - leave balances for a user/year. Non-admins can only view their own.
@@ -15,7 +15,7 @@ export async function GET(req) {
 
   if (!userId) {
     userId = String(user._id);
-  } else if (!isAdminRole(user.role) && userId !== String(user._id)) {
+  } else if (!canManageUsers(user) && userId !== String(user._id)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   if (!ObjectId.isValid(userId)) {
@@ -26,9 +26,10 @@ export async function GET(req) {
   return NextResponse.json({ userId, year, balances });
 }
 
-// POST - admin sets an allocation/carry-forward override for a user+type+year.
+// POST - set an allocation/carry-forward override for a user+type+year.
+// Requires HR management rights (Console admin or users.manage).
 export async function POST(req) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
 

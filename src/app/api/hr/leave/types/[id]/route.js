@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
-import { requireAdmin, logActivity } from '../../../../../../lib/serverAuth';
+import { requireManageUsers, logActivity } from '../../../../../../lib/serverAuth';
 
-// PUT - update a leave type (admin only)
+// PUT - update a leave type (Console admin or users.manage)
 export async function PUT(req, { params }) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
   const { id } = await params;
@@ -43,7 +43,7 @@ export async function PUT(req, { params }) {
 
 // DELETE - soft delete (deactivate) a leave type (admin only)
 export async function DELETE(req, { params }) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
   const { id } = await params;

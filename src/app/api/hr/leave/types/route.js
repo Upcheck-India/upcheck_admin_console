@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireAuth, requireAdmin, logActivity } from '../../../../../lib/serverAuth';
+import { requireAuth, requireManageUsers, logActivity } from '../../../../../lib/serverAuth';
 import { DEFAULT_LEAVE_TYPES } from '../../../../../lib/hr/leave';
 
 // GET - list leave types (seeds defaults on first use)
@@ -24,9 +24,9 @@ export async function GET(req) {
   return NextResponse.json({ types });
 }
 
-// POST - create a leave type (admin only)
+// POST - create a leave type (Console admin or users.manage)
 export async function POST(req) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
 

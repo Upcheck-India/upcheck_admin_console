@@ -27,7 +27,11 @@ export default function HolidaysPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const isAdmin = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Console admin');
+  // Managing holidays requires Console admin or the `users.manage` permission.
+  const isAdmin = currentUser && (
+    currentUser.role === 'Console admin' ||
+    (currentUser.perms || []).includes('users.manage')
+  );
 
   useEffect(() => {
     (async () => {
