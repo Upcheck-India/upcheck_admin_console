@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
-import { requireAdmin, logActivity } from '../../../../../lib/serverAuth';
+import { requireManageUsers, logActivity } from '../../../../../lib/serverAuth';
 import { HOLIDAY_TYPES, toDateOnly } from '../../../../../lib/hr/leave';
 
-// PUT - update a holiday (admin only)
+// PUT - update a holiday (Console admin or users.manage)
 export async function PUT(req, { params }) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
   const { id } = await params;
@@ -44,7 +44,7 @@ export async function PUT(req, { params }) {
 
 // DELETE - remove a holiday (admin only)
 export async function DELETE(req, { params }) {
-  const auth = await requireAdmin(req);
+  const auth = await requireManageUsers(req);
   if (auth.error) return auth.error;
   const { db, user } = auth;
   const { id } = await params;

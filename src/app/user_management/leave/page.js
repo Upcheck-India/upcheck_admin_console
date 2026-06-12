@@ -26,7 +26,13 @@ export default function LeavePage() {
   const [loading, setLoading] = useState(true);
   const year = new Date().getUTCFullYear();
 
-  const isAdmin = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Console admin');
+  // Managing others' leave (view all / approve / configure types) requires
+  // Console admin or the `users.manage` permission. Everyone can apply for
+  // their own leave.
+  const canManage = currentUser && (
+    currentUser.role === 'Console admin' ||
+    (currentUser.perms || []).includes('users.manage')
+  );
 
   // apply modal
   const [applyOpen, setApplyOpen] = useState(false);
@@ -62,15 +68,19 @@ export default function LeavePage() {
       setMyRequests(mine.requests || []);
       setLeaveTypes(types.types || []);
 
-      const apprRes = await fetch('/api/hr/leave/requests?view=approvals', { credentials: 'include' });
-      if (apprRes.ok) {
-        const appr = await apprRes.json();
-        setApprovals(appr.requests || []);
+      if (canManage) {
+        const apprRes = await fetch('/api/hr/leave/requests?view=approvals', { credentials: 'include' });
+        if (apprRes.ok) {
+          const appr = await apprRes.json();
+          setApprovals(appr.requests || []);
+        }
+      } else {
+        setApprovals([]);
       }
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [year, canManage]);
 
   useEffect(() => { if (currentUser) loadAll(); }, [currentUser, loadAll]);
 
@@ -114,11 +124,11 @@ export default function LeavePage() {
   const selectedType = leaveTypes.find((t) => t._id === applyForm.leaveTypeId);
   const selectedBalance = balances.find((b) => String(b.leaveTypeId) === applyForm.leaveTypeId);
 
-  const tabs = [
-    { id: 'mine', label: 'My Leave' },
-    { id: 'approvals', label: `Approvals${approvals.length ? ` (${approvals.length})` : ''}` },
-  ];
-  if (isAdmin) tabs.push({ id: 'types', label: 'Leave Types' });
+  const tabs = [{ id: 'mine', label: 'My Leave' }];
+  if (canManage) {
+    tabs.push({ id: 'approvals', label: `Approvals${approvals.length ? ` (${approvals.length})` : ''}` });
+    tabs.push({ id: 'types', label: 'Leave Types' });
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

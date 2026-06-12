@@ -16,6 +16,17 @@ export function isAdminRole(role) {
   return role === 'Admin' || role === 'Console admin';
 }
 
+// Permission to administer other people's HR records (view everyone's data,
+// approve/reject requests, manage shared config like leave types/holidays).
+// Granted to Console admins unconditionally, or anyone holding the
+// `users.manage` permission. This is the canonical HR management gate and
+// should be preferred over role-only checks.
+export function canManageUsers(user) {
+  if (!user) return false;
+  if (user.role === 'Console admin') return true;
+  return Array.isArray(user.perms) && user.perms.includes('users.manage');
+}
+
 // Returns the authenticated user document (without password) or null.
 export async function getAuthUser(req) {
   const token = req.cookies.get('admin_token')?.value;
@@ -50,6 +61,17 @@ export async function requireAdmin(req) {
   const result = await requireAuth(req);
   if (result.error) return result;
   if (!isAdminRole(result.user.role)) {
+    return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+  return result;
+}
+
+// Requires HR management rights: Console admin role or the `users.manage`
+// permission. Use this for endpoints that act on other users' HR data.
+export async function requireManageUsers(req) {
+  const result = await requireAuth(req);
+  if (result.error) return result;
+  if (!canManageUsers(result.user)) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
   }
   return result;

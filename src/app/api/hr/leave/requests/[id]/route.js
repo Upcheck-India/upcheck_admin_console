@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
-import { requireAuth, isAdminRole, logActivity } from '../../../../../../lib/serverAuth';
+import { requireAuth, canManageUsers, logActivity } from '../../../../../../lib/serverAuth';
 
-// GET - single leave request (owner, manager, or admin)
+// GET - single leave request (owner, or a user manager)
 export async function GET(req, { params }) {
   const auth = await requireAuth(req);
   if (auth.error) return auth.error;
@@ -14,8 +14,7 @@ export async function GET(req, { params }) {
   if (!request) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   const isOwner = String(request.userId) === String(user._id);
-  const isManager = request.managerId && String(request.managerId) === String(user._id);
-  if (!isOwner && !isManager && !isAdminRole(user.role)) {
+  if (!isOwner && !canManageUsers(user)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   return NextResponse.json({ request });
@@ -43,13 +42,12 @@ export async function PATCH(req, { params }) {
   const request = await db.collection('leave_requests').findOne({ _id: new ObjectId(id) });
   if (!request) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const admin = isAdminRole(user.role);
+  const canManage = canManageUsers(user);
   const isOwner = String(request.userId) === String(user._id);
-  const isManager = request.managerId && String(request.managerId) === String(user._id);
   const now = new Date();
 
   if (action === 'cancel') {
-    if (!isOwner && !admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!isOwner && !canManage) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     if (!['pending', 'approved'].includes(request.status)) {
       return NextResponse.json({ error: `Cannot cancel a ${request.status} request` }, { status: 400 });
     }
@@ -62,8 +60,8 @@ export async function PATCH(req, { params }) {
   }
 
   // approve / reject
-  if (!admin && !isManager) return NextResponse.json({ error: 'Only a manager or admin can review this request' }, { status: 403 });
-  if (isOwner && !admin) return NextResponse.json({ error: 'You cannot review your own request' }, { status: 403 });
+  if (!canManage) return NextResponse.json({ error: 'You do not have permission to review leave requests' }, { status: 403 });
+  if (isOwner) return NextResponse.json({ error: 'You cannot review your own request' }, { status: 403 });
   if (request.status !== 'pending') {
     return NextResponse.json({ error: `Request is already ${request.status}` }, { status: 400 });
   }
@@ -88,9 +86,9 @@ export async function DELETE(req, { params }) {
   const request = await db.collection('leave_requests').findOne({ _id: new ObjectId(id) });
   if (!request) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const admin = isAdminRole(user.role);
+  const canManage = canManageUsers(user);
   const isOwner = String(request.userId) === String(user._id);
-  if (!admin && !(isOwner && request.status === 'pending')) {
+  if (!canManage && !(isOwner && request.status === 'pending')) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
   await db.collection('leave_requests').deleteOne({ _id: request._id });
