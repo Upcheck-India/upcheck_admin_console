@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Users, CalendarDays, CalendarCheck, Plane,
+  Users, CalendarCheck, Plane, IdCard, FolderArchive,
 } from 'lucide-react';
 
 // Central registry of HR sub-module navigation links.
@@ -11,6 +11,8 @@ export const HR_NAV_ITEMS = [
   { label: 'Employees', href: '/user_management', icon: Users, exact: true },
   { label: 'Leave', href: '/user_management/leave', icon: Plane },
   { label: 'Holidays', href: '/user_management/holidays', icon: CalendarCheck },
+  { label: 'Profile', href: '/user_management/profile', icon: IdCard },
+  { label: 'Documents', href: '/user_management/documents', icon: FolderArchive },
 ];
 
 export default function HRNav() {
