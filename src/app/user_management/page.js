@@ -9,6 +9,7 @@ import {
 import DocumentationSettingsModal from './components/DocumentationSettingsModal';
 import ExternalUsersTab from './components/ExternalUsersTab';
 import TeamsTab from './components/TeamsTab';
+import HRNav from './_components/HRNav';
 
 // Add this function outside of the component
 const preventFocusLoss = (e) => e.target.select();
@@ -1094,6 +1095,7 @@ const UserManagement = () => {
       />
 
       <div className="max-w-7xl mx-auto">
+        <HRNav />
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center mb-4">
