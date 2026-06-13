@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw, CheckCircle, RotateCwSquare } from 'lucide-react';
+import TopNav from '../components/TopNav';
 
 const EventsPage = () => {
   const [events, setEvents] = useState([]);
@@ -271,7 +272,8 @@ const EventsPage = () => {
   );
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <TopNav />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-8 gap-4">

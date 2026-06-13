@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { validatePost } from "../../../utils/postValidate";
 import SecureLoading from "../../components/SecureLoading";
 import DashboardContentLoader from "../../components/DashboardLoading";
+import TopNav from "../../components/TopNav";
 
 // Constants
 const LANGUAGES = {
@@ -516,7 +517,9 @@ export default function CMSDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <h1 className="text-3xl font-bold text-gray-900">All posts</h1>
@@ -574,6 +577,7 @@ export default function CMSDashboard() {
             onClose={() => setSelectedPost(null)}
           />
         )}
+      </div>
       </div>
     </div>
   );
