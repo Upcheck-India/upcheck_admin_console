@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
-  LayoutDashboard, Mail, Shield, MessageCircle,
+  Mail, Shield, MessageCircle,
   ChevronDown, LogOut, User, Key, X
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
@@ -64,13 +65,15 @@ export default function TopNav() {
           <div className="flex justify-between h-16">
             {/* Logo / Brand */}
             <div className="flex items-center">
-              <Link href="/console" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-2 rounded-lg">
-                  <LayoutDashboard className="h-5 w-5 text-white" />
-                </div>
-                <span className="ml-1 text-lg font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-                  Upcheck Console
-                </span>
+              <Link href="/console" className="flex items-center hover:opacity-80 transition-opacity">
+                <Image
+                  src="/uploads/Upcheck Banner (480 x 144 px).png"
+                  alt="Upcheck Logo"
+                  width={480}
+                  height={144}
+                  className="w-48 sm:w-56 h-auto object-contain"
+                  priority
+                />
               </Link>
             </div>
 

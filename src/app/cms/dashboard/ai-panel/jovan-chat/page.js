@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import UnauthorizedAccess from '../../../../../components/UnauthorizedAccess';
-import { 
-  Bot, 
-  LayoutDashboard, 
-  Send, 
-  Loader2, 
-  ChevronDown, 
+import {
+  Bot,
+  LayoutDashboard,
+  Send,
+  Loader2,
+  ChevronDown,
   LogOut,
   Plus,
   Clock,
@@ -121,7 +121,7 @@ export default function JovanChat() {
         },
         credentials: 'include'
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Failed to fetch chat sessions:', errorData);
@@ -142,7 +142,7 @@ export default function JovanChat() {
       const response = await fetch(`/api/jovan-chat/history?sessionId=${sessionId}`, {
         credentials: 'include'
       });
-      
+
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Failed to load chat history:', errorData);
@@ -151,12 +151,12 @@ export default function JovanChat() {
 
       const history = await response.json();
       console.log('Loaded chat history:', history);
-      
+
       const session = chatSessions.find(s => s._id === sessionId);
       if (session) {
         setEndpointSessionId(session.endpointSessionId);
       }
-      
+
       setMessages(history.map(msg => ({
         role: msg.role,
         content: msg.message
@@ -231,9 +231,9 @@ export default function JovanChat() {
         throw new Error('Failed to update chat title');
       }
 
-      setChatSessions(prev => 
-        prev.map(session => 
-          session._id === sessionId 
+      setChatSessions(prev =>
+        prev.map(session =>
+          session._id === sessionId
             ? { ...session, title: newTitle }
             : session
         )
@@ -273,13 +273,13 @@ export default function JovanChat() {
         if (errorData.retryable && retryCount < MAX_RETRIES) {
           retryCount++;
           const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-          
+
           const retryMessage = {
             role: 'assistant',
-            content: `The request is taking longer than expected. Retrying in ${delay/1000} seconds... (Attempt ${retryCount} of ${MAX_RETRIES})`
+            content: `The request is taking longer than expected. Retrying in ${delay / 1000} seconds... (Attempt ${retryCount} of ${MAX_RETRIES})`
           };
           setMessages(prev => [...prev, retryMessage]);
-          
+
           await new Promise(resolve => setTimeout(resolve, delay));
           return attemptRequest(messageContent, originalInput, isRetry);
         }
@@ -288,7 +288,7 @@ export default function JovanChat() {
 
       const data = await response.json();
       console.log('Received response:', data);
-      
+
       let aiContent;
       if (data.isPlainText) {
         aiContent = data.message.replace(/\\n/g, '\n');
@@ -334,21 +334,21 @@ export default function JovanChat() {
 
     const originalInput = input;
     let messageContent = input;
-    
+
     const toolBadge = searchMode ? getToolBadge(searchMode) : null;
-    
+
     if (searchMode === 'internet') {
       messageContent = "You need to search the internet for this request- " + input;
     } else if (searchMode === 'database') {
       messageContent = "You need to use the mongodb database tool to fetch information regarding this request- " + input;
     }
-    
-    const userMessage = { 
-      role: 'user', 
+
+    const userMessage = {
+      role: 'user',
       content: originalInput,
       badge: toolBadge
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsTyping(true);
@@ -363,7 +363,7 @@ export default function JovanChat() {
 
   const handleRetry = async () => {
     if (messages.length < 2) return;
-    
+
     const lastUserMessage = messages[messages.length - 2];
     if (lastUserMessage.role !== 'user') return;
 
@@ -393,7 +393,7 @@ export default function JovanChat() {
 
   const confirmDelete = async () => {
     if (!chatToDelete) return;
-    
+
     try {
       setIsDeleting(true);
       const response = await fetch(`/api/jovan-chat/sessions?sessionId=${chatToDelete}`, {
@@ -421,7 +421,7 @@ export default function JovanChat() {
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/api/auth/logout', { 
+      const res = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
@@ -520,7 +520,7 @@ export default function JovanChat() {
                 </div>
               </div>
 
-              
+
 
               {/* Don't show again checkbox */}
               <label className="flex items-center gap-3 cursor-pointer group">
@@ -544,7 +544,7 @@ export default function JovanChat() {
               >
                 Okay
               </button>
-              
+
             </div>
           </div>
         </div>
@@ -554,13 +554,15 @@ export default function JovanChat() {
         <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
           <div className="flex justify-between h-14 sm:h-16">
             <div className="flex items-center">
-              <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-1.5 sm:p-2 rounded-lg">
-                <LayoutDashboard className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
-              </div>
-              <Link href="/console" className="flex items-center ml-2">
-                <span className="text-base sm:text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent truncate">
-                  Upcheck Console
-                </span>
+              <Link href="/console" className="flex items-center hover:opacity-80 transition-opacity">
+                <Image
+                  src="/uploads/Upcheck Banner (480 x 144 px).png"
+                  alt="Upcheck Logo"
+                  width={480}
+                  height={144}
+                  className="w-40 sm:w-48 md:w-56 h-auto object-contain"
+                  priority
+                />
               </Link>
             </div>
 
@@ -599,7 +601,7 @@ export default function JovanChat() {
       </nav>
 
       <div className="flex h-[calc(100vh-3.5rem)] sm:h-[calc(100vh-4rem)]">
-        <div 
+        <div
           className={`w-full sm:w-80 bg-white border-r border-gray-200 flex flex-col transition-all duration-300 fixed sm:relative z-40 h-full
             ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full sm:translate-x-0'}`}
         >
@@ -656,9 +658,8 @@ export default function JovanChat() {
               >
                 <button
                   onClick={() => loadChatHistory(session._id)}
-                  className={`w-full p-3 rounded-lg text-left hover:bg-gray-50 transition-colors ${
-                    sessionId === session._id ? 'bg-blue-50 border border-blue-100' : ''
-                  }`}
+                  className={`w-full p-3 rounded-lg text-left hover:bg-gray-50 transition-colors ${sessionId === session._id ? 'bg-blue-50 border border-blue-100' : ''
+                    }`}
                 >
                   <div className="flex items-center space-x-3">
                     <MessageSquare className="w-5 h-5 text-gray-500" />
@@ -765,11 +766,10 @@ export default function JovanChat() {
                           </div>
                         )}
                         <div
-                          className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${
-                            message.role === 'user'
+                          className={`max-w-[85%] sm:max-w-[80%] rounded-xl sm:rounded-2xl p-3 sm:p-4 ${message.role === 'user'
                               ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-blue-500/20'
                               : 'bg-white border border-gray-200 text-gray-800 shadow-gray-200/20'
-                          } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
+                            } shadow-lg transform hover:scale-[1.01] sm:hover:scale-[1.02] transition-transform`}
                         >
                           <div className="space-y-2">
                             {message.badge && (
@@ -781,15 +781,14 @@ export default function JovanChat() {
                             )}
                             {parseMessage(message.content).map((segment, i) => (
                               segment.type === 'code' ? (
-                                <CodeBlock 
+                                <CodeBlock
                                   key={i}
                                   code={segment.content}
                                   language={segment.language}
                                 />
                               ) : (
-                                <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${
-                                  message.role === 'user' ? 'text-white' : 'text-gray-800'
-                                }`}>
+                                <p key={i} className={`text-sm sm:text-base leading-relaxed break-words whitespace-pre-wrap ${message.role === 'user' ? 'text-white' : 'text-gray-800'
+                                  }`}>
                                   {segment.content}
                                 </p>
                               )
@@ -810,27 +809,25 @@ export default function JovanChat() {
                         <div className="flex justify-end -mt-2 mb-4 mr-12 sm:mr-14">
                           <button
                             onClick={handleRetry}
-                            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ${
-                              message.content.includes("I apologize, but I encountered an error")
+                            className={`group flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ${message.content.includes("I apologize, but I encountered an error")
                                 ? 'text-red-600 hover:bg-red-50'
                                 : 'text-gray-400 hover:text-gray-600 hover:bg-gray-50'
-                            }`}
+                              }`}
                           >
-                            <svg 
-                              className={`w-4 h-4 transition-transform group-hover:rotate-[-45deg] ${
-                                message.content.includes("I apologize, but I encountered an error")
+                            <svg
+                              className={`w-4 h-4 transition-transform group-hover:rotate-[-45deg] ${message.content.includes("I apologize, but I encountered an error")
                                   ? 'text-red-500'
                                   : 'text-gray-400 group-hover:text-gray-600'
-                              }`} 
-                              viewBox="0 0 24 24" 
-                              fill="none" 
+                                }`}
+                              viewBox="0 0 24 24"
+                              fill="none"
                               xmlns="http://www.w3.org/2000/svg"
                             >
-                              <path 
-                                d="M4 4V9H4.58152M19.9381 11C19.446 7.05369 16.0796 4 12 4C8.64262 4 5.76829 6.06817 4.58152 9M4.58152 9H9M20 20V15H19.4185M19.4185 15C18.2317 17.9318 15.3574 20 12 20C7.92038 20 4.55399 16.9463 4.06189 13M19.4185 15H15" 
-                                stroke="currentColor" 
-                                strokeWidth="2" 
-                                strokeLinecap="round" 
+                              <path
+                                d="M4 4V9H4.58152M19.9381 11C19.446 7.05369 16.0796 4 12 4C8.64262 4 5.76829 6.06817 4.58152 9M4.58152 9H9M20 20V15H19.4185M19.4185 15C18.2317 17.9318 15.3574 20 12 20C7.92038 20 4.55399 16.9463 4.06189 13M19.4185 15H15"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
                                 strokeLinejoin="round"
                               />
                             </svg>
@@ -863,14 +860,14 @@ export default function JovanChat() {
               <div className="p-3 sm:p-6 border-t bg-white/80 backdrop-blur-sm">
                 <div className="max-w-4xl mx-auto w-full">
                   <div className="flex flex-col items-end gap-2">
-                    <ToolSelector 
+                    <ToolSelector
                       selectedTool={searchMode}
                       onToolChange={handleToolChange}
                     />
                     {searchMode && (
                       <p className="text-xs text-gray-500 px-2">
-                        {searchMode === 'internet' ? 
-                          'Using internet search to find information' : 
+                        {searchMode === 'internet' ?
+                          'Using internet search to find information' :
                           'Searching Upcheck\'s official database'}
                       </p>
                     )}

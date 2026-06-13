@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import UnauthorizedAccess from '../../components/UnauthorizedAccess';
 import AvatarWithStatus from '../../components/AvatarWithStatus';
 import useOnlineUsers from '../../hooks/useOnlineUsers';
-import { Wallet, ClipboardList, Calendar, Briefcase, BarChart3, LayoutDashboard, Shield, Mail, MessageCircle, ChevronDown, ArrowRight } from 'lucide-react';
+import { Wallet, ClipboardList, Calendar, Briefcase, BarChart3, Shield, Mail, MessageCircle, ChevronDown, ArrowRight } from 'lucide-react';
 
 export default function OrganizationPage() {
   const { user, isLoading: authLoading } = useAuth(true);
@@ -53,7 +54,7 @@ export default function OrganizationPage() {
       title: 'Finance Management',
       desc: 'Umbrella for funds, budgets and finance-related modules',
       href: '/organization/finance',
-      icon: <Wallet className="w-6 h-6" />, 
+      icon: <Wallet className="w-6 h-6" />,
       gradient: 'from-indigo-500 via-blue-500 to-teal-500',
       bgGradient: 'from-indigo-50 to-blue-50',
       iconColor: 'text-indigo-600',
@@ -63,7 +64,7 @@ export default function OrganizationPage() {
       title: 'Vendors & Contracts',
       desc: 'Vendor registry, contracts, renewals and cost centers',
       href: '/organization/vendors',
-      icon: <ClipboardList className="w-6 h-6" />, 
+      icon: <ClipboardList className="w-6 h-6" />,
       gradient: 'from-teal-500 via-green-500 to-emerald-500',
       bgGradient: 'from-teal-50 to-green-50',
       iconColor: 'text-teal-600',
@@ -73,7 +74,7 @@ export default function OrganizationPage() {
       title: 'Compliance Calendar',
       desc: 'Statutory filings and renewal reminders',
       href: '/organization/compliance',
-      icon: <Calendar className="w-6 h-6" />, 
+      icon: <Calendar className="w-6 h-6" />,
       gradient: 'from-green-500 via-emerald-500 to-teal-500',
       bgGradient: 'from-green-50 to-emerald-50',
       iconColor: 'text-green-600',
@@ -83,7 +84,7 @@ export default function OrganizationPage() {
       title: 'Assets & Inventory',
       desc: 'Assets, assignments, warranty and check-in/out',
       href: '/organization/assets',
-      icon: <Briefcase className="w-6 h-6" />, 
+      icon: <Briefcase className="w-6 h-6" />,
       gradient: 'from-blue-500 via-indigo-500 to-purple-500',
       bgGradient: 'from-blue-50 to-indigo-50',
       iconColor: 'text-blue-600',
@@ -93,7 +94,7 @@ export default function OrganizationPage() {
       title: 'Org OKRs',
       desc: 'Objectives and key results across teams',
       href: '/organization/okrs',
-      icon: <BarChart3 className="w-6 h-6" />, 
+      icon: <BarChart3 className="w-6 h-6" />,
       gradient: 'from-purple-500 via-indigo-500 to-blue-500',
       bgGradient: 'from-purple-50 to-indigo-50',
       iconColor: 'text-purple-600',
@@ -107,14 +108,16 @@ export default function OrganizationPage() {
       <nav className="bg-white border-b shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-2 rounded-lg">
-                <LayoutDashboard className="h-6 w-6 text-white" />
-              </div>
-              <span className="ml-2 text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-                Organization
-              </span>
-            </div>
+            <Link href="/console" className="flex items-center hover:opacity-80 transition-opacity">
+              <Image
+                src="/uploads/Upcheck Banner (480 x 144 px).png"
+                alt="Upcheck Logo"
+                width={480}
+                height={144}
+                className="w-48 sm:w-56 h-auto object-contain"
+                priority
+              />
+            </Link>
 
             {/* Right side: online, console-admin, mail, chat, profile */}
             <div className="flex items-center space-x-4">
@@ -124,13 +127,13 @@ export default function OrganizationPage() {
                   <div className="px-2 text-xs text-gray-500 hover:text-gray-700">No online</div>
                 ) : (
                   <>
-                    {onlineUsers.slice(0,2).map((u,i)=> (
+                    {onlineUsers.slice(0, 2).map((u, i) => (
                       <div key={u._id} style={{ zIndex: 10 - i }}>
                         <AvatarWithStatus username={u.username} online className="h-6 w-6 text-xs ring-2 ring-white" />
                       </div>
                     ))}
-                    {onlineUsers.length>2 && (
-                      <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs border-2 border-white">+{onlineUsers.length-2}</div>
+                    {onlineUsers.length > 2 && (
+                      <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs border-2 border-white">+{onlineUsers.length - 2}</div>
                     )}
                   </>
                 )}
@@ -158,7 +161,7 @@ export default function OrganizationPage() {
               <div className="relative">
                 <button onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)} className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none">
                   <div className="h-8 w-8 rounded-full bg-teal-500 flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">{(username || user?.username || user?.email || 'U').slice(0,1).toUpperCase()}</span>
+                    <span className="text-white text-sm font-medium">{(username || user?.username || user?.email || 'U').slice(0, 1).toUpperCase()}</span>
                   </div>
                   <span>{username || user?.username || user?.email}</span>
                   <ChevronDown className="w-4 h-4 text-gray-500" />
@@ -213,7 +216,7 @@ export default function OrganizationPage() {
               <div className={`relative bg-white rounded-2xl border-2 border-transparent ${c.hoverBorder} shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden h-full`}>
                 {/* Gradient Top Bar */}
                 <div className={`h-1.5 bg-gradient-to-r ${c.gradient}`} />
-                
+
                 {/* Card Content */}
                 <div className="p-6 sm:p-7">
                   {/* Icon with gradient background */}
@@ -222,13 +225,13 @@ export default function OrganizationPage() {
                       {c.icon}
                     </div>
                   </div>
-                  
+
                   {/* Title */}
                   <h3 className="text-xl font-bold text-slate-900 mb-2 group-hover:text-indigo-700 transition-colors flex items-center justify-between">
                     {c.title}
                     <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all duration-300 opacity-0 group-hover:opacity-100" />
                   </h3>
-                  
+
                   {/* Description */}
                   <p className="text-slate-600 leading-relaxed">{c.desc}</p>
                 </div>

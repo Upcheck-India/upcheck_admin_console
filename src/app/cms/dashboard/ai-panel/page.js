@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import UnauthorizedAccess from '../../../../components/UnauthorizedAccess';
 import Image from 'next/image';
 import Link from 'next/link';
-import { 
+import {
   Bot, Workflow, Brain, Users, MessageSquare, Settings, ArrowRight,
   LayoutDashboard, LogOut, ChevronDown, User, Sparkles, Code, TerminalSquare, HelpingHand
 } from 'lucide-react';
@@ -39,7 +39,7 @@ export default function AIPanel() {
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/api/auth/logout', { 
+      const res = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
@@ -75,13 +75,15 @@ export default function AIPanel() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-2 rounded-lg">
-                <LayoutDashboard className="h-6 w-6 text-white" />
-              </div>
-              <Link href="/console" className="flex items-center ml-2">
-                <span className="ml-2 text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-                  Upcheck Console
-                </span>
+              <Link href="/console" className="flex items-center hover:opacity-80 transition-opacity">
+                <Image
+                  src="/uploads/Upcheck Banner (480 x 144 px).png"
+                  alt="Upcheck Logo"
+                  width={480}
+                  height={144}
+                  className="w-48 sm:w-56 h-auto object-contain"
+                  priority
+                />
               </Link>
             </div>
 
@@ -139,8 +141,8 @@ export default function AIPanel() {
                 Meet Jovan, Your AI Assistant
               </h1>
               <p className="text-lg text-gray-600 mb-6">
-                Much like certain groundbreaking AI characters in modern cinema, Jovan represents the future 
-                of digital assistance. With an empathetic core and adaptive intelligence, Jovan learns and 
+                Much like certain groundbreaking AI characters in modern cinema, Jovan represents the future
+                of digital assistance. With an empathetic core and adaptive intelligence, Jovan learns and
                 evolves alongside you, becoming more attuned to your needs and workflows over time.
               </p>
               <div className="flex flex-wrap gap-4 justify-center lg:justify-start">
@@ -232,8 +234,8 @@ export default function AIPanel() {
               link: "/cms/dashboard/ai-panel/jovan-chat"
             }
           ].map((feature, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className={`bg-gradient-to-br ${feature.color} text-white rounded-xl shadow-lg p-6 relative overflow-hidden ${feature.link ? 'cursor-pointer transform transition-transform hover:scale-105 opacity-100' : 'opacity-75'}`}
               onClick={() => feature.link && router.push(feature.link)}
             >
