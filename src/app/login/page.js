@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Loader2, RotateCcw, Sparkle } from 'lucide-react';
+import { User, Lock, Loader2, RotateCcw, Sparkle, Fingerprint, KeyRound } from 'lucide-react';
 import { AlertMessage } from "../components/AlertMessage";
 import Link from 'next/link';
 import Image from 'next/image';
 import { useClerk } from '@clerk/nextjs';
+import { authenticateWithPasskey, isWebAuthnSupported } from '../../lib/webauthnClient';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -18,6 +19,15 @@ export default function Login() {
   const clerk = useClerk();
 
   const [redirectUrl, setRedirectUrl] = useState('');
+  const [passkeySupported, setPasskeySupported] = useState(false);
+  const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
+  const [showBackupCode, setShowBackupCode] = useState(false);
+  const [backupCode, setBackupCode] = useState('');
+  const [isBackupLoading, setIsBackupLoading] = useState(false);
+
+  useEffect(() => {
+    setPasskeySupported(isWebAuthnSupported());
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -271,6 +281,22 @@ export default function Login() {
     };
   };
 
+  // Shared post-authentication step: confirm the session, drop any external
+  // (Clerk) session, then redirect into the console.
+  const finishLogin = async () => {
+    localStorage.setItem('username', username);
+    const checkAuth = await fetch('/api/auth/check', { credentials: 'include' });
+    if (!checkAuth.ok) {
+      throw new Error('Authentication failed');
+    }
+    if (clerk?.user) {
+      await clerk.signOut({ redirectUrl: '/login' });
+    }
+    const destination = redirectUrl || '/console';
+    router.push(destination);
+    router.refresh();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username || !password) {
@@ -289,21 +315,7 @@ export default function Login() {
       const data = await res.json();
       if (res.ok && data.success) {
         setAlert({ type: 'success', message: 'Login successful!' });
-        localStorage.setItem('username', username);
-        const checkAuth = await fetch('/api/auth/check', { credentials: 'include' });
-        if (checkAuth.ok) {
-          // Sign out from Clerk (external user) if there's an active session
-          // This ensures only one session (internal OR external) exists at a time
-          if (clerk?.user) {
-            await clerk.signOut({ redirectUrl: '/login' });
-          }
-          // Redirect to original URL if exists, otherwise go to console
-          const destination = redirectUrl || '/console';
-          router.push(destination);
-          router.refresh();
-        } else {
-          throw new Error('Authentication failed');
-        }
+        await finishLogin();
       } else {
         setAlert({ type: 'error', message: data.error || 'Invalid credentials' });
       }
@@ -314,6 +326,61 @@ export default function Login() {
       setIsLoading(false);
     }
   };
+
+  const handlePasskeyLogin = async () => {
+    if (!username) {
+      setAlert({ type: 'error', message: 'Enter your username, then sign in with your passkey' });
+      return;
+    }
+    try {
+      setIsPasskeyLoading(true);
+      setAlert({ type: 'loading', message: 'Waiting for your passkey...' });
+      await authenticateWithPasskey(username);
+      setAlert({ type: 'success', message: 'Login successful!' });
+      await finishLogin();
+    } catch (error) {
+      console.error('Passkey login error:', error);
+      const message = error?.name === 'NotAllowedError'
+        ? 'Passkey prompt was cancelled or timed out.'
+        : (error.message || 'Passkey sign-in failed.');
+      setAlert({ type: 'error', message });
+    } finally {
+      setIsPasskeyLoading(false);
+    }
+  };
+
+  const handleBackupCodeLogin = async (e) => {
+    e.preventDefault();
+    if (!username || !backupCode) {
+      setAlert({ type: 'error', message: 'Enter your username and a backup code' });
+      return;
+    }
+    try {
+      setIsBackupLoading(true);
+      setAlert({ type: 'loading', message: 'Verifying backup code...' });
+      const res = await fetch('/api/auth/backup-codes/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username, code: backupCode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAlert({ type: 'success', message: 'Login successful!' });
+        setBackupCode('');
+        await finishLogin();
+      } else {
+        setAlert({ type: 'error', message: data.error || 'Invalid backup code' });
+      }
+    } catch (error) {
+      console.error('Backup code login error:', error);
+      setAlert({ type: 'error', message: 'Server error. Please try again.' });
+    } finally {
+      setIsBackupLoading(false);
+    }
+  };
+
+  const anyLoading = isLoading || isPasskeyLoading || isBackupLoading;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-500 via-teal-500 to-green-600 flex items-center justify-center p-4 overflow-hidden relative">
@@ -350,6 +417,72 @@ export default function Login() {
               <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-blue-400 to-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
               <span className="relative flex items-center justify-center gap-2">{isLoading ? (<><Loader2 className="animate-spin" size={20} />Signing in...</>) : ('Sign in')}</span>
             </button>
+
+            {/* Passwordless / recovery options */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-white/20"></div>
+                <span className="text-xs text-blue-100/70">or</span>
+                <div className="flex-1 h-px bg-white/20"></div>
+              </div>
+
+              {passkeySupported && (
+                <button
+                  type="button"
+                  onClick={handlePasskeyLogin}
+                  disabled={anyLoading}
+                  className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-white/30 rounded-lg text-sm font-medium text-white bg-white/5 hover:bg-white/10 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isPasskeyLoading ? <Loader2 className="animate-spin" size={18} /> : <Fingerprint size={18} />}
+                  Sign in with passkey
+                </button>
+              )}
+
+              {!showBackupCode ? (
+                <button
+                  type="button"
+                  onClick={() => setShowBackupCode(true)}
+                  disabled={anyLoading}
+                  className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-white/30 rounded-lg text-sm font-medium text-white bg-white/5 hover:bg-white/10 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <KeyRound size={18} />
+                  Use a backup code
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <KeyRound className="absolute top-3 left-3 text-blue-300 z-10" size={18} />
+                    <input
+                      type="text"
+                      value={backupCode}
+                      onChange={(e) => setBackupCode(e.target.value)}
+                      placeholder="Backup code (e.g. ABCDE-FGHJK)"
+                      autoComplete="one-time-code"
+                      disabled={anyLoading}
+                      className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleBackupCodeLogin}
+                      disabled={anyLoading}
+                      className="flex-1 flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:shadow-blue-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {isBackupLoading ? <Loader2 className="animate-spin" size={18} /> : 'Verify code'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowBackupCode(false); setBackupCode(''); }}
+                      disabled={anyLoading}
+                      className="py-2.5 px-4 rounded-lg text-sm font-medium text-blue-100 bg-white/5 hover:bg-white/10 transition-all duration-300 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             {/*}<div className="flex flex-col items-center space-y-2 pt-2">
               <Link href="/legacy_login" className="inline-flex items-center text-xs text-blue-200 hover:text-blue-100 transition-colors duration-300"><RotateCcw size={12} className="mr-1" />Use legacy login</Link>
               <Link href="/register" className="inline-flex items-center text-xs text-blue-200 hover:text-blue-100 transition-colors duration-300"><Sparkle size={12} className="mr-1" />Wanna create a new account?</Link>

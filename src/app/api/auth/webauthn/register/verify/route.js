@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { toBase64Url } from '../../../../../../lib/webauthn';
 
 export async function POST(request) {
   try {
@@ -286,36 +287,34 @@ export async function POST(request) {
     }
 
     try {
-      // Store the new credential
+      // Store the new credential. Identifiers and the public key are persisted
+      // as base64url strings so the authentication route can look them up and
+      // decode them with the exact same encoding.
       const newDevice = {
-        credentialID: Buffer.from(credential.rawId || credential.id, 'base64').toString('hex'),
-        credentialPublicKey: Buffer.from(registrationInfo.credentialPublicKey),
-        counter: registrationInfo.counter,
+        credentialID: toBase64Url(registrationInfo.credentialID),
+        credentialPublicKey: toBase64Url(registrationInfo.credentialPublicKey),
+        counter: registrationInfo.counter ?? 0,
         transports: credential.response.transports || [],
         addedAt: new Date(),
         lastUsed: new Date(),
         deviceName: data.deviceName || 'Biometric Device',
         deviceType: data.deviceType || 'biometric',
-        // Store the raw credential data for debugging
-        rawCredential: {
-          id: credential.id,
-          rawId: credential.rawId,
-          type: credential.type,
-          response: {
-            clientDataJSON: credential.response.clientDataJSON,
-            attestationObject: credential.response.attestationObject ? 
-              credential.response.attestationObject.substring(0, 50) + '...' : null,
-            transports: credential.response.transports
-          }
-        }
       };
-      
-      console.log('New device to be saved:', JSON.stringify({
-        ...newDevice,
-        // Don't log the full public key for security
-        credentialPublicKey: '...' + (newDevice.credentialPublicKey?.length || 0) + ' bytes',
-        rawCredential: newDevice.rawCredential ? '...' : null
-      }, null, 2));
+
+      // Guard against registering the same authenticator twice.
+      const alreadyRegistered = (user.webauthn?.credentials || []).some(
+        cred => cred.credentialID === newDevice.credentialID
+      );
+      if (alreadyRegistered) {
+        await db.collection('admin_users').updateOne(
+          { _id: user._id },
+          { $unset: { 'webauthn.challenge': '', 'webauthn.challengeTimestamp': '' } }
+        );
+        return new Response(JSON.stringify({
+          error: 'Already registered',
+          message: 'This device is already registered for biometric sign-in.'
+        }), { status: 409, headers: { 'Content-Type': 'application/json' } });
+      }
 
       console.log('Storing new device for user:', user._id);
       
@@ -324,7 +323,7 @@ export async function POST(request) {
         { _id: user._id },
         {
           $push: { 'webauthn.credentials': newDevice },
-          $unset: { 'webauthn.challenge': '' }
+          $unset: { 'webauthn.challenge': '', 'webauthn.challengeTimestamp': '' }
         }
       );
       

@@ -1,114 +1,79 @@
-import { randomBytes } from 'crypto';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../../../lib/mongodb';
-import { ObjectId } from 'mongodb';
+import { generateChallenge, getRpId } from '../../../../../../lib/webauthn';
 
-// Helper function to generate a secure random string
-function generateSecureRandomString(length = 32) {
-  return randomBytes(length).toString('base64url');
-}
+const json = (body, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
 
-export async function POST() {
+// Returns WebAuthn assertion options for the current user.
+//
+// Two modes are supported:
+//  - Logged-in step-up: no body, the user is resolved from the admin_token cookie.
+//  - Login (passwordless): the body carries { username }, so the flow works
+//    before any session exists.
+export async function POST(request) {
   try {
-    // Get the token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    
-    if (!token) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'Unauthorized',
-        message: 'No authentication token found' 
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    let username = null;
+    try {
+      const body = await request.json();
+      username = body?.username ? String(body.username).trim() : null;
+    } catch {
+      // No JSON body -> session-based step-up.
     }
-    
-    // Get database connection
+
     const client = await clientPromise;
     const db = client.db('resources');
 
-    // Find user by session token
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { 
-        projection: { 
-          'webauthn.credentials': 1,
-          email: 1,
-          _id: 1
-        } 
+    let user = null;
+    if (username) {
+      user = await db.collection('admin_users').findOne(
+        { username },
+        { projection: { 'webauthn.credentials': 1, email: 1, _id: 1 } }
+      );
+    } else {
+      const cookieStore = await cookies();
+      const token = cookieStore.get('admin_token')?.value;
+      if (!token) {
+        return json({ success: false, error: 'Unauthorized', message: 'No authentication token found' }, 401);
       }
-    );
-    
-    if (!user) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'Not Found',
-        message: 'User not found' 
-      }), { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      user = await db.collection('admin_users').findOne(
+        { sessionToken: token },
+        { projection: { 'webauthn.credentials': 1, email: 1, _id: 1 } }
+      );
     }
 
-    // Check if user has WebAuthn credentials
-    if (!user.webauthn?.credentials?.length) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'No Credentials',
-        message: 'No WebAuthn credentials found for this account' 
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    // Always return the same generic response when there are no credentials so
+    // the login form cannot be used to enumerate which accounts have passkeys.
+    if (!user || !user.webauthn?.credentials?.length) {
+      return json({ success: false, error: 'No Credentials', message: 'No passkey is registered for this account.' }, 404);
     }
 
-    // Generate a secure random challenge
-    const challenge = generateSecureRandomString(32);
-    
-    // Store challenge in user's document with expiration (5 minutes)
+    const challenge = generateChallenge(32);
     const challengeExpires = new Date(Date.now() + 5 * 60 * 1000);
-    
+
     await db.collection('admin_users').updateOne(
       { _id: user._id },
-      { 
-        $set: { 
-          'webauthn.challenge': challenge,
-          'webauthn.challengeExpires': challengeExpires
-        } 
-      }
+      { $set: { 'webauthn.challenge': challenge, 'webauthn.challengeExpires': challengeExpires } }
     );
 
-    console.log(`Generated authentication challenge for user ${user.email}`);
+    const allowCredentials = user.webauthn.credentials.map(cred => ({
+      id: cred.credentialID, // base64url, decoded client-side
+      type: 'public-key',
+      transports: Array.isArray(cred.transports) ? cred.transports : [],
+    }));
 
-    // Get allowed credentials
-    const allowCredentials = user.webauthn.credentials.map(cred => {
-      // Convert credential ID from base64url to Uint8Array
-      const credentialId = cred.credentialID;
-      
-      return {
-        id: credentialId,
-        type: 'public-key',
-        transports: Array.isArray(cred.transports) ? cred.transports : [],
-      };
-    });
-
-    // Create authentication options
-    const options = {
-      challenge: challenge,
+    return json({
+      challenge,
       allowCredentials,
       userVerification: 'preferred',
-      timeout: 300000, // 5 minutes
-      rpId: process.env.NEXT_PUBLIC_WEBAUTHN_RP_ID || 'localhost',
-    };
-
-    return new Response(JSON.stringify(options), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      timeout: 300000,
+      rpId: getRpId(),
     });
   } catch (error) {
     console.error('WebAuthn authentication options error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500 });
+    return json({ success: false, error: 'Internal server error' }, 500);
   }
 }
