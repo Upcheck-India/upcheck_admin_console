@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../../hooks/useAuth';
+import TopNav from '../../components/TopNav';
+
 import {
   ArrowLeft, Send, MoreVertical, AlertCircle, Loader, Copy, RotateCcw, Check, Smile
 } from 'lucide-react';
@@ -326,6 +328,7 @@ const ChatThread = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
+      <TopNav />
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
         <button
