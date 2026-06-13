@@ -135,8 +135,8 @@ async function cleanupOldDevices(db, userId) {
 // Get all trusted devices for the current user
 export async function GET(request) {
   try {
-    const { get: getCookie } = cookies();
-    const adminToken = getCookie('admin_token');
+    const cookieStore = await cookies();
+    const adminToken = cookieStore.get('admin_token');
     
     if (!adminToken?.value) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -197,8 +197,8 @@ export async function GET(request) {
 // Add a new trusted device
 export async function POST(request) {
   try {
-    const { get: getCookie } = cookies();
-    const adminToken = getCookie('admin_token');
+    const cookieStore = await cookies();
+    const adminToken = cookieStore.get('admin_token');
     
     if (!adminToken?.value) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -325,8 +325,8 @@ export async function POST(request) {
 // Remove a trusted device
 export async function DELETE(request) {
   try {
-    const { get: getCookie } = cookies();
-    const adminToken = getCookie('admin_token');
+    const cookieStore = await cookies();
+    const adminToken = cookieStore.get('admin_token');
     
     if (!adminToken?.value) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -405,8 +405,8 @@ export async function DELETE(request) {
 // Update device information (for updating last used time)
 export async function PATCH(request) {
   try {
-    const { get: getCookie } = cookies();
-    const adminToken = getCookie('admin_token');
+    const cookieStore = await cookies();
+    const adminToken = cookieStore.get('admin_token');
     
     if (!adminToken?.value) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

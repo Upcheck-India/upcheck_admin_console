@@ -24,7 +24,9 @@ import {
   RefreshCw,
   CheckCircle,
   XCircle,
-  MonitorSmartphone
+  MonitorSmartphone,
+  KeyRound,
+  Copy
 } from 'lucide-react';
 
 const deviceIcons = {
@@ -59,6 +61,10 @@ export default function TrustedDevices() {
   const [isCurrentDeviceTrusted, setIsCurrentDeviceTrusted] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDeviceDetails, setShowDeviceDetails] = useState({});
+  // Backup (recovery) codes
+  const [backupStatus, setBackupStatus] = useState({ generated: false, total: 0, remaining: 0 });
+  const [backupCodes, setBackupCodes] = useState([]);
+  const [isLoadingBackup, setIsLoadingBackup] = useState(false);
 
   // Enhanced device detection with more details
   const getDeviceInfo = useCallback(() => {
@@ -315,6 +321,61 @@ export default function TrustedDevices() {
       toast.error('Error loading biometric devices');
     }
   }, []);
+
+  // Fetch backup codes status (never returns the codes themselves)
+  const fetchBackupStatus = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/backup-codes', { credentials: 'include' });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setBackupStatus({
+          generated: data.generated,
+          total: data.total,
+          remaining: data.remaining,
+          generatedAt: data.generatedAt,
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching backup codes status:', error);
+    }
+  }, []);
+
+  // Generate (or regenerate) backup codes; the plaintext is shown once.
+  const generateBackupCodes = async () => {
+    if (backupStatus.generated && !window.confirm(
+      'Regenerating will invalidate your existing backup codes. Continue?'
+    )) {
+      return;
+    }
+    try {
+      setIsLoadingBackup(true);
+      const response = await fetch('/api/auth/backup-codes', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to generate backup codes');
+      }
+      setBackupCodes(data.codes || []);
+      toast.success('Backup codes generated. Save them now!');
+      await fetchBackupStatus();
+    } catch (error) {
+      console.error('Error generating backup codes:', error);
+      toast.error(error.message || 'Failed to generate backup codes');
+    } finally {
+      setIsLoadingBackup(false);
+    }
+  };
+
+  const copyBackupCodes = async () => {
+    try {
+      await navigator.clipboard.writeText(backupCodes.join('\n'));
+      toast.success('Backup codes copied to clipboard');
+    } catch {
+      toast.error('Could not copy codes');
+    }
+  };
 
   // Register a new biometric device
   const registerBiometricDevice = async () => {
@@ -676,7 +737,8 @@ export default function TrustedDevices() {
   useEffect(() => {
     fetchDevices();
     fetchBiometricDevices(); // Add this line to load biometric devices on component mount
-  }, [fetchDevices, fetchBiometricDevices]);
+    fetchBackupStatus();
+  }, [fetchDevices, fetchBiometricDevices, fetchBackupStatus]);
 
   // Auto-suggest device name based on current device
   useEffect(() => {
@@ -1241,6 +1303,80 @@ export default function TrustedDevices() {
           </div>
         </div>
       )}
+
+      {/* Backup Codes Section */}
+      <div className="bg-white border border-gray-200 rounded-xl p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium flex items-center text-gray-900">
+            <KeyRound className="w-5 h-5 mr-2 text-blue-600" />
+            Backup Codes
+          </h3>
+          {backupStatus.generated ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              {backupStatus.remaining} of {backupStatus.total} remaining
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+              <XCircle className="w-3 h-3 mr-1" />
+              Not set up
+            </span>
+          )}
+        </div>
+
+        <p className="text-sm text-gray-600 mb-4">
+          Backup codes let you sign in if you lose access to your passkey or trusted device.
+          Each code can be used once. Store them somewhere safe.
+        </p>
+
+        {backupStatus.generated && backupStatus.remaining <= 2 && backupCodes.length === 0 && (
+          <div className="mb-4 p-3 text-sm text-amber-700 bg-amber-100 rounded-md flex items-center">
+            <AlertTriangle className="w-4 h-4 mr-2 flex-shrink-0" />
+            You are running low on backup codes. Consider regenerating a new set.
+          </div>
+        )}
+
+        {backupCodes.length > 0 && (
+          <div className="mb-4">
+            <div className="p-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md mb-3">
+              These codes are shown only once. Copy or write them down now.
+            </div>
+            <div className="grid grid-cols-2 gap-2 font-mono text-sm bg-gray-50 border border-gray-200 rounded-lg p-4">
+              {backupCodes.map((code) => (
+                <div key={code} className="text-gray-800 tracking-wider">{code}</div>
+              ))}
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={copyBackupCodes}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy codes
+              </button>
+              <button
+                onClick={() => setBackupCodes([])}
+                className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={generateBackupCodes}
+          disabled={isLoadingBackup}
+          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+        >
+          {isLoadingBackup ? (
+            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+            <KeyRound className="h-4 w-4 mr-2" />
+          )}
+          {backupStatus.generated ? 'Regenerate backup codes' : 'Generate backup codes'}
+        </button>
+      </div>
 
       {/* Information Modal */}
       {showInfo && (
