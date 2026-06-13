@@ -129,7 +129,7 @@ export async function GET(req) {
     const usersWithManager = await Promise.all(users.map(async (user) => {
       if (user.managerId) {
         const manager = await db.collection('admin_users')
-          .findOne({ _id: user.managerId }, { projection: { password: 0, username: 1, email: 1, role: 1 } });
+          .findOne({ _id: user.managerId }, { projection: { username: 1, email: 1, role: 1 } });
         return { ...user, manager };
       }
       return user;
