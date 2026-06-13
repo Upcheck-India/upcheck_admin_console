@@ -4,31 +4,18 @@ import { createZoomMeeting } from '../../../lib/zoom';
 import { sendEmail } from '../../../lib/email';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
-
-// Helper function to get user from token
-async function getUserFromToken(token) {
-    if (!token) return null;
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne(
-        { sessionToken: token },
-        {
-            projection: {
-                _id: 1,
-                email: 1,
-                name: 1,
-                role: 1,
-            }
-        }
-    );
-    return user;
-}
-
+import { getUserFromToken } from '../../../lib/eventAuthHelper';
 
 // GET /api/events
 export async function GET(request) {
   try {
+    // --- Bug Fix #1.7: Auth guard added — was fully public before ---
+    const token = request.cookies.get('admin_token')?.value;
+    const user = await getUserFromToken(token);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized. Please login again.' }, { status: 401 });
+    }
+
     const client = await clientPromise;
     const db = client.db("resources");
 
@@ -66,7 +53,7 @@ export async function GET(request) {
     }));
 
     // Combine and sort all items
-    const allItems = [...events, ...seriesAsEvents].sort((a, b) => 
+    const allItems = [...events, ...seriesAsEvents].sort((a, b) =>
       new Date(a.startTime) - new Date(b.startTime)
     );
 

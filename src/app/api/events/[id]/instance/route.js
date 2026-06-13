@@ -5,25 +5,14 @@ import { sendEmail } from '../../../../../lib/email';
 import { validateUpdateInstanceRequest } from '../../../../../lib/validation/recurring';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
+import { getUserFromToken } from '../../../../../lib/eventAuthHelper';
 
-// Helper function to get user from token
-async function getUserFromToken(token) {
-    if (!token) return null;
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne(
-        { sessionToken: token },
-        {
-            projection: {
-                _id: 1,
-                email: 1,
-                name: 1,
-                role: 1,
-            }
-        }
-    );
-    return user;
+// Helper to safely convert a value to ObjectId (handles both string and ObjectId inputs)
+function toObjectId(val) {
+  if (!val) return null;
+  if (val instanceof ObjectId) return val;
+  if (ObjectId.isValid(val)) return new ObjectId(val);
+  return null;
 }
 
 // PUT /api/events/[id]/instance - Update individual instance
@@ -277,6 +266,11 @@ export async function DELETE(request, { params }) {
     const cancelFuture = url.searchParams.get('cancelFuture') === 'true';
     const sendNotification = url.searchParams.get('sendNotification') === 'true';
 
+    // --- Bug Fix #1.9: Resolve seriesId early for all subsequent DB calls ---
+    // --- Bug Fix #1.9: toObjectId() ensures seriesId is always a proper ObjectId,
+    // whether it was stored as a string or ObjectId in the DB ---
+    const seriesObjectId = toObjectId(event.seriesId);
+
     // Cancel this instance
     await db.collection('events').updateOne(
       { _id: new ObjectId(id) },
@@ -295,7 +289,7 @@ export async function DELETE(request, { params }) {
     if (cancelFuture) {
       const result = await db.collection('events').updateMany(
         { 
-          seriesId: event.seriesId,
+          seriesId: seriesObjectId,
           startTime: { $gt: event.startTime },
           'recurrenceInstance.isCancelled': { $ne: true }
         },
@@ -311,7 +305,7 @@ export async function DELETE(request, { params }) {
 
       // Also deactivate the series
       await db.collection('recurring_series').updateOne(
-        { _id: event.seriesId },
+        { _id: seriesObjectId },
         { 
           $set: { 
             isActive: false,
@@ -323,7 +317,7 @@ export async function DELETE(request, { params }) {
 
     // Update series statistics
     await db.collection('recurring_series').updateOne(
-      { _id: event.seriesId },
+      { _id: seriesObjectId },
       { 
         $inc: { cancelledInstances: cancelledCount },
         $set: { updatedAt: new Date() }

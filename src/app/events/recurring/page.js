@@ -62,14 +62,19 @@ const RecurringMeetingsPage = () => {
     }
   }, []);
 
-  const handleToggleActive = useCallback(async (seriesId, forceActive = null) => {
+  // --- Bug Fix #1.5: handleToggleActive previously sent isActive: undefined when
+  // forceActive was null. JSON.stringify strips undefined values so the backend
+  // received an empty object and nothing changed — but success toast still showed.
+  // Now we always send an explicit boolean.
+  const handleToggleActive = useCallback(async (seriesId, currentIsActive, forceActive = null) => {
     try {
+      const newIsActive = forceActive !== null ? forceActive : !currentIsActive;
       const response = await fetch(`/api/events/recurring/${seriesId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          isActive: forceActive !== null ? forceActive : undefined
+          isActive: newIsActive
         })
       });
 
@@ -78,7 +83,7 @@ const RecurringMeetingsPage = () => {
         throw new Error(errorData.error || 'Failed to update series');
       }
 
-      const action = forceActive === false ? 'paused' : forceActive === true ? 'activated' : 'updated';
+      const action = newIsActive ? 'activated' : 'paused';
       showNotification(`Recurring series ${action} successfully`);
     } catch (error) {
       showNotification(error.message, 'error');

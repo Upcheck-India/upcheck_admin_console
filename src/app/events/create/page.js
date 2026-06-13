@@ -123,7 +123,8 @@ const CreateEventPage = () => {
         return null;
       case 'duration':
         if (!value || parseInt(value) < 1) return 'Duration must be at least 1 minute';
-        if (parseInt(value) > 480) return 'Duration cannot exceed 8 hours';
+        // --- Bug Fix #2.5: Changed max from 480 to 300 to match backend validation ---
+        if (parseInt(value) > 300) return 'Duration cannot exceed 300 minutes (5 hours)';
         return null;
       default:
         return null;
@@ -565,7 +566,7 @@ const CreateEventPage = () => {
                 />
                 <div className="text-xs text-gray-500 flex items-center">
                   <Clock className="w-4 h-4 mr-1" />
-                  Duration in minutes (max 8 hours)
+                  Duration in minutes (max 5 hours / 300 mins)
                 </div>
               </div>
             </div>
@@ -795,12 +796,13 @@ const CreateEventPage = () => {
                 </div>
                 <h2 className="text-xl font-semibold text-gray-900">Upcheck Bot <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 align-middle">Locked beta</span></h2>
               </div>
-              <div className="opacity-60 pointer-events-none">
+              <div>
                 <Toggle
                   label="Invite Upcheck Bot"
                   name="inviteUpcheckBot"
-                  checked={false}
-                  onChange={() => { }}
+                  // --- Bug Fix #1.6: Connected to real formData state (was hardcoded false) ---
+                  checked={formData.inviteUpcheckBot}
+                  onChange={handleInputChange}
                   description="Automatically join Google Meet at start time with the Upcheck bot (locked beta)"
                 />
               </div>

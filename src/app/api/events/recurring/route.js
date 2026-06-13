@@ -4,26 +4,7 @@ import { validateRecurrencePattern, generateOccurrences } from '../../../../lib/
 import { scheduleJob } from '../../../../lib/scheduler';
 import { validateCreateSeriesRequest } from '../../../../lib/validation/recurring';
 import { ObjectId } from 'mongodb';
-
-// Helper function to get user from token
-async function getUserFromToken(token) {
-    if (!token) return null;
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne(
-        { sessionToken: token },
-        {
-            projection: {
-                _id: 1,
-                email: 1,
-                name: 1,
-                role: 1,
-            }
-        }
-    );
-    return user;
-}
+import { getUserFromToken } from '../../../../lib/eventAuthHelper';
 
 // GET /api/events/recurring - Get all recurring series for the user
 export async function GET(request) {

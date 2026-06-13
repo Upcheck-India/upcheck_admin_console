@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { getUserFromToken } from '../../../../lib/eventAuthHelper';
 
 // GET /api/events/[id]
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
+
+    // --- Bug Fix #1.8: Auth guard added — was fully public before ---
+    const token = request.cookies.get('admin_token')?.value;
+    const user = await getUserFromToken(token);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized. Please login again.' }, { status: 401 });
+    }
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });
@@ -45,7 +53,7 @@ export async function DELETE(request, { params }) {
     const db = client.db("resources");
 
     // Verify token and get user (aligned with /api/auth/check)
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 401 });
     }
@@ -95,7 +103,7 @@ export async function PUT(request, { params }) {
     const db = client.db("resources");
 
     // Verify token and get user (aligned with /api/auth/check)
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
+    const user = await getUserFromToken(token);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 401 });
     }

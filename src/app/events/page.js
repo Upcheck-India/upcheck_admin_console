@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw, CheckCircle, RotateCwSquare } from 'lucide-react';
+import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw, CheckCircle, RotateCwSquare, AlertCircle } from 'lucide-react';
 
 const EventsPage = () => {
   const [events, setEvents] = useState([]);
@@ -12,7 +12,26 @@ const EventsPage = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [notification, setNotification] = useState(null);
   const [showRecurring, setShowRecurring] = useState(true);
+  // --- Bug Fix #2.7: Use React state for dropdown instead of raw DOM manipulation ---
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
 
+  // --- Bug Fix #2.7: Close dropdown on outside click ---
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    if (dropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  // --- Bug Fix #1.2: Separate fetch effect from notification effect ---
+  // Previously both were in one effect with [notification, showRecurring] deps,
+  // causing a full event re-fetch every time a notification appeared.
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -31,25 +50,31 @@ const EventsPage = () => {
     };
 
     fetchEvents();
+  }, [showRecurring]); // Only re-fetch when the recurring toggle changes
 
-    // Check for success messages from URL params
+  // Check for success/delete messages from URL params on mount only
+  useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('created') === 'true') {
       setNotification({ message: 'Meeting created successfully!', type: 'success' });
-      // Clean up URL
       window.history.replaceState({}, '', '/events');
     } else if (urlParams.get('recurring_created') === 'true') {
       setNotification({ message: 'Recurring meeting series created successfully!', type: 'success' });
-      // Clean up URL
+      window.history.replaceState({}, '', '/events');
+    } else if (urlParams.get('deleted') === 'true') {
+      // --- Bug Fix #1.1: Handle deleted=true URL param — was completely missing ---
+      setNotification({ message: 'Event deleted successfully!', type: 'success' });
       window.history.replaceState({}, '', '/events');
     }
+  }, []); // Run once on mount
 
-    // Auto-hide notification after 5 seconds
+  // Auto-hide notification after 5 seconds
+  useEffect(() => {
     if (notification) {
       const timer = setTimeout(() => setNotification(null), 5000);
       return () => clearTimeout(timer);
     }
-  }, [notification, showRecurring]);
+  }, [notification]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -79,8 +104,10 @@ const EventsPage = () => {
     
     if (filter === 'All') return true;
     const isPast = new Date(event.startTime) < new Date();
+    const isToday = new Date(event.startTime).toDateString() === new Date().toDateString();
     if (filter === 'Upcoming') return !isPast;
     if (filter === 'Past') return isPast;
+    if (filter === 'Today') return isToday; // Bug Fix #3.13: Today filter
     return true;
   });
 
@@ -112,7 +139,6 @@ const EventsPage = () => {
     const isPast = !isRecurringSeries && new Date(event.startTime) < new Date();
     const eventDate = new Date(event.startTime);
     const isToday = !isRecurringSeries && eventDate.toDateString() === new Date().toDateString();
-    const isUpcoming = eventDate > new Date();
 
     const linkHref = isRecurringSeries ? `/events/recurring` : `/events/${event._id}`;
 
@@ -270,6 +296,23 @@ const EventsPage = () => {
     </button>
   );
 
+  // Determine empty state message based on filter and search
+  // --- Bug Fix #3.14: Show contextually correct empty state message ---
+  const getEmptyStateMessage = () => {
+    if (searchTerm) {
+      return { title: 'No events found', body: 'Try adjusting your search or filter criteria.' };
+    }
+    if (filter === 'Past') {
+      return { title: 'No past events', body: 'No past events match the current filters.' };
+    }
+    if (filter === 'Today') {
+      return { title: 'No meetings today', body: 'You have no meetings scheduled for today.' };
+    }
+    return { title: 'No events scheduled', body: 'Get started by creating your first meeting.' };
+  };
+
+  const emptyState = getEmptyStateMessage();
+
   return (
     <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -295,7 +338,8 @@ const EventsPage = () => {
               <RotateCwSquare className="w-4 h-4 mr-2" />
               Recurring Meetings
             </Link>
-            <div className="relative inline-block text-left">
+            {/* --- Bug Fix #2.7: Dropdown uses React state, not raw DOM --- */}
+            <div className="relative inline-block text-left" ref={dropdownRef}>
               <div className="flex">
                 <Link 
                   href="/events/create"
@@ -308,35 +352,32 @@ const EventsPage = () => {
                   <button
                     type="button"
                     className="inline-flex items-center px-2 py-2 border border-l-0 border-transparent text-sm font-medium rounded-r-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                    onClick={() => {
-                      // Simple dropdown - you can enhance this with proper state management
-                      const dropdown = document.getElementById('meeting-dropdown');
-                      dropdown.classList.toggle('hidden');
-                    }}
+                    onClick={() => setDropdownOpen(prev => !prev)}
                   >
                     <ChevronRight className="w-4 h-4 rotate-90" />
                   </button>
-                  <div
-                    id="meeting-dropdown"
-                    className="hidden absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none"
-                  >
-                    <div className="py-1">
-                      <Link
-                        href="/events/create"
-                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        <Calendar className="w-4 h-4 mr-3" />
-                        Single Meeting
-                      </Link>
-                      <Link
-                        href="/events/recurring/create"
-                        className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      >
-                        <RefreshCw className="w-4 h-4 mr-3" />
-                        Recurring Series
-                      </Link>
+                  {dropdownOpen && (
+                    <div className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="py-1">
+                        <Link
+                          href="/events/create"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <Calendar className="w-4 h-4 mr-3" />
+                          Single Meeting
+                        </Link>
+                        <Link
+                          href="/events/recurring/create"
+                          onClick={() => setDropdownOpen(false)}
+                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        >
+                          <RefreshCw className="w-4 h-4 mr-3" />
+                          Recurring Series
+                        </Link>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -352,7 +393,11 @@ const EventsPage = () => {
           }`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center">
-                <CheckCircle className="w-5 h-5 mr-2" />
+                {/* --- Bug Fix #2.6: Show AlertCircle for errors, CheckCircle for success --- */}
+                {notification.type === 'error'
+                  ? <AlertCircle className="w-5 h-5 mr-2" />
+                  : <CheckCircle className="w-5 h-5 mr-2" />
+                }
                 <span className="font-medium">{notification.message}</span>
               </div>
               <button
@@ -391,25 +436,12 @@ const EventsPage = () => {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <Filter className="w-4 h-4 text-gray-500 mr-2" />
+                {/* --- Bug Fix #3.13: Added "Today" filter tab --- */}
                 <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
-                  <FilterTab 
-                    value="Upcoming" 
-                    label="Upcoming" 
-                    isActive={filter === 'Upcoming'} 
-                    onClick={() => setFilter('Upcoming')} 
-                  />
-                  <FilterTab 
-                    value="Past" 
-                    label="Past" 
-                    isActive={filter === 'Past'} 
-                    onClick={() => setFilter('Past')} 
-                  />
-                  <FilterTab 
-                    value="All" 
-                    label="All" 
-                    isActive={filter === 'All'} 
-                    onClick={() => setFilter('All')} 
-                  />
+                  <FilterTab value="Upcoming" label="Upcoming" isActive={filter === 'Upcoming'} onClick={() => setFilter('Upcoming')} />
+                  <FilterTab value="Today"    label="Today"    isActive={filter === 'Today'}    onClick={() => setFilter('Today')} />
+                  <FilterTab value="Past"     label="Past"     isActive={filter === 'Past'}     onClick={() => setFilter('Past')} />
+                  <FilterTab value="All"      label="All"      isActive={filter === 'All'}      onClick={() => setFilter('All')} />
                 </div>
               </div>
               
@@ -443,16 +475,15 @@ const EventsPage = () => {
               <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-6">
                 <Calendar className="w-8 h-8 text-gray-400" />
               </div>
+              {/* --- Bug Fix #3.14: Contextual empty state messages --- */}
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                {searchTerm ? 'No events found' : 'No events scheduled'}
+                {emptyState.title}
               </h3>
               <p className="text-gray-500 mb-8">
-                {searchTerm 
-                  ? 'Try adjusting your search or filter criteria.' 
-                  : 'Get started by creating your first meeting.'
-                }
+                {emptyState.body}
               </p>
-              {!searchTerm && (
+              {/* Only show Schedule CTA when no search is active and filter isn't "Past" or "Today" */}
+              {!searchTerm && filter !== 'Past' && filter !== 'Today' && (
                 <Link 
                   href="/events/create"
                   className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"

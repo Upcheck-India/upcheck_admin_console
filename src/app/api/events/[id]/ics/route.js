@@ -2,11 +2,19 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import * as ics from 'ics';
+import { getUserFromToken } from '../../../../../lib/eventAuthHelper';
 
 // GET /api/events/[id]/ics
 export async function GET(request, { params }) {
   try {
     const { id } = await params;
+
+    // --- Bug Fix #2.8: Auth guard added — was fully public before ---
+    const token = request.cookies.get('admin_token')?.value;
+    const user = await getUserFromToken(token);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized. Please login again.' }, { status: 401 });
+    }
 
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });

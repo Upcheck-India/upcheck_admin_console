@@ -4,26 +4,7 @@ import { validateRecurrencePattern, generateOccurrences } from '../../../../../l
 import { scheduleJob, cancelJob, getJobsBySeries } from '../../../../../lib/scheduler';
 import { validateUpdateSeriesRequest } from '../../../../../lib/validation/recurring';
 import { ObjectId } from 'mongodb';
-
-// Helper function to get user from token
-async function getUserFromToken(token) {
-    if (!token) return null;
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne(
-        { sessionToken: token },
-        {
-            projection: {
-                _id: 1,
-                email: 1,
-                name: 1,
-                role: 1,
-            }
-        }
-    );
-    return user;
-}
+import { getUserFromToken } from '../../../../../lib/eventAuthHelper';
 
 // GET /api/events/recurring/[seriesId] - Get specific recurring series
 export async function GET(request, { params }) {
@@ -112,6 +93,7 @@ export async function PUT(request, { params }) {
       useInterstitialJoin,
       redirectDelay,
       includeDirectMeetingLink,
+      isActive,
       applyToFutureOnly = true
     } = body;
 
@@ -131,6 +113,11 @@ export async function PUT(request, { params }) {
     if (useInterstitialJoin !== undefined) updateData.useInterstitialJoin = !!useInterstitialJoin;
     if (redirectDelay !== undefined) updateData.redirectDelay = Math.max(0, Number(redirectDelay) || 0);
     if (includeDirectMeetingLink !== undefined) updateData.includeDirectMeetingLink = !!includeDirectMeetingLink;
+
+    // --- Bug Fix #1.5: isActive toggle now properly handled ---
+    // Previously the frontend sent isActive: undefined which was stripped by JSON.stringify
+    // and nothing changed, but a success toast still showed.
+    if (isActive !== undefined) updateData.isActive = !!isActive;
 
     // Validate duration if provided
     if (duration !== undefined) {
@@ -244,6 +231,22 @@ export async function DELETE(request, { params }) {
         }
       );
 
+      // --- Bug Fix #1.10 (partial): Cancel all future child event instances ---
+      await db.collection('events').updateMany(
+        {
+          seriesId: new ObjectId(seriesId),
+          startTime: { $gt: new Date() },
+          'recurrenceInstance.isCancelled': { $ne: true },
+        },
+        {
+          $set: {
+            'recurrenceInstance.isCancelled': true,
+            'recurrenceInstance.modificationReason': 'Parent series deactivated',
+            updatedAt: new Date(),
+          }
+        }
+      );
+
       // Cancel pending jobs
       try {
         const pendingJobs = await getJobsBySeries(seriesId, 'pending');
@@ -269,6 +272,12 @@ export async function DELETE(request, { params }) {
           }, { status: 404 });
       }
 
+      // --- Bug Fix #1.10: Delete all related child event instances ---
+      // Previously these were left as orphans in the events collection.
+      await db.collection('events').deleteMany({
+        seriesId: new ObjectId(seriesId)
+      });
+
       // Cancel all related jobs
       try {
         const allJobs = await getJobsBySeries(seriesId);
@@ -281,11 +290,8 @@ export async function DELETE(request, { params }) {
         console.error('Error cancelling jobs:', jobError);
       }
 
-      // TODO: Also delete or mark related events as cancelled
-      // This would be implemented when we have the full event integration
-
       return NextResponse.json({ 
-        message: 'Series deleted successfully' 
+        message: 'Series and all related meeting instances deleted successfully' 
       });
     }
 
