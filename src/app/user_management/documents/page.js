@@ -5,6 +5,8 @@ import {
   FolderArchive, Upload, Download, Trash2, Loader2, FileText, Eye, X,
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
+
 import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_LABELS, MAX_DOCUMENT_BYTES } from '../../../lib/hr/employee';
 
 const fmtSize = (b) => {
@@ -115,9 +117,11 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <HRNav />
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
+        <div className="max-w-6xl mx-auto">
+          <HRNav />
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
@@ -237,6 +241,7 @@ export default function DocumentsPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

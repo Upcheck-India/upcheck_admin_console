@@ -5,6 +5,8 @@ import {
   Plane, Plus, X, Loader2, Check, Ban, Trash2, Settings as SettingsIcon, Edit2,
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
+
 
 const STATUS_COLORS = {
   pending: 'bg-amber-100 text-amber-800',
@@ -131,9 +133,11 @@ export default function LeavePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <HRNav />
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <HRNav />
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center">
             <Plane className="h-8 w-8 text-blue-600 mr-3" />
@@ -258,6 +262,7 @@ export default function LeavePage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

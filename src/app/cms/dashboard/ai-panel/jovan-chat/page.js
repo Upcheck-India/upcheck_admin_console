@@ -465,7 +465,7 @@ export default function JovanChat() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-slideIn">
             {/* Header with gradient */}
-            <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 p-6 text-white relative overflow-hidden">
+            <div className="bg-gradient-to-r from-teal-600 to-blue-600 p-6 text-white relative overflow-hidden">
               <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
               <div className="relative z-10 flex items-start gap-4">
                 <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">

@@ -7,6 +7,8 @@ import {
   List, LayoutGrid,
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
+
 import { HOLIDAY_TYPES } from '../../../lib/hr/leave';
 
 const TYPE_META = {
@@ -181,9 +183,11 @@ export default function HolidaysPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <HRNav />
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
+        <div className="max-w-6xl mx-auto">
+          <HRNav />
 
         {/* Header */}
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -448,6 +452,7 @@ export default function HolidaysPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

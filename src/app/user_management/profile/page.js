@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { IdCard, Loader2, Save, Check } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
+
 import {
   GENDERS, MARITAL_STATUSES, BLOOD_GROUPS,
 } from '../../../lib/hr/employee';
@@ -133,9 +135,11 @@ export default function ProfilePage() {
   const fullName = emp ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim() || emp.username : '';
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-5xl mx-auto">
-        <HRNav />
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
+        <div className="max-w-5xl mx-auto">
+          <HRNav />
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
@@ -276,6 +280,7 @@ export default function ProfilePage() {
             </div>
           </form>
         )}
+      </div>
       </div>
     </div>
   );

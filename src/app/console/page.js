@@ -289,7 +289,7 @@ const AdminLandingPage = () => {
         {/* FAB for Jovan Chat */}
         <Link
           href="/cms/dashboard/ai-panel/jovan-chat"
-          className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group z-50"
+          className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group z-50"
         >
           <div className="relative">
             <Bot className="w-6 h-6 text-white" />
@@ -314,9 +314,9 @@ const AdminLandingPage = () => {
               <div className="mt-3">
                 <button
                   onClick={() => setShowJovanModal(true)}
-                  className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-full group hover:shadow-lg transition-all duration-300"
+                  className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 rounded-full group hover:shadow-lg transition-all duration-300"
                 >
-                  <Bot className="w-4 h-4 text-white mr-2" />
+                  <Bot className="w-4 h-4 text-white mr-2 group-hover:scale-110 transition-transform duration-300" />
                   <span className="text-sm font-medium text-white">Powered by Jovan AI</span>
                 </button>
               </div>
@@ -423,7 +423,7 @@ const AdminLandingPage = () => {
                   className="object-contain"
                 />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent text-center md:text-left">
+              <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent text-center md:text-left">
                 Meet Jovan AI
               </h2>
             </div>
@@ -432,12 +432,12 @@ const AdminLandingPage = () => {
               Jovan AI is Upcheck's upcoming artificial intelligence assistant designed to enhance your workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
             </p>
 
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-purple-100">
-              <h3 className="font-medium text-purple-800 flex items-center text-sm md:text-base">
+            <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-teal-100">
+              <h3 className="font-medium text-teal-800 flex items-center text-sm md:text-base">
                 <Settings className="w-4 h-4 mr-2" />
                 Development Status
               </h3>
-              <p className="text-sm text-purple-700 mt-1">
+              <p className="text-sm text-teal-700 mt-1">
                 Jovan AI is currently in active development. Admins can now access the early preview version to explore upcoming features and provide feedback.
               </p>
             </div>
@@ -446,7 +446,7 @@ const AdminLandingPage = () => {
               <h3 className="font-medium text-gray-900 mb-2 text-sm md:text-base">Coming Features:</h3>
               <ul className="space-y-2">
                 <li className="flex items-center text-xs md:text-sm text-gray-600">
-                  <Sparkles className="w-4 h-4 text-purple-500 mr-2 flex-shrink-0" />
+                  <Sparkles className="w-4 h-4 text-teal-500 mr-2 flex-shrink-0" />
                   Smart CMS
                 </li>
                 <li className="flex items-center text-xs md:text-sm text-gray-600">
@@ -470,7 +470,7 @@ const AdminLandingPage = () => {
                   setShowJovanModal(false);
                   router.push('/cms/dashboard/ai-panel');
                 }}
-                className="inline-flex items-center px-3 py-2 md:px-4 md:py-2 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 text-sm md:text-base"
+                className="inline-flex items-center px-3 py-2 md:px-4 md:py-2 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 text-white rounded-lg hover:shadow-lg transition-all duration-300 text-sm md:text-base"
               >
                 <Bot className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                 Try Early Access

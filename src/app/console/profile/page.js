@@ -571,7 +571,7 @@ export default function ProfilePage() {
 
         {/* Profile Header */}
         <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
-          <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 px-6 py-8">
+          <div className="bg-gradient-to-r from-teal-600 to-blue-600 px-6 py-8">
             <div className="flex items-center space-x-4">
               <div className="h-20 w-20 rounded-full bg-white flex items-center justify-center">
                 <span className="text-3xl font-bold text-blue-600">

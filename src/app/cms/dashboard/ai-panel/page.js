@@ -137,7 +137,7 @@ export default function AIPanel() {
               />
             </div>
             <div className="flex-1 text-center lg:text-left">
-              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent">
+              <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
                 Meet Jovan, Your AI Assistant
               </h1>
               <p className="text-lg text-gray-600 mb-6">
