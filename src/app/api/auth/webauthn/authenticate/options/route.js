@@ -8,12 +8,17 @@ const json = (body, status = 200) =>
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 
-// Returns WebAuthn assertion options for the current user.
+// Returns WebAuthn assertion options.
 //
-// Two modes are supported:
-//  - Logged-in step-up: no body, the user is resolved from the admin_token cookie.
-//  - Login (passwordless): the body carries { username }, so the flow works
-//    before any session exists.
+// Two modes:
+//  - Login (passwordless): body carries { username } — challenge stored per-user.
+//  - Logged-in step-up: no body — challenge stored on the session user.
+//
+// We always return an EMPTY allowCredentials list (discoverable credential flow).
+// This lets the browser show ALL passkeys stored for the RP domain rather than
+// filtering by specific credential IDs. Filtering by ID is the root cause of
+// NotAllowedError when the passkey lives in a different browser's credential
+// store (e.g., Chrome GPM vs Edge / Windows Hello).
 export async function POST(request) {
   try {
     let username = null;
@@ -21,7 +26,7 @@ export async function POST(request) {
       const body = await request.json();
       username = body?.username ? String(body.username).trim() : null;
     } catch {
-      // No JSON body -> session-based step-up.
+      // No JSON body → session-based step-up.
     }
 
     const client = await clientPromise;
@@ -45,34 +50,33 @@ export async function POST(request) {
       );
     }
 
-    // Always return the same generic response when there are no credentials so
-    // the login form cannot be used to enumerate which accounts have passkeys.
+    // Return same generic error for missing user/no credentials so that the
+    // login form cannot enumerate which accounts have passkeys registered.
     if (!user || !user.webauthn?.credentials?.length) {
       return json({ success: false, error: 'No Credentials', message: 'No passkey is registered for this account.' }, 404);
     }
 
     const challenge = generateChallenge(32);
-    const challengeExpires = new Date(Date.now() + 5 * 60 * 1000);
+    const challengeExpires = new Date(Date.now() + 5 * 60 * 1000); // 5-min server window
 
     await db.collection('admin_users').updateOne(
       { _id: user._id },
       { $set: { 'webauthn.challenge': challenge, 'webauthn.challengeExpires': challengeExpires } }
     );
 
-    const allowCredentials = user.webauthn.credentials.map(cred => ({
-      id: cred.credentialID, // base64url, decoded client-side
-      type: 'public-key',
-      transports: Array.isArray(cred.transports) ? cred.transports : [],
-    }));
-
     const rpId = getRpId();
     console.log('[WebAuthn auth/options] rpId:', rpId, '| env var:', process.env.NEXT_PUBLIC_WEBAUTHN_RP_ID || '(NOT SET — falling back to localhost!)');
 
+    // Empty allowCredentials = discoverable credential flow.
+    // The browser shows ALL passkeys it has for the RP domain from its own
+    // credential store (Windows Hello, iCloud Keychain, Google Password Manager,
+    // etc.) rather than searching for specific credential IDs that may live in a
+    // different browser's store.
     return json({
       challenge,
-      allowCredentials,
+      allowCredentials: [],
       userVerification: 'preferred',
-      timeout: 300000,
+      timeout: 90000, // 90 seconds — long enough to act, short enough to feel snappy
       rpId,
     });
   } catch (error) {

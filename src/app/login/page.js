@@ -334,15 +334,23 @@ export default function Login() {
     }
     try {
       setIsPasskeyLoading(true);
-      setAlert({ type: 'loading', message: 'Waiting for your passkey...' });
+      setAlert({ type: 'loading', message: 'Waiting for your passkey…' });
       await authenticateWithPasskey(username);
       setAlert({ type: 'success', message: 'Login successful!' });
       await finishLogin();
     } catch (error) {
       console.error('Passkey login error:', error);
-      const message = error?.name === 'NotAllowedError'
-        ? 'Passkey prompt was cancelled or timed out.'
-        : (error.message || 'Passkey sign-in failed.');
+      let message;
+      if (error?.name === 'NotAllowedError') {
+        // This fires when either:
+        //  a) The user dismissed the prompt
+        //  b) The browser found no passkey for this domain in its credential store
+        //     (common when the passkey was registered in a different browser, e.g.
+        //      Chrome's Google Password Manager vs Edge's Windows Hello store)
+        message = 'No passkey found in this browser. Make sure you\'re using the same browser where you registered your passkey, or go to Settings → Passkeys to register a new one.';
+      } else {
+        message = error.message || 'Passkey sign-in failed.';
+      }
       setAlert({ type: 'error', message });
     } finally {
       setIsPasskeyLoading(false);
@@ -409,7 +417,7 @@ export default function Login() {
               </div>
               <div className="relative group overflow-hidden rounded-lg">
                 <Lock className="absolute top-3 left-3 text-blue-300 transition-colors duration-300 group-hover:text-white z-10" size={20} />
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" disabled={isLoading} className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed z-0 relative" />
+              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" disabled={isLoading} className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50 disabled:cursor-not-allowed z-0 relative" />
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:from-blue-500/10 group-hover:via-blue-500/20 group-hover:to-blue-500/10 transition-all duration-700 transform -translate-x-full group-hover:translate-x-0 pointer-events-none"></div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
 import clientPromise from '../../../../../../lib/mongodb';
+import { ObjectId } from 'mongodb';
 import { getRpId, getExpectedOrigins, toBuffer } from '../../../../../../lib/webauthn';
 import { issueAdminSessionToken, setAdminSessionCookie } from '../../../../../../lib/adminSession';
 
@@ -25,6 +26,10 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db('resources');
 
+    // ── 1. Locate the user ───────────────────────────────────────────────────
+    // Primary: username from request body (traditional username-first flow).
+    // Fallback: search all users for the credential ID returned by the browser
+    //           (discoverable credential flow — browser picks from its own store).
     let user = null;
     if (username) {
       user = await db.collection('admin_users').findOne(
@@ -41,6 +46,28 @@ export async function POST(request) {
         { sessionToken: token },
         { projection: { webauthn: 1, email: 1, name: 1, role: 1, username: 1 } }
       );
+    }
+
+    // Discoverable-credential fallback: the browser chose a passkey from its
+    // own native picker and returned it. Find the matching user by credential ID.
+    const incomingCredId = credential.id; // base64url
+    if (!user || !user.webauthn?.challenge) {
+      const byCredId = await db.collection('admin_users').findOne(
+        { 'webauthn.credentials.credentialID': incomingCredId },
+        { projection: { webauthn: 1, email: 1, name: 1, role: 1, username: 1 } }
+      );
+      if (byCredId) user = byCredId;
+    }
+
+    // Also try userHandle (returned by browser for discoverable credentials)
+    if (!user && credential.response?.userHandle) {
+      try {
+        const uidStr = Buffer.from(credential.response.userHandle, 'base64url').toString();
+        user = await db.collection('admin_users').findOne(
+          { _id: new ObjectId(uidStr) },
+          { projection: { webauthn: 1, email: 1, name: 1, role: 1, username: 1 } }
+        );
+      } catch { /* invalid userHandle, ignore */ }
     }
 
     if (!user || !user.webauthn?.credentials?.length) {
