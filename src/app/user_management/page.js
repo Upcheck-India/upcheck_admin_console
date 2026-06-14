@@ -4,12 +4,14 @@ import { useRouter } from 'next/navigation';
 import {
   Users, Trash2, Edit2, Plus, X, Search, User,
   AlertCircle, Building2, Filter, Mail, MessageCircle,
-  CodeXml, FileText, Settings as SettingsIcon, CheckCircle, ChevronDown
+  CodeXml, FileText, Settings as SettingsIcon, CheckCircle, ChevronDown, Copy, Database
 } from 'lucide-react';
 import DocumentationSettingsModal from './components/DocumentationSettingsModal';
 import ExternalUsersTab from './components/ExternalUsersTab';
 import TeamsTab from './components/TeamsTab';
 import HRNav from './_components/HRNav';
+import PeopleDatabaseTab from './components/PeopleDatabaseTab';
+import { toast } from 'react-hot-toast';
 
 // Add this function outside of the component
 const preventFocusLoss = (e) => e.target.select();
@@ -44,7 +46,8 @@ const UserManagement = () => {
     managerId: '',
     startDate: '',
     phone: '',
-    location: ''
+    location: '',
+    autoCopyCredentials: true // auto-copy after creation
   });
 
   // Employment types and statuses
@@ -89,7 +92,7 @@ const UserManagement = () => {
   const [usersPerPage] = useState(10);
 
   // External users state
-  const [activeTab, setActiveTab] = useState('internal'); // 'internal' or 'external'
+  const [activeTab, setActiveTab] = useState('internal'); // 'internal' | 'external' | 'teams' | 'people'
   const [externalUsers, setExternalUsers] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loadingExternal, setLoadingExternal] = useState(false);
@@ -258,6 +261,20 @@ const UserManagement = () => {
         throw new Error(errorData.error || 'Operation failed');
       }
 
+      const result = await response.json();
+
+      // Auto-copy credentials if checkbox was checked (only on add)
+      if (modalMode === 'add' && submittedData.autoCopyCredentials) {
+        const credText = `Username: ${submittedData.username}\nPassword: ${submittedData.password}`;
+        try {
+          await navigator.clipboard.writeText(credText);
+          toast.success('Credentials copied to clipboard!');
+        } catch {
+          // Fallback: show in alert
+          window.prompt('Copy credentials (Ctrl+C):', credText);
+        }
+      }
+
       await fetchUsers(currentUser?.role);
       setIsModalOpen(false);
       resetForm();
@@ -418,7 +435,8 @@ const UserManagement = () => {
       managerId: '',
       startDate: '',
       phone: '',
-      location: ''
+      location: '',
+      autoCopyCredentials: true,
     });
     setFormErrors({});
     setSelectedUser(null);
@@ -1013,26 +1031,45 @@ const UserManagement = () => {
             </form>
           </div>
 
-          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end space-x-3 mt-auto">
-            <button
-              type="button"
-              onClick={() => {
-                setIsModalOpen(false);
-                resetForm();
-              }}
-              className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="user-form"
-              disabled={modalMode === 'add' && !localPasswordValidation.valid}
-              className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {modalMode === 'add' ? 'Create User' : 'Update User'}
-            </button>
+
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50 mt-auto">
+            {/* Auto-copy checkbox — only shown when adding a new user */}
+            {modalMode === 'add' && (
+              <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={localFormData.autoCopyCredentials}
+                  onChange={e => setLocalFormData(prev => ({ ...prev, autoCopyCredentials: e.target.checked }))}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="flex items-center gap-1.5 text-sm text-gray-600">
+                  <Copy className="h-3.5 w-3.5 text-gray-400" />
+                  Automatically copy username &amp; password after creating user
+                </span>
+              </label>
+            )}
+            <div className="flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  resetForm();
+                }}
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                form="user-form"
+                disabled={modalMode === 'add' && !localPasswordValidation.valid}
+                className="px-4 py-2 text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {modalMode === 'add' ? 'Create User' : 'Update User'}
+              </button>
+            </div>
           </div>
+
         </div>
       </div>
     );
@@ -1131,6 +1168,17 @@ const UserManagement = () => {
                         {pendingCount}
                       </span>
                     )}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('people')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors flex items-center gap-1.5 ${
+                      activeTab === 'people'
+                        ? 'text-blue-600 border-b-2 border-blue-600'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <Database className="h-3.5 w-3.5" />
+                    People Database
                   </button>
                 </>
               )}
@@ -1296,6 +1344,8 @@ const UserManagement = () => {
             currentUser={currentUser}
             loading={loadingExternal}
           />
+        ) : activeTab === 'people' ? (
+          <PeopleDatabaseTab currentUser={currentUser} />
         ) : (
           <TeamsTab currentUser={currentUser} onRefresh={fetchUsers} />
         )}

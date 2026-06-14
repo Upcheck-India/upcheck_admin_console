@@ -1,668 +1,636 @@
 'use client';
 
-'use client';
-
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from 'react-hot-toast';
-import { format, formatDistanceToNow } from 'date-fns';
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Briefcase, 
-  MapPin, 
-  Calendar, 
-  Globe, 
-  Edit2, 
-  Trash2, 
-  ChevronLeft, 
-  ChevronRight,
-  CheckCircle as CheckCircle2,
-  Lock, 
-  Check, 
-  X, 
-  ExternalLink, 
-  Link as LinkIcon,
-  Github,
-  Linkedin,
-  Plus,
-  ArrowUpRight,
-  Star,
-  GitFork,
-  Search,
-  Loader2,
-  CircleAlert as AlertIcon
+import { format, formatDistanceToNow, differenceInDays } from 'date-fns';
+import {
+  User, Mail, Phone, Briefcase, MapPin, Calendar, Globe, Edit2,
+  ChevronLeft, Shield, Clock, CheckCircle, XCircle, Github, Linkedin,
+  Plus, ArrowUpRight, Star, GitFork, Loader2, AlertTriangle,
+  Building2, Users, Hash, Link2, FileText, StickyNote, Activity,
+  ClipboardList, Lock, Info, UserCheck, RefreshCw, Download, X,
+  KeyRound, Layers
 } from 'lucide-react';
 import { FaLinkedin } from 'react-icons/fa';
 import GithubReposDialog from '../../../components/GithubReposDialog';
 
-// Simple loading spinner component
-const LoadingSpinner = () => (
-  <div className="flex justify-center items-center h-64">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-  </div>
-);
-
-// OAuth provider configuration
-const oauthProviders = [
-  {
-    id: 'google',
-    name: 'Google',
-    icon: Globe, // Using Globe as Google icon not available in lucide-react
-    color: 'bg-red-100 text-red-600',
-    connectEndpoint: '/api/auth/google/connect',
-    disconnectEndpoint: '/api/auth/google/disconnect'
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    icon: Github,
-    color: 'bg-gray-100 text-gray-800',
-    connectEndpoint: '/api/auth/github/connect',
-    disconnectEndpoint: '/api/auth/github/disconnect'
-  },
-  // Add more providers as needed
+const TABS = [
+  { id: 'overview',  label: 'Overview',       icon: User },
+  { id: 'timeline',  label: 'Timeline',        icon: Activity },
+  { id: 'notes',     label: 'Notes',           icon: StickyNote },
+  { id: 'access',    label: 'System Access',   icon: Lock },
 ];
 
+const STATUS_COLORS = {
+  active:    'bg-emerald-100 text-emerald-800 border-emerald-200',
+  suspended: 'bg-amber-100 text-amber-800 border-amber-200',
+  alumni:    'bg-slate-100 text-slate-700 border-slate-200',
+  archived:  'bg-gray-100 text-gray-600 border-gray-200',
+  on_leave:  'bg-blue-100 text-blue-800 border-blue-200',
+  terminated:'bg-red-100 text-red-800 border-red-200',
+};
+
+const TYPE_COLORS = {
+  employee:   'bg-blue-100 text-blue-800',
+  intern:     'bg-purple-100 text-purple-800',
+  contractor: 'bg-orange-100 text-orange-800',
+};
+
+const TIMELINE_EVENT_STYLES = {
+  joined:      { color: 'bg-emerald-500', border: 'border-emerald-200', bg: 'bg-emerald-50' },
+  exit:        { color: 'bg-red-500',     border: 'border-red-200',     bg: 'bg-red-50' },
+  suspended:   { color: 'bg-amber-500',   border: 'border-amber-200',   bg: 'bg-amber-50' },
+  reinstated:  { color: 'bg-emerald-500', border: 'border-emerald-200', bg: 'bg-emerald-50' },
+  're-hired':  { color: 'bg-blue-500',    border: 'border-blue-200',    bg: 'bg-blue-50' },
+  default:     { color: 'bg-gray-400',    border: 'border-gray-200',    bg: 'bg-gray-50' },
+};
+
+function InfoRow({ icon: Icon, label, value, mono }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-start gap-3 py-2.5 border-b border-gray-50 last:border-0">
+      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+        <Icon className="w-4 h-4 text-gray-500" />
+      </div>
+      <div>
+        <div className="text-xs font-medium text-gray-400 uppercase tracking-wide">{label}</div>
+        <div className={`text-sm text-gray-800 mt-0.5 ${mono ? 'font-mono' : ''}`}>{value}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function UserProfilePage() {
-  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedData, setEditedData] = useState({});
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showConnectGithub, setShowConnectGithub] = useState(false);
-  const [showConnectGoogle, setShowConnectGoogle] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Notes
+  const [newNote, setNewNote] = useState('');
+  const [addingNote, setAddingNote] = useState(false);
+
+  // Timeline event
+  const [newEventForm, setNewEventForm] = useState({ event: '', description: '' });
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [showAddEvent, setShowAddEvent] = useState(false);
+
+  // GitHub
   const [showGithubRepos, setShowGithubRepos] = useState(false);
   const [githubRepos, setGithubRepos] = useState([]);
-  const [isLoadingRepos, setIsLoadingRepos] = useState(false);
-  const [error, setError] = useState(null);
 
   const router = useRouter();
   const { id } = useParams();
 
+  // Detect if this is a people_records ID or an admin_users ID
+  // People records: accessed via /user_management/people/[id]
+  // Admin users: accessed via /user_management/[id]
+  const isPeopleRecord = typeof window !== 'undefined' && window.location.pathname.includes('/people/');
+  const apiBase = isPeopleRecord ? `/api/people/${id}` : `/api/users/${id}`;
+
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const checkAuth = async () => {
       try {
-        setIsLoading(true);
-        setError(null);
-        
-        const response = await fetch(`/api/users/${id}`, {
-          credentials: 'include',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || 'Failed to fetch user data');
+        const res = await fetch('/api/auth/session', { credentials: 'include', cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.user || null);
         }
-
-        const data = await response.json();
-        setUserData(data);
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-        setError(error.message || 'Failed to load user profile');
-      } finally {
-        setIsLoading(false);
-      }
+      } catch {}
     };
+    checkAuth();
+  }, []);
 
-    if (id) {
-      fetchUserProfile();
-    } else {
-      setError('No user ID provided');
-      setIsLoading(false);
-    }
+  useEffect(() => {
+    if (!id) { setError('No user ID'); setLoading(false); return; }
+    fetchUser();
   }, [id]);
 
-  if (isLoading) {
+  const fetchUser = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(apiBase, { credentials: 'include', headers: { 'Cache-Control': 'no-cache' } });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to load profile');
+      }
+      const data = await res.json();
+      setUserData(data);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isAdmin = currentUser?.role === 'Console admin' || currentUser?.role === 'Admin';
+  const isConsoleAdmin = currentUser?.role === 'Console admin';
+
+  const handleAddNote = async () => {
+    if (!newNote.trim()) return;
+    setAddingNote(true);
+    try {
+      const res = await fetch(apiBase, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addNote: { text: newNote.trim() } }),
+      });
+      if (!res.ok) throw new Error('Failed to add note');
+      setNewNote('');
+      toast.success('Note added');
+      fetchUser();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setAddingNote(false);
+    }
+  };
+
+  const handleAddTimelineEvent = async () => {
+    if (!newEventForm.event.trim()) return;
+    setAddingEvent(true);
+    try {
+      const res = await fetch(apiBase, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addTimelineEvent: newEventForm }),
+      });
+      if (!res.ok) throw new Error('Failed to add event');
+      setNewEventForm({ event: '', description: '' });
+      setShowAddEvent(false);
+      toast.success('Event added to timeline');
+      fetchUser();
+    } catch (e) {
+      toast.error(e.message);
+    } finally {
+      setAddingEvent(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const data = { ...userData };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const name = [userData?.firstName, userData?.lastName].filter(Boolean).join('_') || userData?.username || id;
+      a.download = `${name}_profile.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Profile exported');
+    } catch (e) {
+      toast.error('Export failed');
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <LoadingSpinner />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
       </div>
     );
   }
 
-  if (!userData) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center py-12">
-              <User className="mx-auto h-12 w-12 text-gray-400" />
-              <h2 className="mt-4 text-xl font-medium text-gray-900">User Not Found</h2>
-              <p className="mt-2 text-gray-600">The requested user could not be found.</p>
-              <div className="mt-6">
-                <button
-                  onClick={() => router.back()}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <ChevronLeft className="mr-2 h-4 w-4" />
-                  Back to User Management
-                </button>
-              </div>
-            </div>
-          </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+          <p className="text-gray-700 font-medium">{error}</p>
+          <button onClick={() => router.back()} className="mt-4 text-blue-600 text-sm hover:underline">← Go back</button>
         </div>
       </div>
     );
   }
 
-  // No actions needed for public profile view
+  if (!userData) return null;
 
-  // Format date
-  const formatDate = (dateString) => {
-    if (!dateString) return 'Unavailable';
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (e) {
-      return 'Unavailable';
-    }
-  };
+  const fullName = [userData.firstName, userData.lastName].filter(Boolean).join(' ') || userData.username || 'Unknown';
+  const joinDate = userData.joinDate || userData.startDate;
+  const exitDate = userData.exitDate || userData.endDate;
+  const tenureDays = joinDate ? differenceInDays(exitDate ? new Date(exitDate) : new Date(), new Date(joinDate)) : null;
+  const tenureText = tenureDays !== null ? `${Math.floor(tenureDays / 365)}y ${Math.floor((tenureDays % 365) / 30)}m` : null;
 
-  // Get status badge color
-  const getStatusBadgeColor = (status) => {
-    const statusValue = status?.toLowerCase() || 'active'; // Default to active if not set
-    switch (statusValue) {
-      case 'active':
-        return 'bg-green-100 text-green-800';
-      case 'inactive':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'suspended':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const statusKey = userData.status || userData.employmentStatus || 'active';
+  const statusColor = STATUS_COLORS[statusKey] || STATUS_COLORS.active;
 
-  // Get status display text
-  const getStatusDisplay = (status) => {
-    if (!status) return 'Active'; // Default to Active if not set
-    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
-  };
-
-  // Format permissions for display
-  const formatPermission = (permission) => {
-    // Convert snake_case to Title Case
-    return permission
-      .split('.')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' > ');
-  };
-
-  // Group permissions by category
-  const groupPermissions = (permissions) => {
-    if (!permissions || !Array.isArray(permissions)) return {};
-    
-    return permissions.reduce((groups, permission) => {
-      const [category] = permission.split('.');
-      if (!groups[category]) {
-        groups[category] = [];
-      }
-      groups[category].push(permission);
-      return groups;
-    }, {});
-  };
-
-  // Use perms array from userData if available, otherwise fall back to permissions
-  const userPermissions = userData?.perms || userData?.permissions || [];
-  const permissionGroups = groupPermissions(userPermissions);
+  const timeline = [...(userData.timeline || [])].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const notes = [...(userData.notes || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6">
-      <div className="max-w-5xl mx-auto">
-        <div className="bg-white rounded-xl shadow overflow-hidden">
-          {/* Header */}
-          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center">
-                <button
-                  onClick={() => router.back()}
-                  className="mr-4 p-1.5 rounded-lg bg-white shadow-sm hover:bg-gray-50 transition-colors duration-200"
-                >
-                  <ChevronLeft className="h-5 w-5 text-gray-600" />
-                </button>
-                <div>
-                  <h2 className="text-xl font-semibold text-gray-900">User Profile</h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Manage user account and settings
-                  </p>
-                </div>
+    <div className="min-h-screen bg-gray-50">
+      {/* Top header bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-gray-500 hover:text-gray-800 text-sm transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Back
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+            {isAdmin && (
+              <a
+                href={`/user_management/${userData.systemUserId || id}`}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Edit2 className="w-4 h-4" />
+                Edit in System
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Profile hero card */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {/* Gradient banner */}
+          <div className="h-24 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
+          <div className="px-6 pb-6">
+            {/* Avatar */}
+            <div className="flex items-end justify-between -mt-10 mb-4">
+              <div className="w-20 h-20 rounded-2xl border-4 border-white bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-3xl font-bold text-white shadow-lg">
+                {(userData.firstName?.[0] || userData.username?.[0] || '?').toUpperCase()}
               </div>
-              <div className="mt-4 sm:mt-0">
-                <span className="text-sm text-gray-500">Viewing Public Profile</span>
+              <div className="flex items-center gap-2 mb-1">
+                {userData.employeeId && (
+                  <code className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full font-mono border border-gray-200">
+                    {userData.employeeId}
+                  </code>
+                )}
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusColor}`}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-current opacity-60" />
+                  {statusKey.charAt(0).toUpperCase() + statusKey.slice(1).replace('_', ' ')}
+                </span>
               </div>
             </div>
-          </div>
 
-          {/* Main Content */}
-          <div className="px-6 py-6 sm:px-8">
-            <div className="flex flex-col lg:flex-row gap-8">
-              {/* Left Column - Profile Info */}
-              <div className="lg:w-1/3">
-                {/* Profile Card */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex flex-col items-center">
-                    <div className="relative">
-                      <div className="h-32 w-32 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center mb-4 overflow-hidden">
-                        {userData.avatar ? (
-                          <img 
-                            src={userData.avatar} 
-                            alt={`${userData.firstName} ${userData.lastName}`}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <User className="h-16 w-16 text-blue-600" />
-                        )}
-                        <div className="absolute -bottom-1 -right-1 bg-white p-1.5 rounded-full shadow-md">
-                          <div className={`h-3.5 w-3.5 rounded-full ${userData.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                        </div>
-                      </div>
-                      
-                      <h1 className="text-2xl font-bold text-center text-gray-900">
-                        {userData.firstName || userData.lastName
-                          ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim()
-                          : userData.username}
-                      </h1>
-                      <p className="text-gray-600 text-center">{userData.email}</p>
-                      
-                      {userData.role && (
-                        <div className="mt-2 flex justify-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {userData.role}
-                          </span>
-                        </div>
-                      )}
-                      
-                      <div className="mt-4 flex justify-center">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(userData.status)}`}>
-                          {getStatusDisplay(userData.status)}
-                        </span>
-                      </div>
+            {/* Identity */}
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">{fullName}</h1>
+                <p className="text-gray-500 mt-0.5">
+                  {userData.jobTitle || 'No title'} {userData.department ? `· ${userData.department}` : ''}
+                </p>
+                {userData.email && (
+                  <a href={`mailto:${userData.email}`} className="flex items-center gap-1.5 text-blue-600 text-sm mt-1 hover:underline">
+                    <Mail className="w-3.5 h-3.5" />
+                    {userData.email}
+                  </a>
+                )}
+              </div>
+              {/* Quick stats */}
+              <div className="flex gap-6">
+                {joinDate && (
+                  <div className="text-center">
+                    <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">Joined</div>
+                    <div className="text-sm font-semibold text-gray-700 mt-0.5">
+                      {format(new Date(joinDate), 'MMM d, yyyy')}
                     </div>
                   </div>
-                  
-                  {/* Social Profiles Section */}
-                  <div className="mt-8">
-                    <h3 className="text-sm font-medium text-gray-500 mb-3">SOCIAL PROFILES</h3>
-                    <div className="space-y-3">
-                      {/* GitHub Profile - Show if connected via OAuth or has githubUsername */}
-                      {(userData.oauth?.github?.login || userData.githubUsername) && (
-                        <div className="relative">
-                          <button
-                            onClick={() => setShowGithubRepos(true)}
-                            className="w-full text-left flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                          >
-                            <div className="p-2 rounded-lg bg-gray-100 bg-opacity-30">
-                              <Github className="h-5 w-5 text-gray-900" />
-                            </div>
-                            <div className="ml-3 flex-1">
-                              <p className="text-sm font-medium text-gray-700">GitHub</p>
-                              <p className="text-xs text-gray-500">
-                                @{userData.oauth?.github?.login || userData.githubUsername}
-                                {userData.githubProfile?.currentRepo && (
-                                  <span className="ml-2 px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
-                                    {userData.githubProfile.currentRepo}
-                                  </span>
-                                )}
-                              </p>
-                              {userData.githubProfile?.notes && (
-                                <p className="text-xs text-gray-500 mt-1 line-clamp-1">
-                                  {userData.githubProfile.notes}
-                                </p>
-                              )}
-                            </div>
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Connected
-                            </span>
-                            <ChevronRight className="ml-2 h-4 w-4 text-gray-400" />
-                          </button>
-                          
-                          <a 
-                            href={`https://github.com/${userData.oauth.github.login}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="absolute inset-0 opacity-0"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`Open ${userData.oauth.github.login}'s GitHub profile`}
-                          />
-                        </div>
-                      )}
+                )}
+                {tenureText && (
+                  <div className="text-center">
+                    <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">Tenure</div>
+                    <div className="text-sm font-semibold text-gray-700 mt-0.5">{tenureText}</div>
+                  </div>
+                )}
+                {exitDate && (
+                  <div className="text-center">
+                    <div className="text-xs text-gray-400 font-medium uppercase tracking-wide">Exited</div>
+                    <div className="text-sm font-semibold text-gray-700 mt-0.5">
+                      {format(new Date(exitDate), 'MMM d, yyyy')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
 
-                      {/* Google Profile - Show if connected via OAuth */}
-                      {userData.oauth?.google?.email && (
-                        <a 
-                          href="https://myaccount.google.com/profile"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                        >
-                          <div className="p-2 rounded-lg bg-red-100 bg-opacity-30">
-                            <Google className="h-5 w-5 text-red-600" />
-                          </div>
-                          <div className="ml-3 flex-1">
-                            <p className="text-sm font-medium text-gray-700">Google</p>
-                            <p className="text-xs text-gray-500">
-                              {userData.oauth.google.email}
-                            </p>
-                          </div>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Connected
-                          </span>
-                        </a>
-                      )}
+            {/* Re-hire badge */}
+            {userData.status === 'alumni' && (
+              <div className={`mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${userData.reHireEligible !== false ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {userData.reHireEligible !== false ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                {userData.reHireEligible !== false ? 'Eligible for re-hire' : 'Not eligible for re-hire'}
+              </div>
+            )}
+          </div>
+        </div>
 
-                      {/* LinkedIn Profile - Show if available */}
-                      {userData.linkedinProfile && (
-                        <a 
-                          href={userData.linkedinProfile.startsWith('http') ? 
-                              userData.linkedinProfile : 
-                              `https://linkedin.com/in/${userData.linkedinProfile}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200"
-                        >
-                          <div className="p-2 rounded-lg bg-blue-100 bg-opacity-30">
-                            <FaLinkedin className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="ml-3">
-                            <p className="text-sm font-medium text-gray-700">LinkedIn</p>
-                            <p className="text-xs text-gray-500">View Profile</p>
-                          </div>
-                        </a>
-                      )}
+        {/* Tabs */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="border-b border-gray-100">
+            <nav className="flex px-4 gap-1 overflow-x-auto">
+              {TABS.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`flex items-center gap-2 px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-                      {/* No profiles connected message */}
-                      {!userData.oauth?.github?.login && !userData.githubUsername && 
-                       !userData.oauth?.google?.email && !userData.linkedinProfile && (
-                        <div className="text-center py-4 text-gray-500">
-                          <p>No social profiles connected</p>
-                          <p className="text-xs mt-1">Connect accounts in the profile settings</p>
-                        </div>
-                      )}
+          <div className="p-6">
+            {/* ── OVERVIEW TAB ── */}
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Personal Info */}
+                <div className="space-y-1">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Contact Information</h3>
+                  <InfoRow icon={Mail}     label="Work Email"      value={userData.email} />
+                  <InfoRow icon={Mail}     label="Personal Email"  value={userData.personalEmail} />
+                  <InfoRow icon={Phone}    label="Phone"           value={userData.phone} />
+                  <InfoRow icon={MapPin}   label="Location"        value={userData.location} />
+                  <InfoRow icon={Globe}    label="Timezone"        value={userData.timezone} />
+                </div>
 
-                      {/* Other connected accounts without OAuth data */}
-                      {userData.connectedAccounts?.map(providerId => {
-                        // Skip already displayed providers
-                        if (['github', 'google'].includes(providerId)) return null;
-                        
-                        const provider = oauthProviders.find(p => p.id === providerId);
-                        if (!provider) return null;
-                        
+                {/* Employment Info */}
+                <div className="space-y-1">
+                  <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Employment</h3>
+                  <InfoRow icon={Briefcase}  label="Job Title"        value={userData.jobTitle} />
+                  <InfoRow icon={Building2}  label="Department"        value={userData.department} />
+                  <InfoRow icon={Layers}     label="Type"              value={userData.type ? (TYPE_COLORS[userData.type] ? userData.type.charAt(0).toUpperCase() + userData.type.slice(1) : userData.employmentType) : userData.employmentType} />
+                  <InfoRow icon={Users}      label="Manager"           value={userData.managerName || (userData.manager ? [userData.manager.firstName, userData.manager.lastName].filter(Boolean).join(' ') || userData.manager.username : null)} />
+                  <InfoRow icon={Calendar}   label="Join Date"         value={joinDate ? format(new Date(joinDate), 'MMMM d, yyyy') : null} />
+                  {exitDate && <InfoRow icon={Calendar} label="Exit Date" value={format(new Date(exitDate), 'MMMM d, yyyy')} />}
+                  {userData.exitType && <InfoRow icon={Info} label="Exit Type" value={userData.exitType.replace('_', ' ')} />}
+                  {userData.exitReason && <InfoRow icon={FileText} label="Exit Reason" value={userData.exitReason} />}
+                  {userData.reHireNotes && <InfoRow icon={StickyNote} label="Re-hire Notes" value={userData.reHireNotes} />}
+                </div>
+
+                {/* Bio */}
+                {userData.bio && (
+                  <div className="lg:col-span-2">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Bio</h3>
+                    <p className="text-sm text-gray-700 leading-relaxed">{userData.bio}</p>
+                  </div>
+                )}
+
+                {/* Teams */}
+                {userData.teams?.length > 0 && (
+                  <div className="lg:col-span-2">
+                    <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Teams</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {userData.teams.map(t => (
+                        <span key={t._id} className={`px-3 py-1.5 rounded-lg text-sm border ${t.isLead ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-gray-50 border-gray-200 text-gray-700'}`}>
+                          {t.name} {t.isLead && <span className="text-xs font-medium text-blue-600 ml-1">(Lead)</span>}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── TIMELINE TAB ── */}
+            {activeTab === 'timeline' && (
+              <div className="space-y-4">
+                {isAdmin && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => setShowAddEvent(v => !v)}
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Event
+                    </button>
+                  </div>
+                )}
+
+                {showAddEvent && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
+                    <h4 className="text-sm font-semibold text-blue-800">Add Timeline Event</h4>
+                    <input
+                      type="text"
+                      placeholder="Event title (e.g. promoted, department_change)"
+                      value={newEventForm.event}
+                      onChange={e => setNewEventForm(p => ({ ...p, event: e.target.value }))}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <textarea
+                      placeholder="Description (optional)"
+                      value={newEventForm.description}
+                      onChange={e => setNewEventForm(p => ({ ...p, description: e.target.value }))}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => setShowAddEvent(false)} className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg">Cancel</button>
+                      <button
+                        onClick={handleAddTimelineEvent}
+                        disabled={addingEvent || !newEventForm.event.trim()}
+                        className="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-lg disabled:opacity-50 hover:bg-blue-700"
+                      >
+                        {addingEvent ? 'Adding...' : 'Add Event'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {timeline.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <Activity className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">No timeline events yet</p>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200" />
+                    <div className="space-y-4 pl-12">
+                      {timeline.map((event, i) => {
+                        const style = TIMELINE_EVENT_STYLES[event.event] || TIMELINE_EVENT_STYLES.default;
                         return (
-                          <div key={provider.id} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                            <div className={`p-2 rounded-lg ${provider.color} bg-opacity-30`}>
-                              <provider.icon className="h-5 w-5" />
-                            </div>
-                            <div className="ml-3">
-                              <p className="text-sm font-medium text-gray-700">{provider.name}</p>
-                              <p className="text-xs text-gray-500">Connected</p>
+                          <div key={i} className="relative">
+                            <div className={`absolute -left-10 w-4 h-4 rounded-full ${style.color} border-2 border-white shadow-sm`} />
+                            <div className={`${style.bg} border ${style.border} rounded-xl p-4`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <span className="text-sm font-semibold text-gray-800 capitalize">{event.event.replace('_', ' ')}</span>
+                                <span className="text-xs text-gray-400 whitespace-nowrap">
+                                  {event.date ? format(new Date(event.date), 'MMM d, yyyy · HH:mm') : ''}
+                                </span>
+                              </div>
+                              {event.description && (
+                                <p className="text-sm text-gray-600 mt-1">{event.description}</p>
+                              )}
+                              {event.by && (
+                                <p className="text-xs text-gray-400 mt-1.5">by {event.by}</p>
+                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                </div>
-                
-                {/* Account Status - Read Only */}
-                <div className="mt-6 bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <h3 className="text-sm font-medium text-gray-500 mb-3">ACCOUNT STATUS</h3>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Account Status</span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeColor(userData.status)}`}>
-                        {getStatusDisplay(userData.status)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Account Created</span>
-                      <span className="text-sm text-gray-600">{formatDate(userData.createdAt)}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Last Active</span>
-                      <span className="text-sm text-gray-600">{formatDate(userData.lastLogin)}</span>
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
-              
-              {/* Right Column - User Details */}
-              <div className="lg:w-2/3">
-                {/* Account Information */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <h3 className="text-lg font-medium text-gray-900 mb-6">Account Information</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Account ID</h4>
-                      <p className="text-sm text-gray-900 break-all">{userData._id || 'N/A'}</p>
+            )}
+
+            {/* ── NOTES TAB ── */}
+            {activeTab === 'notes' && (
+              <div className="space-y-4">
+                {!isAdmin ? (
+                  <div className="text-center py-12">
+                    <Lock className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">Notes are only visible to admins</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Add note */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                      <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
+                        <StickyNote className="w-4 h-4" />
+                        Admin Note (private)
+                      </h4>
+                      <textarea
+                        placeholder="Add a private note about this person..."
+                        value={newNote}
+                        onChange={e => setNewNote(e.target.value)}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-amber-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                      />
+                      <div className="flex justify-end">
+                        <button
+                          onClick={handleAddNote}
+                          disabled={addingNote || !newNote.trim()}
+                          className="px-4 py-1.5 text-sm bg-amber-600 text-white rounded-lg disabled:opacity-50 hover:bg-amber-700"
+                        >
+                          {addingNote ? 'Saving...' : 'Add Note'}
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Username</h4>
-                      <p className="text-sm text-gray-900">{userData.username || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">User Type</h4>
-                      <p className="text-sm text-gray-900">{userData.userType || 'Standard'}</p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Email Verified</h4>
-                      <p className="text-sm">
-                        {userData.emailVerified ? (
-                          <span className="inline-flex items-center text-green-600">
-                            <CheckCircle2 className="h-4 w-4 mr-1" /> Verified
-                          </span>
+
+                    {notes.length === 0 ? (
+                      <div className="text-center py-8 text-gray-400">
+                        <StickyNote className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                        <p className="text-sm">No notes yet</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {notes.map((note, i) => (
+                          <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+                            <p className="text-sm text-gray-700 leading-relaxed">{note.text}</p>
+                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
+                              <span>{note.createdBy || 'Admin'}</span>
+                              <span>·</span>
+                              <span>{note.createdAt ? format(new Date(note.createdAt), 'MMM d, yyyy · HH:mm') : ''}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* ── SYSTEM ACCESS TAB ── */}
+            {activeTab === 'access' && (
+              <div className="space-y-6">
+                {userData.systemUser || userData.sessionToken !== undefined || userData.role ? (
+                  <>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="space-y-1">
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Account Details</h3>
+                        <InfoRow icon={Hash}       label="Account ID"     value={userData._id?.toString() || (userData.systemUser?._id?.toString())} mono />
+                        <InfoRow icon={User}       label="Username"       value={userData.username || userData.systemUser?.username} />
+                        <InfoRow icon={Shield}     label="Role"           value={userData.role || userData.systemUser?.role} />
+                        <InfoRow icon={CheckCircle} label="Email Verified" value={userData.emailVerified ? 'Yes' : 'No'} />
+                        <InfoRow icon={Clock}      label="Last Login"     value={userData.lastLogin || userData.systemUser?.lastLogin ? format(new Date(userData.lastLogin || userData.systemUser?.lastLogin), 'MMM d, yyyy · HH:mm') : 'Never'} />
+                        <InfoRow icon={Activity}   label="Login Count"    value={String(userData.loginCount || userData.systemUser?.loginCount || 0)} />
+                        <InfoRow icon={MapPin}     label="Last IP"        value={userData.lastIpAddress || userData.systemUser?.lastIpAddress} />
+                      </div>
+
+                      <div className="space-y-1">
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Permissions</h3>
+                        {(userData.perms || userData.systemUser?.perms || []).length === 0 ? (
+                          <p className="text-sm text-gray-400">No special permissions</p>
                         ) : (
-                          <span className="inline-flex items-center text-yellow-600">
-                            <AlertIcon className="h-4 w-4 mr-1" /> Not Verified
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="border-t border-gray-200 my-6"></div>
-                  <h4 className="text-md font-medium text-gray-900 mb-4">Contact Information</h4>
-
-                  {/* Contact Information Content */}
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                      <div className="flex items-start">
-                        <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                          <Mail className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div className="ml-4">
-                          <p className="text-sm font-medium text-gray-500">Email</p>
-                          <p className="text-sm text-gray-900">{userData.email || 'Not provided'}</p>
-                        </div>
-                      </div>
-
-                      {userData.alternateEmail && (
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                            <Mail className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-500">Alternate Email</p>
-                            <p className="text-sm text-gray-900">{userData.alternateEmail}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {userData.phone && (
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                            <Phone className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-500">Phone</p>
-                            <p className="text-sm text-gray-900">{userData.phone}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {userData.location && (
-                        <div className="flex items-start">
-                          <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-50 flex items-center justify-center">
-                            <MapPin className="h-5 w-5 text-blue-600" />
-                          </div>
-                          <div className="ml-4">
-                            <p className="text-sm font-medium text-gray-500">Location</p>
-                            <p className="text-sm text-gray-900">{userData.location}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              </div>
-              
-              {/* Additional Sections */}
-              <div className="lg:col-span-2 space-y-6">
-
-                {/* Additional Information */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Additional Information</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Bio */}
-                    {userData.bio && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">Bio</h4>
-                        <p className="text-gray-700 text-sm">{userData.bio}</p>
-                      </div>
-                    )}
-                    
-                    {/* Department */}
-                    {userData.department && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">Department</h4>
-                        <p className="text-gray-700 text-sm">{userData.department}</p>
-                      </div>
-                    )}
-                    
-                    {/* Timezone */}
-                    {userData.timezone && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">Timezone</h4>
-                        <p className="text-gray-700 text-sm">{userData.timezone}</p>
-                      </div>
-                    )}
-                    
-                    {/* Last IP Address */}
-                    {userData.lastIpAddress && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-500 mb-2">Last IP Address</h4>
-                        <p className="text-gray-700 text-sm font-mono">{userData.lastIpAddress}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Permissions */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium text-gray-900">Permissions</h3>
-                    <span className="text-sm text-gray-500">
-                      {userPermissions.length} permission{userPermissions.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  
-                  {userPermissions.length > 0 ? (
-                    <div className="space-y-4">
-                      {Object.entries(permissionGroups).map(([category, perms]) => (
-                        <div key={category}>
-                          <h4 className="text-sm font-medium text-gray-700 mb-2 capitalize">
-                            {category.replace(/\./g, ' ')}
-                          </h4>
                           <div className="flex flex-wrap gap-2">
-                            {perms.map((permission, index) => (
-                              <span 
-                                key={index}
-                                className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700"
-                                title={permission}
-                              >
-                                <CheckCircle2 className="h-3 w-3 mr-1.5 flex-shrink-0" />
-                                {permission.split('.').slice(1).join(' > ')}
+                            {(userData.perms || userData.systemUser?.perms || []).map(perm => (
+                              <span key={perm} className="px-2.5 py-1 bg-blue-50 border border-blue-200 text-blue-800 rounded-lg text-xs font-medium">
+                                {perm}
                               </span>
                             ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <p className="text-gray-500 text-sm">No specific permissions assigned</p>
-                    </div>
-                  )}
-                </div>
-                
-                {/* System Information */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">System Information</h3>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Account Created</h4>
-                      <p className="text-gray-700 text-sm">
-                        {formatDate(userData.createdAt)}
-                        {userData.createdBy && (
-                          <span className="text-gray-500 text-xs block mt-1">
-                            by {userData.createdBy}
-                          </span>
                         )}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Last Updated</h4>
-                      <p className="text-gray-700 text-sm">
-                        {formatDate(userData.updatedAt || userData.createdAt)}
-                        {userData.updatedBy && (
-                          <span className="text-gray-500 text-xs block mt-1">
-                            by {userData.updatedBy}
-                          </span>
+
+                        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 mt-5">Connected Accounts</h3>
+                        {userData.oauth?.github && (
+                          <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl">
+                            <Github className="w-5 h-5 text-gray-800" />
+                            <div>
+                              <div className="text-sm font-medium text-gray-800">GitHub</div>
+                              <div className="text-xs text-gray-500">@{userData.oauth.github.login || userData.githubUsername}</div>
+                            </div>
+                            <button
+                              onClick={() => setShowGithubRepos(true)}
+                              className="ml-auto text-xs text-blue-600 hover:underline"
+                            >
+                              View repos
+                            </button>
+                          </div>
                         )}
-                      </p>
-                    </div>
-                    
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Last Login</h4>
-                      <p className="text-gray-700 text-sm">
-                        {userData.lastLogin ? formatDate(userData.lastLogin) : 'Never logged in'}
-                        {userData.lastIpAddress && (
-                          <span className="text-gray-500 text-xs block mt-1">
-                            from {userData.lastIpAddress}
-                          </span>
+                        {userData.oauth?.google && (
+                          <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl mt-2">
+                            <Globe className="w-5 h-5 text-red-500" />
+                            <div>
+                              <div className="text-sm font-medium text-gray-800">Google</div>
+                              <div className="text-xs text-gray-500">{userData.oauth.google.email}</div>
+                            </div>
+                          </div>
                         )}
-                      </p>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-500 mb-2">Login Count</h4>
-                      <p className="text-gray-700 text-sm">
-                        {userData.loginCount || 0} time{userData.loginCount !== 1 ? 's' : ''}
-                      </p>
-                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-12 text-gray-400">
+                    <Lock className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">This person does not have a system account</p>
+                    {isAdmin && (
+                      <button className="mt-4 text-sm text-blue-600 hover:underline">
+                        Create system account →
+                      </button>
+                    )}
                   </div>
-                </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* GitHub repos dialog */}
+      {showGithubRepos && (
+        <GithubReposDialog
+          userId={id}
+          onClose={() => setShowGithubRepos(false)}
+        />
+      )}
+    </div>
   );
-} 
+}
