@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../hooks/useAuth';
-import { Calendar, Clock, Users, Video, Info, ArrowLeft, Copy, Check, Trash2, AlertTriangle, Pencil, Download, Eye, MousePointer, MailCheck } from 'lucide-react';
+import { Calendar, Clock, Users, Video, Info, ArrowLeft, Copy, Check, Trash2, AlertTriangle, Pencil, Download, Eye, MousePointer, MailCheck, FileText, Upload, Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 const EventDetailPage = () => {
   const { id } = useParams();
@@ -17,6 +18,11 @@ const EventDetailPage = () => {
   const [internalEmails, setInternalEmails] = useState([]);
   const [forcingBot, setForcingBot] = useState(false);
   const [forceMsg, setForceMsg] = useState('');
+  
+  // MOM file upload states
+  const [momFiles, setMomFiles] = useState([]);
+  const [isUploadingMom, setIsUploadingMom] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -32,6 +38,7 @@ const EventDetailPage = () => {
           } else {
             const data = await response.json();
             setEvent(data);
+            setMomFiles(data.momDocuments || []);
           }
         } catch (err) {
           setError(err.message);
@@ -101,6 +108,122 @@ const EventDetailPage = () => {
       setForcingBot(false);
       setTimeout(() => setForceMsg(''), 4000);
     }
+  };
+
+  const formatBytes = (bytes, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleMomUpload(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleMomUpload = async (file) => {
+    if (!file) return;
+
+    // Validate size (5MB)
+    const MAX_SIZE = 5 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      toast.error('File size exceeds the 5MB limit.');
+      return;
+    }
+
+    // Validate extension
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (ext !== 'pdf' && ext !== 'docx') {
+      toast.error('Only PDF and DOCX files are allowed.');
+      return;
+    }
+
+    setIsUploadingMom(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`/api/events/${id}/mom`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload MOM');
+      }
+
+      toast.success(data.message || 'MOM document uploaded successfully!');
+      
+      const updatedMomDocs = [...momFiles, data.mom];
+      setMomFiles(updatedMomDocs);
+      setEvent(prev => ({
+        ...prev,
+        momDocuments: updatedMomDocs
+      }));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'An error occurred during upload.');
+    } finally {
+      setIsUploadingMom(false);
+    }
+  };
+
+  const handleMomDelete = async (fileId) => {
+    if (!confirm('Are you sure you want to delete this MOM document?')) return;
+
+    try {
+      const response = await fetch(`/api/events/${id}/mom?fileId=${fileId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete MOM');
+      }
+
+      toast.success(data.message || 'MOM document deleted successfully.');
+      
+      const updatedMomDocs = momFiles.filter(doc => doc.fileId !== fileId);
+      setMomFiles(updatedMomDocs);
+      setEvent(prev => ({
+        ...prev,
+        momDocuments: updatedMomDocs
+      }));
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'An error occurred during deletion.');
+    }
+  };
+
+  const handleMomDownload = (fileId, filename) => {
+    const link = document.createElement('a');
+    link.href = `/api/events/${id}/mom?fileId=${fileId}`;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   if (loading || authLoading) {
@@ -304,6 +427,151 @@ const EventDetailPage = () => {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Moments of the Meeting (MOM) Section */}
+            <div className="mt-8 pt-8 border-t border-gray-200">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h3 className="font-bold text-xl text-gray-900 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-600" />
+                    Moments of the Meeting (MOM)
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Upload and manage official minutes/moments documents for this meeting.
+                  </p>
+                </div>
+                
+                {/* Recommended Hint */}
+                {momFiles.length <= 1 && (
+                  <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 text-indigo-800 text-xs px-3 py-1.5 rounded-full">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                    </span>
+                    <span>💡 <strong>Recommendation:</strong> Uploading a single consolidated MOM is recommended.</span>
+                  </div>
+                )}
+                {momFiles.length > 1 && (
+                  <div className="inline-flex items-center gap-2 bg-yellow-50 border border-yellow-100 text-yellow-800 text-xs px-3 py-1.5 rounded-full">
+                    <span>💡 Only one MOM document is recommended ({momFiles.length}/3 uploaded).</span>
+                  </div>
+                )}
+              </div>
+
+              {/* MOM List */}
+              {momFiles.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                  {momFiles.map((doc) => {
+                    const isPdf = doc.filename.toLowerCase().endsWith('.pdf');
+                    const uploadDate = new Date(doc.uploadedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                    const canDelete = user && (user.email.toLowerCase() === (event.host || '').toLowerCase() || user.email.toLowerCase() === (doc.uploadedBy || '').toLowerCase());
+                    
+                    return (
+                      <div key={doc.fileId} className="flex flex-col justify-between p-4 rounded-xl border border-gray-200 bg-white hover:shadow-md transition-shadow duration-300">
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2.5 rounded-lg shrink-0 ${isPdf ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                            <FileText className="w-6 h-6" />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-gray-900 text-sm truncate" title={doc.filename}>
+                              {doc.filename}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {formatBytes(doc.size || 0)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                          <div className="min-w-0 pr-2">
+                            <p className="truncate text-gray-600 font-medium" title={`Uploaded by ${doc.uploadedBy}`}>
+                              Uploaded by: <span className="text-gray-900 font-semibold">{doc.uploadedBy}</span>
+                            </p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">{uploadDate}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => handleMomDownload(doc.fileId, doc.filename)}
+                              className="p-1.5 hover:bg-gray-100 hover:text-indigo-600 rounded-md transition-colors"
+                              title="Download document"
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                            {canDelete && (
+                              <button
+                                onClick={() => handleMomDelete(doc.fileId)}
+                                className="p-1.5 hover:bg-red-50 hover:text-red-600 rounded-md transition-colors"
+                                title="Delete document"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Upload Dropzone */}
+              {canJoinMeeting && momFiles.length < 3 ? (
+                <div
+                  onDragEnter={handleDrag}
+                  onDragOver={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-300 ${
+                    dragActive
+                      ? 'border-indigo-500 bg-indigo-50/50 scale-[0.99]'
+                      : 'border-gray-300 hover:border-indigo-400 hover:bg-gray-50/50'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    id="mom-file-upload"
+                    className="hidden"
+                    accept=".pdf,.docx"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleMomUpload(e.target.files[0]);
+                      }
+                    }}
+                    disabled={isUploadingMom}
+                  />
+                  
+                  {isUploadingMom ? (
+                    <div className="flex flex-col items-center justify-center py-2">
+                      <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-3" />
+                      <p className="font-medium text-gray-700">Uploading and scanning document...</p>
+                      <p className="text-xs text-gray-500 mt-1">This runs magic checks and antivirus scans for security</p>
+                    </div>
+                  ) : (
+                    <label htmlFor="mom-file-upload" className="cursor-pointer flex flex-col items-center justify-center">
+                      <div className="p-3 bg-indigo-50 rounded-full text-indigo-600 mb-3 hover:scale-110 transition-transform">
+                        <Upload className="w-6 h-6" />
+                      </div>
+                      <p className="font-semibold text-gray-700 text-sm">
+                        Drag & drop file here, or <span className="text-indigo-600 hover:underline">browse</span>
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1.5">
+                        PDF or DOCX only (Max 5MB) • Up to 3 files allowed
+                      </p>
+                    </label>
+                  )}
+                </div>
+              ) : (
+                !canJoinMeeting ? (
+                  <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-center text-sm text-gray-500">
+                    Only participants of the meeting can upload MOM documents.
+                  </div>
+                ) : momFiles.length >= 3 ? (
+                  <div className="p-4 bg-gray-50 border border-gray-100 rounded-xl text-center text-sm text-gray-500">
+                    Maximum limit of 3 MOM documents has been uploaded for this meeting.
+                  </div>
+                ) : null
+              )}
             </div>
           </div>
           <div className="bg-gray-50 px-6 py-3 flex items-center justify-end text-xs text-gray-500">
