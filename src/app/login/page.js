@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Loader2, RotateCcw, Sparkle, Fingerprint, KeyRound } from 'lucide-react';
+import { User, Lock, Loader2, Fingerprint, KeyRound, TriangleAlert, ChevronDown } from 'lucide-react';
 import { AlertMessage } from "../components/AlertMessage";
 import Link from 'next/link';
 import Image from 'next/image';
@@ -418,15 +418,14 @@ export default function Login() {
               <span className="relative flex items-center justify-center gap-2">{isLoading ? (<><Loader2 className="animate-spin" size={20} />Signing in...</>) : ('Sign in')}</span>
             </button>
 
-            {/* Passwordless / recovery options */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-white/20"></div>
-                <span className="text-xs text-blue-100/70">or</span>
-                <div className="flex-1 h-px bg-white/20"></div>
-              </div>
-
-              {passkeySupported && (
+            {/* Passwordless sign-in */}
+            {passkeySupported && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 h-px bg-white/20"></div>
+                  <span className="text-xs text-blue-100/70">or</span>
+                  <div className="flex-1 h-px bg-white/20"></div>
+                </div>
                 <button
                   type="button"
                   onClick={handlePasskeyLogin}
@@ -436,46 +435,66 @@ export default function Login() {
                   {isPasskeyLoading ? <Loader2 className="animate-spin" size={18} /> : <Fingerprint size={18} />}
                   Sign in with passkey
                 </button>
-              )}
+              </div>
+            )}
 
+            {/* Emergency recovery — intentionally de-emphasised */}
+            <div className="pt-1">
               {!showBackupCode ? (
-                <button
-                  type="button"
-                  onClick={() => setShowBackupCode(true)}
-                  disabled={anyLoading}
-                  className="w-full flex justify-center items-center gap-2 py-2.5 px-4 border border-white/30 rounded-lg text-sm font-medium text-white bg-white/5 hover:bg-white/10 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <KeyRound size={18} />
-                  Use a backup code
-                </button>
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowBackupCode(true)}
+                    disabled={anyLoading}
+                    className="inline-flex items-center gap-1 text-xs text-blue-200/60 hover:text-blue-100/80 transition-colors duration-200 disabled:opacity-40"
+                  >
+                    <ChevronDown size={13} />
+                    Can&apos;t sign in? Use an emergency backup code
+                  </button>
+                </div>
               ) : (
-                <div className="space-y-2">
+                <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 space-y-3 animate-fadeIn">
+                  {/* Header */}
+                  <div className="flex items-start gap-2">
+                    <TriangleAlert size={15} className="text-amber-300 mt-0.5 shrink-0" />
+                    <div>
+                      <p className="text-xs font-semibold text-amber-200">Emergency recovery only</p>
+                      <p className="text-xs text-amber-200/70 mt-0.5">
+                        Each backup code works once. Use these only when your password and passkey are unavailable.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Code input */}
                   <div className="relative">
-                    <KeyRound className="absolute top-3 left-3 text-blue-300 z-10" size={18} />
+                    <KeyRound className="absolute top-3 left-3 text-amber-300/70 z-10" size={16} />
                     <input
                       type="text"
                       value={backupCode}
-                      onChange={(e) => setBackupCode(e.target.value)}
-                      placeholder="Backup code (e.g. ABCDE-FGHJK)"
+                      onChange={(e) => setBackupCode(e.target.value.toUpperCase())}
+                      placeholder="XXXXX-XXXXX"
                       autoComplete="one-time-code"
+                      spellCheck={false}
                       disabled={anyLoading}
-                      className="pl-10 w-full p-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-200/70 transition-all duration-300 focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:bg-white/20 disabled:opacity-50"
+                      className="pl-9 w-full p-3 bg-white/5 border border-amber-400/30 rounded-lg text-white placeholder-amber-200/30 font-mono tracking-widest text-sm transition-all duration-300 focus:ring-2 focus:ring-amber-400/50 focus:border-amber-400/50 focus:bg-white/10 disabled:opacity-50"
                     />
                   </div>
+
+                  {/* Actions */}
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={handleBackupCodeLogin}
-                      disabled={anyLoading}
-                      className="flex-1 flex justify-center items-center gap-2 py-2.5 px-4 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:shadow-blue-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={anyLoading || !backupCode.trim()}
+                      className="flex-1 flex justify-center items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium text-amber-900 bg-amber-300 hover:bg-amber-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {isBackupLoading ? <Loader2 className="animate-spin" size={18} /> : 'Verify code'}
+                      {isBackupLoading ? <Loader2 className="animate-spin" size={16} /> : 'Recover access'}
                     </button>
                     <button
                       type="button"
                       onClick={() => { setShowBackupCode(false); setBackupCode(''); }}
                       disabled={anyLoading}
-                      className="py-2.5 px-4 rounded-lg text-sm font-medium text-blue-100 bg-white/5 hover:bg-white/10 transition-all duration-300 disabled:opacity-50"
+                      className="py-2 px-4 rounded-lg text-xs font-medium text-blue-100/70 hover:text-blue-100 bg-white/5 hover:bg-white/10 transition-all duration-200 disabled:opacity-50"
                     >
                       Cancel
                     </button>
