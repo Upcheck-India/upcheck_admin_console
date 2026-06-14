@@ -1,12 +1,10 @@
 import { cookies } from 'next/headers';
-import { randomBytes } from 'crypto';
 import clientPromise from '../../../../../../lib/mongodb';
+import { generateChallenge, getRpId, getRpName } from '../../../../../../lib/webauthn';
 
-// Helper function to generate a secure random string
-function generateSecureRandomString(length = 32) {
-  const array = new Uint8Array(length);
-  crypto.getRandomValues(array);
-  return Buffer.from(array).toString('base64url');
+// Helper: generate a secure base64url challenge (delegates to the shared helper).
+function generateSecureRandomString() {
+  return generateChallenge(32);
 }
 
 export async function POST(request) {
@@ -56,7 +54,7 @@ export async function POST(request) {
     console.log('Authenticated user:', user.email); 
 
     // Generate a secure random challenge
-    const challengeBase64 = generateSecureRandomString(32);
+    const challengeBase64 = generateSecureRandomString();
     
     console.log('Generated challenge for user:', {
       userId: user._id,
@@ -102,35 +100,19 @@ export async function POST(request) {
     }
 
     // Set up RP ID and origin handling
-    const isProduction = process.env.NODE_ENV === 'production';
-    const rpId = process.env.NEXT_PUBLIC_WEBAUTHN_RP_ID || 'localhost';
-    
-    // For local development, allow both http and https origins
-    let origin;
-    if (isProduction) {
-      origin = process.env.NEXTAUTH_URL || `https://${rpId}`;
-    } else {
-      // In development, use the request origin
-      const requestOrigin = request.headers.get('origin') || 'http://localhost:3000';
-      origin = [
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'https://localhost:3000',
-        'https://127.0.0.1:3000'
-      ].includes(requestOrigin) ? requestOrigin : 'http://localhost:3000';
-    }
+    const rpId = getRpId();
+    const rpName = getRpName();
     
     console.log('WebAuthn Registration Options:', {
       rpId,
-      origin,
-      isProduction,
+      rpName,
       nodeEnv: process.env.NODE_ENV
     });
     
     const options = {
       challenge: challengeBase64, // Already in base64url format
       rp: {
-        name: 'Upcheck Admin',
+        name: rpName,
         id: rpId,
       },
       user: {
@@ -143,12 +125,14 @@ export async function POST(request) {
         { type: 'public-key', alg: -257 }, // RS256
       ],
       timeout: 60000,
-      attestation: 'direct',
+      attestation: 'none',
       authenticatorSelection: {
+        // 'platform' = built-in biometrics (fingerprint / Face ID / Windows Hello)
+        // 'cross-platform' = hardware security keys (YubiKey etc.)
+        // Omitting authenticatorAttachment lets the user choose either.
         userVerification: 'required',
         requireResidentKey: true,
         residentKey: 'required',
-        authenticatorAttachment: 'platform',
       },
     };
     

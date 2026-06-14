@@ -53,10 +53,10 @@ export default function TrustedDevices() {
   const [showInfo, setShowInfo] = useState(false);
   const [deviceName, setDeviceName] = useState('');
   const [currentDeviceId, setCurrentDeviceId] = useState(null);
-  const [isBiometricAvailable, setIsBiometricAvailable] = useState(false);
-  const [isRegisteringBiometric, setIsRegisteringBiometric] = useState(false);
-  const [biometricError, setBiometricError] = useState(null);
-  const [biometricDevices, setBiometricDevices] = useState([]);
+  const [isPasskeyAvailable, setIsPasskeyAvailable] = useState(false);
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
+  const [passkeyError, setPasskeyError] = useState(null);
+  const [passkeyDevices, setPasskeyDevices] = useState([]);
   const [currentDeviceInfo, setCurrentDeviceInfo] = useState(null);
   const [isCurrentDeviceTrusted, setIsCurrentDeviceTrusted] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -274,22 +274,25 @@ export default function TrustedDevices() {
     }
   }, []);
 
-  // Check if WebAuthn is available
+  // Check if WebAuthn / passkeys are available.
+  // We check for PublicKeyCredential (the W3C WebAuthn API) rather than
+  // isUserVerifyingPlatformAuthenticatorAvailable() so that roaming keys
+  // (YubiKey, hardware tokens) are also accepted, not just built-in biometrics.
   useEffect(() => {
-    const checkBiometricSupport = async () => {
+    const checkPasskeySupport = async () => {
       try {
-        const isAvailable = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-        setIsBiometricAvailable(isAvailable);
+        const isAvailable = typeof window !== 'undefined' && !!window.PublicKeyCredential;
+        setIsPasskeyAvailable(isAvailable);
       } catch (error) {
         console.error('Error checking WebAuthn support:', error);
-        setIsBiometricAvailable(false);
+        setIsPasskeyAvailable(false);
       }
     };
-    
-    checkBiometricSupport();
+
+    checkPasskeySupport();
   }, []);
 
-  // Fetch biometric devices
+  // Fetch registered passkeys
   const fetchBiometricDevices = useCallback(async () => {
     try {
       const response = await fetch('/api/auth/webauthn/devices', {
@@ -304,21 +307,21 @@ export default function TrustedDevices() {
       const data = await response.json();
       
       if (response.ok && data.success) {
-        console.log('Fetched biometric devices:', data.devices);
-        setBiometricDevices(data.devices || []);
+        console.log('Fetched passkeys:', data.devices);
+        setPasskeyDevices(data.devices || []);
       } else {
-        console.error('Failed to fetch biometric devices:', {
+        console.error('Failed to fetch passkeys:', {
           status: response.status,
           statusText: response.statusText,
           error: data.error || 'Unknown error'
         });
-        setBiometricDevices([]);
-        toast.error('Failed to load biometric devices');
+        setPasskeyDevices([]);
+        toast.error('Failed to load passkeys');
       }
     } catch (error) {
-      console.error('Error fetching biometric devices:', error);
-      setBiometricDevices([]);
-      toast.error('Error loading biometric devices');
+      console.error('Error fetching passkeys:', error);
+      setPasskeyDevices([]);
+      toast.error('Error loading passkeys');
     }
   }, []);
 
@@ -377,16 +380,16 @@ export default function TrustedDevices() {
     }
   };
 
-  // Register a new biometric device
+  // Register a new passkey
   const registerBiometricDevice = async () => {
     if (!deviceName.trim()) {
-      toast.error('Please enter a device name');
+      toast.error('Please enter a passkey name');
       return;
     }
 
     try {
-      setIsRegisteringBiometric(true);
-      setBiometricError(null);
+      setIsRegisteringPasskey(true);
+      setPasskeyError(null);
 
       // Get registration options from server
       console.log('Fetching WebAuthn registration options...');
@@ -502,13 +505,13 @@ export default function TrustedDevices() {
         throw error;
       }
 
-      toast.success('Biometric authentication registered successfully');
+      toast.success('Passkey registered successfully');
       setDeviceName('');
       setIsAdding(false);
       fetchDevices();
       fetchBiometricDevices();
     } catch (error) {
-      console.error('Error in biometric device registration:', {
+      console.error('Error in passkey registration:', {
         name: error.name,
         message: error.message,
         type: error.type,
@@ -517,33 +520,32 @@ export default function TrustedDevices() {
       });
       
       // Set user-friendly error message based on error type
-      let errorMessage = 'Failed to register biometric authentication';
+      let errorMessage = 'Failed to register passkey';
       let showOriginalError = false;
-      
+
       if (error.message.includes('Failed to get registration options')) {
         errorMessage = 'Failed to start registration process. Please try again.';
       } else if (error.message.includes('challenge') || error.type === 'challenge_mismatch') {
         errorMessage = 'Session expired. Please try the registration again.';
-      } else if (error.message.includes('NotAllowedError') || error.type === 'invalid_data') {
+      } else if (error.name === 'NotAllowedError' || error.message.includes('NotAllowedError') || error.type === 'invalid_data') {
         errorMessage = 'Registration was cancelled or timed out. Please try again.';
       } else if (error.type === 'verification_failed') {
         errorMessage = 'Verification failed. The security challenge did not match.';
       } else {
-        // For other errors, show the original message in development
-        errorMessage = process.env.NODE_ENV === 'development' 
-          ? error.message 
+        errorMessage = process.env.NODE_ENV === 'development'
+          ? error.message
           : 'An error occurred during registration. Please try again.';
         showOriginalError = true;
       }
-      
-      setBiometricError(errorMessage);
+
+      setPasskeyError(errorMessage);
       toast.error(showOriginalError ? error.message : errorMessage);
     } finally {
-      setIsRegisteringBiometric(false);
+      setIsRegisteringPasskey(false);
     }
   };
 
-  // Remove a biometric device
+  // Remove a passkey
   const removeBiometricDevice = async (credentialId) => {
     if (!credentialId) {
       console.error('No credential ID provided for removal');
@@ -551,12 +553,12 @@ export default function TrustedDevices() {
       return;
     }
 
-    if (!window.confirm('Are you sure you want to remove this biometric device? This action cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to remove this passkey? This action cannot be undone.')) {
       return;
     }
 
     try {
-      console.log('Removing biometric device with ID:', credentialId);
+      console.log('Removing passkey with ID:', credentialId);
       const response = await fetch(`/api/auth/webauthn/devices/${encodeURIComponent(credentialId)}`, {
         method: 'DELETE',
         credentials: 'include',
@@ -572,12 +574,12 @@ export default function TrustedDevices() {
       }
 
       console.log('Successfully removed device:', result);
-      toast.success('Biometric device removed successfully');
+      toast.success('Passkey removed successfully');
       
       // Refresh the list of devices
       await fetchBiometricDevices();
     } catch (error) {
-      console.error('Error removing biometric device:', {
+      console.error('Error removing passkey:', {
         error,
         credentialId,
         message: error.message,
@@ -736,7 +738,7 @@ export default function TrustedDevices() {
 
   useEffect(() => {
     fetchDevices();
-    fetchBiometricDevices(); // Add this line to load biometric devices on component mount
+    fetchBiometricDevices(); // Load passkeys on component mount
     fetchBackupStatus();
   }, [fetchDevices, fetchBiometricDevices, fetchBackupStatus]);
 
@@ -837,34 +839,34 @@ export default function TrustedDevices() {
         </div>
       )}
 
-      {/* Biometric Authentication Section */}
+      {/* Passkeys Section */}
       <div className="bg-white border border-gray-200 rounded-xl p-6 mt-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium flex items-center text-gray-900">
-            <Fingerprint className="w-5 h-5 mr-2 text-blue-600" />
-            Biometric Authentication
+            <KeyRound className="w-5 h-5 mr-2 text-blue-600" />
+            Passkeys
           </h3>
-          {isBiometricAvailable ? (
+          {isPasskeyAvailable ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
               <CheckCircle className="w-3 h-3 mr-1" />
-              Available
+              Supported
             </span>
           ) : (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
               <XCircle className="w-3 h-3 mr-1" />
-              Not Available
+              Not Supported
             </span>
           )}
         </div>
-        
+
         <p className="text-sm text-gray-600 mb-4">
-          Secure your account with biometric authentication using your device's fingerprint sensor.
-          This allows you to log in without entering your password.
+          Passkeys let you sign in without a password using your device&apos;s built-in biometrics
+          (fingerprint, Face ID, Windows Hello) or a hardware security key (YubiKey, etc.).
         </p>
         
-        {biometricError && (
+        {passkeyError && (
           <div className="mb-4 p-3 text-sm text-red-700 bg-red-100 rounded-md">
-            {biometricError}
+            {passkeyError}
           </div>
         )}
 
@@ -872,7 +874,7 @@ export default function TrustedDevices() {
           <div className="mt-4 space-y-4">
             <div>
               <label htmlFor="deviceName" className="block text-sm font-medium text-gray-700 mb-1">
-                Device Name
+                Passkey Name
               </label>
               <input
                 type="text"
@@ -880,33 +882,33 @@ export default function TrustedDevices() {
                 value={deviceName}
                 onChange={(e) => setDeviceName(e.target.value)}
                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                placeholder="e.g., John's iPhone"
+                placeholder="e.g., Work Laptop, iPhone, YubiKey"
               />
             </div>
-            
+
             <div className="flex space-x-3">
               <button
                 onClick={registerBiometricDevice}
-                disabled={isRegisteringBiometric || !deviceName.trim()}
+                disabled={isRegisteringPasskey || !deviceName.trim()}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               >
-                {isRegisteringBiometric ? (
+                {isRegisteringPasskey ? (
                   <>
                     <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
                     Registering...
                   </>
                 ) : (
                   <>
-                    <Fingerprint className="-ml-1 mr-2 h-4 w-4" />
-                    Register Biometric
+                    <KeyRound className="-ml-1 mr-2 h-4 w-4" />
+                    Create Passkey
                   </>
                 )}
               </button>
-              
+
               <button
                 onClick={() => {
                   setIsAdding(false);
-                  setBiometricError(null);
+                  setPasskeyError(null);
                 }}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
@@ -916,23 +918,32 @@ export default function TrustedDevices() {
           </div>
         ) : (
           <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Registered Biometric Devices</h4>
-            
-            {biometricDevices.length > 0 ? (
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Registered Passkeys</h4>
+
+            {passkeyDevices.length > 0 ? (
               <ul className="divide-y divide-gray-200">
-                {biometricDevices.map((device) => {
+                {passkeyDevices.map((device) => {
                   const addedDate = new Date(device.addedAt);
                   const lastUsedDate = device.lastUsed ? new Date(device.lastUsed) : null;
-                  
+
+                  // Infer a friendly transport label
+                  const transportLabel = (() => {
+                    const t = device.transports || [];
+                    if (t.includes('internal')) return 'Built-in authenticator';
+                    if (t.includes('usb') || t.includes('nfc') || t.includes('ble')) return 'Hardware key';
+                    return null;
+                  })();
+
                   return (
                     <li key={device.id || device.credentialID} className="py-3 flex justify-between items-center">
                       <div className="flex items-center">
-                        <MonitorSmartphone className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" />
+                        <KeyRound className="w-5 h-5 text-blue-500 mr-2 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-gray-900">
-                            {device.deviceName || 'Biometric Device'}
+                            {device.deviceName || 'Passkey'}
                           </p>
                           <p className="text-xs text-gray-500">
+                            {transportLabel && <span className="mr-2">{transportLabel} •</span>}
                             Added {formatDistanceToNow(addedDate, { addSuffix: true })}
                             {lastUsedDate && (
                               <span className="ml-2">
@@ -942,39 +953,37 @@ export default function TrustedDevices() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {device.transports && device.transports.length > 0 && (
-                          <span className="text-xs text-gray-500">
-                            {device.transports.join(', ')}
-                          </span>
-                        )}
-                        <button
-                          onClick={() => removeBiometricDevice(device.credentialID || device.id)}
-                          className="text-red-600 hover:text-red-800 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
-                          title="Remove device"
-                        >
-                          Remove
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => removeBiometricDevice(device.credentialID || device.id)}
+                        className="text-red-600 hover:text-red-800 text-sm font-medium px-2 py-1 rounded hover:bg-red-50 transition-colors"
+                        title="Remove passkey"
+                      >
+                        Remove
+                      </button>
                     </li>
                   );
                 })}
               </ul>
             ) : (
               <div className="text-center py-4 text-sm text-gray-500">
-                No biometric devices registered yet.
+                No passkeys registered yet.
               </div>
             )}
-            
-            {isBiometricAvailable && !isAdding && (
+
+            {isPasskeyAvailable && !isAdding && (
               <div className="mt-4">
                 <button
-                  onClick={() => alert('Biometric device registration is currently unavailable. Please check back later.')}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 opacity-50 cursor-not-allowed"
-                  disabled
+                  onClick={() => setIsAdding(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <Plus className="w-3 h-3 mr-1" /> Add Biometric Device (Temporarily Unavailable)
+                  <Plus className="w-3 h-3 mr-1" /> Add Passkey
                 </button>
+              </div>
+            )}
+
+            {!isPasskeyAvailable && (
+              <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md text-xs text-yellow-800">
+                Your browser does not support passkeys. Try a modern browser such as Chrome, Safari, Edge, or Firefox.
               </div>
             )}
           </div>
