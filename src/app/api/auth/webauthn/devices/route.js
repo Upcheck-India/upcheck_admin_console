@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { requireReauth, revokeReauth } from '../../../../../lib/reauth';
 
 export async function DELETE(request, { params }) {
   try {
@@ -17,29 +18,13 @@ export async function DELETE(request, { params }) {
       });
     }
 
-    // Get the token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
+    const { user, db, error } = await requireReauth();
+    if (error) return error;
     
-    if (!token) {
-      return new Response(JSON.stringify({ 
-        success: false,
-        error: 'Unauthorized',
-        message: 'No authentication token found' 
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Connect to database
-    const client = await clientPromise;
-    const db = client.db('resources');
-    
-    // Find user with active session and remove the credential
+    // Remove the credential
     const result = await db.collection('admin_users').updateOne(
       { 
-        sessionToken: token,
+        _id: user._id,
         'webauthn.credentials.credentialID': credentialId 
       },
       { 
@@ -61,6 +46,9 @@ export async function DELETE(request, { params }) {
     }
 
     console.log(`Removed WebAuthn device: ${credentialId}`);
+
+    // Consume the re-auth window.
+    await revokeReauth(user._id);
     
     return new Response(JSON.stringify({
       success: true,

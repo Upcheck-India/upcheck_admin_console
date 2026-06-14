@@ -1,6 +1,13 @@
+// Backup-code management routes.
+//
+// GET    — returns status (count, remaining) — no re-auth needed
+// POST   — (re)generates a full new set of codes — REQUIRES REAUTH
+// DELETE — disables all backup codes — REQUIRES REAUTH
+
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 import { generateBackupCodes, BACKUP_CODE_COUNT } from '../../../../lib/backupCodes';
+import { requireReauth, revokeReauth } from '../../../../lib/reauth';
 
 const json = (body, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -19,7 +26,7 @@ async function getSessionUser(projection) {
   return { user, db };
 }
 
-// Status of the current user's backup codes (never returns the codes).
+// Status of the current user's backup codes (never returns the codes themselves).
 export async function GET() {
   try {
     const { user, error } = await getSessionUser({ backupCodes: 1, backupCodesGeneratedAt: 1 });
@@ -41,10 +48,10 @@ export async function GET() {
   }
 }
 
-// (Re)generate a fresh set of backup codes. Plaintext is returned exactly once.
+// (Re)generate a fresh set of backup codes — requires recent re-authentication.
 export async function POST() {
   try {
-    const { user, db, error } = await getSessionUser({ _id: 1 });
+    const { user, db, error } = await requireReauth();
     if (error) return error;
 
     const { plaintext, records } = generateBackupCodes(BACKUP_CODE_COUNT);
@@ -54,6 +61,10 @@ export async function POST() {
       { _id: user._id },
       { $set: { backupCodes: records, backupCodesGeneratedAt: generatedAt } }
     );
+
+    // Consume the re-auth window so the user must re-authenticate before
+    // the next sensitive action.
+    await revokeReauth(user._id);
 
     return json({
       success: true,
@@ -68,16 +79,18 @@ export async function POST() {
   }
 }
 
-// Disable backup codes entirely.
+// Disable backup codes entirely — requires recent re-authentication.
 export async function DELETE() {
   try {
-    const { user, db, error } = await getSessionUser({ _id: 1 });
+    const { user, db, error } = await requireReauth();
     if (error) return error;
 
     await db.collection('admin_users').updateOne(
       { _id: user._id },
       { $unset: { backupCodes: '', backupCodesGeneratedAt: '' } }
     );
+
+    await revokeReauth(user._id);
 
     return json({ success: true, message: 'Backup codes disabled.' });
   } catch (error) {

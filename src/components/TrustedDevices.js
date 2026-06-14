@@ -28,6 +28,7 @@ import {
   KeyRound,
   Copy
 } from 'lucide-react';
+import ReauthModal from './ReauthModal';
 
 const deviceIcons = {
   mobile: Smartphone,
@@ -65,6 +66,19 @@ export default function TrustedDevices() {
   const [backupStatus, setBackupStatus] = useState({ generated: false, total: 0, remaining: 0 });
   const [backupCodes, setBackupCodes] = useState([]);
   const [isLoadingBackup, setIsLoadingBackup] = useState(false);
+
+  // Re-authentication modal state
+  const [reauthModalOpen, setReauthModalOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null);
+
+  const handleReauthSuccess = () => {
+    setReauthModalOpen(false);
+    if (pendingAction) {
+      const action = pendingAction;
+      setPendingAction(null);
+      action(); // Retry the action that triggered the 403
+    }
+  };
 
   // Enhanced device detection with more details
   const getDeviceInfo = useCallback(() => {
@@ -356,6 +370,11 @@ export default function TrustedDevices() {
         method: 'POST',
         credentials: 'include',
       });
+      if (response.status === 403) {
+        setPendingAction(() => generateBackupCodes);
+        setReauthModalOpen(true);
+        return;
+      }
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to generate backup codes');
@@ -398,6 +417,12 @@ export default function TrustedDevices() {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include'
       });
+
+      if (optionsResponse.status === 403) {
+        setPendingAction(() => registerBiometricDevice);
+        setReauthModalOpen(true);
+        return;
+      }
 
       if (!optionsResponse.ok) {
         let errorDetails = 'Unknown error';
@@ -566,6 +591,12 @@ export default function TrustedDevices() {
           'Content-Type': 'application/json',
         },
       });
+
+      if (response.status === 403) {
+        setPendingAction(() => () => removeBiometricDevice(credentialId));
+        setReauthModalOpen(true);
+        return;
+      }
 
       const result = await response.json().catch(() => ({}));
       
@@ -1459,6 +1490,16 @@ export default function TrustedDevices() {
           </div>
         </div>
       )}
+
+      <ReauthModal
+        isOpen={reauthModalOpen}
+        onClose={() => {
+          setReauthModalOpen(false);
+          setPendingAction(null);
+        }}
+        onSuccess={handleReauthSuccess}
+        hasPasskeys={passkeyDevices.length > 0}
+      />
     </div>
   );
 }

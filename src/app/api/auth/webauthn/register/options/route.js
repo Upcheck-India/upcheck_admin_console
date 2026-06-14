@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../../../lib/mongodb';
 import { generateChallenge, getRpId, getRpName } from '../../../../../../lib/webauthn';
+import { requireReauth } from '../../../../../../lib/reauth';
 
 // Helper: generate a secure base64url challenge (delegates to the shared helper).
 function generateSecureRandomString() {
@@ -10,48 +11,10 @@ function generateSecureRandomString() {
 export async function POST(request) {
   console.log('Starting WebAuthn registration options request');
   try {
-    // Get the token from cookies - must be awaited
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    
-    if (!token) {
-      return new Response(JSON.stringify({ 
-        error: 'Unauthorized',
-        message: 'No authentication token found' 
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    const { user, db, error } = await requireReauth({ email: 1, name: 1, role: 1 });
+    if (error) return error;
 
-    // Connect to database
-    const client = await clientPromise;
-    const db = client.db('resources');
-    
-    // Find user with active session
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { 
-        projection: { 
-          _id: 1,
-          email: 1,
-          name: 1,
-          role: 1
-        } 
-      }
-    );
-    
-    if (!user) {
-      return new Response(JSON.stringify({ 
-        error: 'Unauthorized',
-        message: 'Invalid or expired session' 
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-    
-    console.log('Authenticated user:', user.email); 
+    console.log('Authenticated user for passkey registration:', user.email); 
 
     // Generate a secure random challenge
     const challengeBase64 = generateSecureRandomString();
