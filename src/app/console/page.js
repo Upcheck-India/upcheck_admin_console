@@ -31,7 +31,8 @@ import {
   MessageSquare,
   PartyPopper,
   Video,
-  MessageCircle
+  MessageCircle,
+  CalendarClock
 } from 'lucide-react';
 import AvatarWithStatus from '../../components/AvatarWithStatus';
 import useHeartbeat from '../../hooks/useHeartbeat';
@@ -110,6 +111,14 @@ const AdminLandingPage = () => {
       link: "/events",
       gradient: "from-teal-400 via-blue-500 to-green-400",
       bgLight: "bg-teal-50"
+    },
+    {
+      title: "Scheduling",
+      description: "Share booking links and let people pick a time",
+      icon: <CalendarClock className="w-6 h-6 text-white" />,
+      link: "/scheduling",
+      gradient: "from-blue-500 via-cyan-500 to-teal-400",
+      bgLight: "bg-cyan-50"
     },
     {
       title: "Organization",

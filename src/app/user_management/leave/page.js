@@ -2,9 +2,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Plane, Plus, X, Loader2, Check, Ban, Trash2, Settings as SettingsIcon, Edit2,
+  Plane, Plus, X, Loader2, Check, Ban, Trash2, Settings as SettingsIcon, Edit2, LayoutGrid, List,
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import LeaveApprovalsBoard from './LeaveApprovalsBoard';
 
 const STATUS_COLORS = {
   pending: 'bg-amber-100 text-amber-800',
@@ -22,6 +23,8 @@ export default function LeavePage() {
   const [balances, setBalances] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
   const [approvals, setApprovals] = useState([]);
+  const [boardRequests, setBoardRequests] = useState([]); // all-status, for the board view
+  const [approvalsView, setApprovalsView] = useState('board'); // 'board' | 'list'
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [loading, setLoading] = useState(true);
   const year = new Date().getUTCFullYear();
@@ -84,6 +87,37 @@ export default function LeavePage() {
 
   useEffect(() => { if (currentUser) loadAll(); }, [currentUser, loadAll]);
 
+  // All-status requests for the approvals board (managers only).
+  const loadBoard = useCallback(async () => {
+    if (!canManage) return;
+    const res = await fetch('/api/hr/leave/requests?view=all', { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      setBoardRequests(data.requests || []);
+    }
+  }, [canManage]);
+
+  useEffect(() => {
+    if (currentUser && canManage && tab === 'approvals' && approvalsView === 'board') loadBoard();
+  }, [currentUser, canManage, tab, approvalsView, loadBoard]);
+
+  // Approve directly from the board (drag Pending → Approved), optimistic.
+  const approveFromBoard = async (id) => {
+    const prev = boardRequests;
+    setBoardRequests((rs) => rs.map((r) => (r._id === id ? { ...r, status: 'approved' } : r)));
+    const res = await fetch(`/api/hr/leave/requests/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ action: 'approve', reviewNote: '' }),
+    });
+    if (!res.ok) {
+      setBoardRequests(prev);
+      const d = await res.json().catch(() => ({}));
+      alert(d.error || 'Action failed');
+    } else {
+      loadAll(); // refresh balances + approvals count
+    }
+  };
+
   const submitApply = async (e) => {
     e.preventDefault();
     setApplyError('');
@@ -111,7 +145,7 @@ export default function LeavePage() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ action, reviewNote: note }),
     });
-    if (res.ok) { setReviewTarget(null); setReviewNote(''); loadAll(); }
+    if (res.ok) { setReviewTarget(null); setReviewNote(''); loadAll(); loadBoard(); }
     else { const d = await res.json(); alert(d.error || 'Action failed'); }
   };
 
@@ -177,14 +211,42 @@ export default function LeavePage() {
             ))}
           />
         ) : tab === 'approvals' ? (
-          <RequestsTable requests={approvals} showEmployee emptyText="No requests awaiting your approval."
-            renderActions={(r) => r.status === 'pending' && (
-              <div className="flex gap-2">
-                <button onClick={() => act(r._id, 'approve')} className="inline-flex items-center gap-1 text-sm text-green-600 hover:text-green-700"><Check className="h-4 w-4" /> Approve</button>
-                <button onClick={() => { setReviewTarget(r); setReviewNote(''); }} className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700"><Ban className="h-4 w-4" /> Reject</button>
+          <>
+            <div className="flex justify-end mb-3">
+              <div className="inline-flex bg-gray-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setApprovalsView('board')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${approvalsView === 'board' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  title="Board view"
+                >
+                  <LayoutGrid className="w-4 h-4" /> Board
+                </button>
+                <button
+                  onClick={() => setApprovalsView('list')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${approvalsView === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                  title="List view"
+                >
+                  <List className="w-4 h-4" /> List
+                </button>
               </div>
+            </div>
+            {approvalsView === 'board' ? (
+              <LeaveApprovalsBoard
+                requests={boardRequests}
+                onApprove={approveFromBoard}
+                onReject={(r) => { setReviewTarget(r); setReviewNote(''); }}
+              />
+            ) : (
+              <RequestsTable requests={approvals} showEmployee emptyText="No requests awaiting your approval."
+                renderActions={(r) => r.status === 'pending' && (
+                  <div className="flex gap-2">
+                    <button onClick={() => act(r._id, 'approve')} className="inline-flex items-center gap-1 text-sm text-green-600 hover:text-green-700"><Check className="h-4 w-4" /> Approve</button>
+                    <button onClick={() => { setReviewTarget(r); setReviewNote(''); }} className="inline-flex items-center gap-1 text-sm text-red-600 hover:text-red-700"><Ban className="h-4 w-4" /> Reject</button>
+                  </div>
+                )}
+              />
             )}
-          />
+          </>
         ) : (
           <LeaveTypesManager leaveTypes={leaveTypes} onChange={loadAll} />
         )}

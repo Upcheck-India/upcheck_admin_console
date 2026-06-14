@@ -5,13 +5,15 @@ import { useAuth } from '../../../hooks/useAuth';
 import SecureLoading from '../../components/SecureLoading';
 import DataRoomNav from '../../components/dataroom/DataRoomNav';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, CheckSquare, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Plus, CheckSquare, Clock, AlertCircle, LayoutGrid, List } from 'lucide-react';
+import TaskBoard from './TaskBoard';
 
 export default function TasksPage() {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [view, setView] = useState('board'); // 'board' | 'list'
   const [showModal, setShowModal] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -24,11 +26,14 @@ export default function TasksPage() {
 
   useEffect(() => {
     fetchTasks();
-  }, [filter]);
+  }, [filter, view]);
 
   async function fetchTasks() {
     try {
-      const url = filter === 'all' ? '/api/dataroom/tasks' : `/api/dataroom/tasks?status=${filter}`;
+      // Board view shows every status as columns, so it always loads all tasks.
+      const url = (view === 'board' || filter === 'all')
+        ? '/api/dataroom/tasks'
+        : `/api/dataroom/tasks?status=${filter}`;
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
@@ -36,6 +41,23 @@ export default function TasksPage() {
       }
     } catch (error) {
       console.error('Failed to fetch tasks:', error);
+    }
+  }
+
+  // Move a task to a new status (used by the kanban board on drag-and-drop).
+  async function moveTask(taskId, newStatus) {
+    const previous = tasks;
+    setTasks((ts) => ts.map((t) => (t._id === taskId ? { ...t, status: newStatus } : t)));
+    try {
+      const response = await fetch(`/api/dataroom/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!response.ok) throw new Error('Failed to update task');
+    } catch (error) {
+      console.error('Failed to move task:', error);
+      setTasks(previous); // revert on failure
     }
   }
 
@@ -116,15 +138,44 @@ export default function TasksPage() {
                 <p className="text-sm text-slate-500">Track document-related tasks</p>
               </div>
             </div>
-            <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2">
-              <Plus className="w-4 h-4" />
-              <span>New Task</span>
-            </button>
+            <div className="flex items-center space-x-3">
+              {/* View toggle: Board (kanban) / List */}
+              <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
+                <button
+                  onClick={() => setView('board')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    view === 'board' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Board view"
+                >
+                  <LayoutGrid className="w-4 h-4" />
+                  <span>Board</span>
+                </button>
+                <button
+                  onClick={() => setView('list')}
+                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    view === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="List view"
+                >
+                  <List className="w-4 h-4" />
+                  <span>List</span>
+                </button>
+              </div>
+              <button onClick={() => setShowModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2">
+                <Plus className="w-4 h-4" />
+                <span>New Task</span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {view === 'board' ? (
+          <TaskBoard tasks={tasks} onMove={moveTask} />
+        ) : (
+        <>
         {/* Filters */}
         <div className="flex space-x-2 mb-6">
           {filters.map((f) => (
@@ -209,6 +260,8 @@ export default function TasksPage() {
               </div>
             ))}
           </div>
+        )}
+        </>
         )}
       </div>
 
