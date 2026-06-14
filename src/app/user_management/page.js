@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Users, Trash2, Edit2, Plus, X, Search, User,
+  Users, Trash2, Edit2, Plus, X, Search, User, UserX,
   AlertCircle, Building2, Filter, Mail, MessageCircle,
   CodeXml, FileText, Settings as SettingsIcon, CheckCircle, ChevronDown, Copy, Database
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import ExternalUsersTab from './components/ExternalUsersTab';
 import TeamsTab from './components/TeamsTab';
 import HRNav from './_components/HRNav';
 import PeopleDatabaseTab from './components/PeopleDatabaseTab';
+import OffboardingModal from './components/OffboardingModal';
 import { toast } from 'react-hot-toast';
 
 // Add this function outside of the component
@@ -97,6 +98,10 @@ const UserManagement = () => {
   const [externalUsers, setExternalUsers] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [loadingExternal, setLoadingExternal] = useState(false);
+
+  // Offboarding/suspension modal state
+  const [isOffboardModalOpen, setIsOffboardModalOpen] = useState(false);
+  const [selectedPersonForOffboard, setSelectedPersonForOffboard] = useState(null);
 
   const ROLES_HIERARCHY = {
     'Console admin': ['Admin', 'Member', 'Intern'],
@@ -190,6 +195,75 @@ const UserManagement = () => {
       console.error('Failed to fetch external users:', err);
     } finally {
       setLoadingExternal(false);
+    }
+  };
+
+  const handleOpenOffboard = async (user) => {
+    try {
+      toast.loading('Initializing status manager...', { id: 'load-offboard' });
+      
+      // 1. Try fetching by peopleRecordId
+      let person = null;
+      if (user.peopleRecordId) {
+        const res = await fetch(`/api/people/${user.peopleRecordId}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          person = data.person;
+        }
+      }
+      
+      // 2. Try searching by email
+      if (!person) {
+        const res = await fetch(`/api/people?search=${encodeURIComponent(user.email)}`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const match = data.people?.find(p => p.systemUserId === user._id || p.email?.toLowerCase() === user.email?.toLowerCase());
+          if (match) {
+            const fullRes = await fetch(`/api/people/${match._id}`, { credentials: 'include' });
+            if (fullRes.ok) {
+              const fullData = await fullRes.json();
+              person = fullData.person;
+            }
+          }
+        }
+      }
+
+      // 3. If still no record, call PUT /api/users/[id] to trigger on-the-fly creation and linking
+      if (!person) {
+        const syncRes = await fetch(`/api/users/${user._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': currentUser.role,
+            'x-user-id': currentUser._id
+          },
+          body: JSON.stringify({ employmentStatus: user.employmentStatus || 'active' }),
+        });
+        
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          const updatedUser = syncData.user;
+          
+          if (updatedUser?.peopleRecordId) {
+            const res = await fetch(`/api/people/${updatedUser.peopleRecordId}`, { credentials: 'include' });
+            if (res.ok) {
+              const data = await res.json();
+              person = data.person;
+            }
+          }
+        }
+      }
+
+      if (!person) {
+        throw new Error('Could not find or create linked employee record.');
+      }
+
+      setSelectedPersonForOffboard(person);
+      setIsOffboardModalOpen(true);
+      toast.success('Ready to manage status.', { id: 'load-offboard' });
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to initialize offboarding process.', { id: 'load-offboard' });
     }
   };
 
@@ -663,6 +737,13 @@ const UserManagement = () => {
             </button>
             {canModifyUser(user.role) && (
               <>
+                <button
+                  onClick={() => handleOpenOffboard(user)}
+                  className="text-orange-600 hover:text-orange-900"
+                  title="Suspend/Offboard User"
+                >
+                  <UserX className="h-5 w-5" />
+                </button>
                 <button
                   onClick={() => {
                     setSelectedUser(user);
@@ -1373,6 +1454,19 @@ const UserManagement = () => {
       </div>
 
       {isModalOpen && <UserFormModal />}
+      <OffboardingModal
+        isOpen={isOffboardModalOpen}
+        onClose={() => {
+          setIsOffboardModalOpen(false);
+          setSelectedPersonForOffboard(null);
+        }}
+        onSuccess={() => {
+          // Re-fetch users to reflect status changes in list
+          checkAuthAndFetchUsers();
+        }}
+        person={selectedPersonForOffboard}
+        currentUser={currentUser}
+      />
     </div>
   );
 };

@@ -301,6 +301,68 @@ export async function POST(request) {
       { role: newUser.role, department: newUser.department, employmentType: newUser.employmentType }
     );
 
+    // Automatically create a corresponding record in people_records for HR tracking
+    let peopleRecordId = null;
+    try {
+      const isIntern = newUser.role === 'Intern' || newUser.employmentType === 'intern';
+      const type = isIntern ? 'intern' : 'employee';
+      
+      const counterKey = type === 'intern' ? 'utint_counter' : 'utemp_counter';
+      const counter = await db.collection('counters').findOneAndUpdate(
+        { _id: counterKey },
+        { $inc: { seq: 1 } },
+        { upsert: true, returnDocument: 'after' }
+      );
+      const num = String(counter.seq).padStart(5, '0');
+      const employeeId = type === 'intern' ? `UTINT-${num}` : `UTEMP-${num}`;
+
+      const personRecord = {
+        employeeId,
+        type,
+        status: 'active',
+        firstName: newUser.firstName || '',
+        lastName: newUser.lastName || '',
+        email: newUser.email || '',
+        personalEmail: null,
+        phone: newUser.phone || null,
+        alternatePhone: null,
+        department: newUser.department || null,
+        jobTitle: newUser.jobTitle || null,
+        managerId: newUser.managerId,
+        joinDate: newUser.startDate || new Date(),
+        exitDate: null,
+        exitType: null,
+        exitReason: null,
+        reHireEligible: true,
+        reHireNotes: null,
+        systemUserId: result.insertedId,
+        timeline: [
+          {
+            date: new Date(),
+            event: 'system_user_created',
+            description: `Linked system account '${newUser.username}' created.`,
+            by: actor?.username || 'system',
+          },
+        ],
+        notes: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdBy: userId ? new ObjectId(userId) : null
+      };
+
+      const peopleResult = await db.collection('people_records').insertOne(personRecord);
+      peopleRecordId = peopleResult.insertedId;
+
+      await db.collection('admin_users').updateOne(
+        { _id: result.insertedId },
+        { $set: { peopleRecordId } }
+      );
+      newUser.peopleRecordId = peopleRecordId;
+      console.log(`Automatically created and linked people record ${peopleRecordId} for user ${result.insertedId}`);
+    } catch (peopleErr) {
+      console.error('Failed to automatically create linked people record:', peopleErr);
+    }
+
     // Send welcome email to new user
     if (newUser.email && data.sendWelcomeEmail !== false) {
       try {
