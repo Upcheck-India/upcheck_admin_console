@@ -65,12 +65,15 @@ export async function POST(request) {
       transports: Array.isArray(cred.transports) ? cred.transports : [],
     }));
 
+    const rpId = getRpId();
+    console.log('[WebAuthn auth/options] rpId:', rpId, '| env var:', process.env.NEXT_PUBLIC_WEBAUTHN_RP_ID || '(NOT SET — falling back to localhost!)');
+
     return json({
       challenge,
       allowCredentials,
       userVerification: 'preferred',
       timeout: 300000,
-      rpId: getRpId(),
+      rpId,
     });
   } catch (error) {
     console.error('WebAuthn authentication options error:', error);
