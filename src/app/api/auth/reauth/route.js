@@ -2,7 +2,7 @@
 // Verifies the user's password and, on success, stamps a 10-minute re-auth
 // window on their account so subsequent sensitive-action routes will pass.
 
-import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { grantReauth, getSessionUserForReauth } from '../../../../lib/reauth';
 
 const json = (body, status = 200) =>
@@ -29,7 +29,12 @@ export async function POST(request) {
       return json({ success: false, error: 'No password set for this account' }, 400);
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    const hashedPassword = crypto
+      .createHash('sha256')
+      .update(password)
+      .digest('hex');
+
+    const valid = (hashedPassword === user.password);
 
     if (!valid) {
       // Generic delay to slow brute-force attempts on the re-auth endpoint.
