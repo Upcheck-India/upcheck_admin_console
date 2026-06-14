@@ -131,6 +131,36 @@ export async function PUT(req, { params }) {
     if (body.status && VALID_STATUSES.includes(body.status) && body.status !== existing.status) {
       $set.status = body.status;
 
+      // Sync status to the linked system account (admin_users) if it exists
+      const systemUserId = existing.systemUserId || (body.systemUserId ? safeObjectId(body.systemUserId) : null);
+      if (systemUserId) {
+        let adminStatus = 'active';
+        if (body.status === 'suspended') {
+          adminStatus = 'suspended';
+        } else if (body.status === 'alumni') {
+          adminStatus = 'terminated';
+        } else if (body.status === 'active') {
+          adminStatus = 'active';
+        }
+
+        try {
+          const userSet = { employmentStatus: adminStatus, updatedAt: now };
+          if (adminStatus === 'terminated') {
+            userSet.endDate = now;
+          } else if (adminStatus === 'active') {
+            userSet.endDate = null;
+          }
+
+          await db.collection('admin_users').updateOne(
+            { _id: new ObjectId(systemUserId) },
+            { $set: userSet }
+          );
+          console.log(`Synced people_record status change to system user: ${systemUserId} -> ${adminStatus}`);
+        } catch (syncErr) {
+          console.error(`Failed to sync status to system user ${systemUserId}:`, syncErr);
+        }
+      }
+
       const statusTimelineMap = {
         suspended: { event: 'status_suspended', description: 'Person status changed to suspended' },
         alumni:    { event: 'status_alumni',    description: 'Person marked as alumni' },

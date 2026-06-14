@@ -243,6 +243,36 @@ export async function PUT(request, { params }) {
         if (data.employmentStatus === 'terminated' && !existingUser.endDate) {
           updateData.endDate = new Date();
         }
+
+        // Sync status back to people_records if linked
+        const peopleRecordId = existingUser.peopleRecordId;
+        if (peopleRecordId) {
+          let peopleStatus = 'active';
+          if (data.employmentStatus === 'suspended') {
+            peopleStatus = 'suspended';
+          } else if (data.employmentStatus === 'terminated') {
+            peopleStatus = 'alumni';
+          }
+
+          try {
+            const peopleSet = { status: peopleStatus, updatedAt: new Date() };
+            if (data.employmentStatus === 'terminated') {
+              peopleSet.exitDate = new Date();
+              peopleSet.exitType = 'terminated';
+            } else if (data.employmentStatus === 'active') {
+              peopleSet.exitDate = null;
+              peopleSet.exitType = null;
+            }
+
+            await db.collection('people_records').updateOne(
+              { _id: new ObjectId(peopleRecordId) },
+              { $set: peopleSet }
+            );
+            console.log(`Synced user employmentStatus change to people record: ${peopleRecordId} -> ${peopleStatus}`);
+          } catch (syncErr) {
+            console.error(`Failed to sync status to people record ${peopleRecordId}:`, syncErr);
+          }
+        }
       }
     }
 

@@ -62,7 +62,8 @@ const UserManagement = () => {
   const [sortConfig, setSortConfig] = useState({ field: 'role', order: 'asc' });
   const [filterConfig, setFilterConfig] = useState({
     role: 'all',
-    department: 'all'
+    department: 'all',
+    status: 'active_only'
   });
 
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
@@ -481,7 +482,16 @@ const UserManagement = () => {
       const matchesRole = filterConfig.role === 'all' || user.role === filterConfig.role;
       const matchesDepartment = filterConfig.department === 'all' ||
         user.department === filterConfig.department;
-      return matchesSearch && matchesRole && matchesDepartment;
+      
+      const userStatus = user.employmentStatus || 'active';
+      let matchesStatus = true;
+      if (filterConfig.status === 'active_only') {
+        matchesStatus = userStatus === 'active' || userStatus === 'on_leave';
+      } else if (filterConfig.status !== 'all') {
+        matchesStatus = userStatus === filterConfig.status;
+      }
+
+      return matchesSearch && matchesRole && matchesDepartment && matchesStatus;
     });
   };
 
@@ -533,6 +543,17 @@ const UserManagement = () => {
         {DEPARTMENTS.map(dept => (
           <option key={dept} value={dept}>{dept}</option>
         ))}
+      </select>
+
+      <select
+        value={filterConfig.status}
+        onChange={(e) => setFilterConfig(prev => ({ ...prev, status: e.target.value }))}
+        className="px-3 py-1 border rounded-md text-sm bg-white"
+      >
+        <option value="active_only">Active Only</option>
+        <option value="suspended">Suspended</option>
+        <option value="terminated">Terminated</option>
+        <option value="all">All Statuses</option>
       </select>
     </div>
   );
