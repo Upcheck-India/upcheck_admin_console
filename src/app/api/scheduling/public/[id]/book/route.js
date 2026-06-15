@@ -72,6 +72,9 @@ export async function POST(request, { params }) {
       timezone: tz,
       status: 'confirmed',
       createdAt: new Date(),
+      isNew: true,
+      isImportant: false,
+      attendanceStatus: 'will_attend',
     };
     const result = await db.collection('bookings').insertOne(doc);
 

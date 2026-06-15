@@ -19,6 +19,11 @@ export async function GET(request) {
       query.status = 'confirmed';
     } else if (scope === 'past') {
       query.startTime = { $lt: now };
+      query.status = 'confirmed';
+    } else if (scope === 'trash') {
+      query.status = 'cancelled';
+    } else if (scope === 'all') {
+      query.status = 'confirmed';
     }
 
     const client = await clientPromise;
