@@ -29,6 +29,7 @@ export async function POST() {
     // Create indexes
     await db.collection('admin_users').createIndex({ messagingId: 1 }, { unique: true, sparse: true });
     await db.collection('chat_connections').createIndex({ userId: 1, status: 1 });
+    await db.collection('chat_connections').createIndex({ userId: 1, status: 1, updatedAt: 1 });
     await db.collection('chat_connections').createIndex({ userId: 1, peerId: 1 });
     await db.collection('chat_messages').createIndex({ conversationId: 1, createdAt: -1 });
     await db.collection('chat_messages').createIndex({ recipientId: 1, status: 1 });

@@ -24,7 +24,7 @@ const ChatThread = () => {
   const [peer, setPeer] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [lastPoll, setLastPoll] = useState(new Date().toISOString());
+  const [lastPoll, setLastPoll] = useState('');
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const [connectionStatus, setConnectionStatus] = useState(null);
@@ -166,7 +166,9 @@ const ChatThread = () => {
         });
       }
       
-      setLastPoll(new Date().toISOString());
+      if (data.serverTimestamp) {
+        setLastPoll(data.serverTimestamp);
+      }
     } catch (e) {
       console.error('Poll error:', e);
     }
@@ -325,67 +327,72 @@ const ChatThread = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-slate-50 font-sans overflow-hidden">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        <button
-          onClick={() => router.push('/messages')}
-          className="p-2 hover:bg-gray-100 rounded-lg"
-        >
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        
-        <div className="relative">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold shadow-md">
-            {peer?.username?.[0]?.toUpperCase() || '?'}
+      <div className="bg-white/95 backdrop-blur-md border-b border-slate-100 px-6 py-4 flex items-center justify-between shadow-sm z-10">
+        <div className="flex items-center gap-3.5">
+          <button
+            onClick={() => router.push('/messages')}
+            className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
+            title="Go Back"
+          >
+            <ArrowLeft className="w-5 h-5 stroke-[2.2]" />
+          </button>
+          
+          <div className="relative">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-sm border-2 border-white">
+              {peer?.username?.[0]?.toUpperCase() || '?'}
+            </div>
+            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
           </div>
-          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-        </div>
-        
-        <div className="flex-1">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {peer?.name || peer?.username || 'Unknown User'}
-          </h2>
-          <p className="text-xs text-gray-500">{peer?.email}</p>
+          
+          <div>
+            <h2 className="text-md font-bold text-slate-800 tracking-tight leading-none mb-1">
+              {peer?.name || peer?.username || 'Teammate'}
+            </h2>
+            <p className="text-xs text-slate-400 font-medium">{peer?.email}</p>
+          </div>
         </div>
 
-        <button className="p-2 hover:bg-gray-100 rounded-lg">
-          <MoreVertical className="w-5 h-5 text-gray-600" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
+            <MoreVertical className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {connectionStatus !== 'accepted' && (
-        <div className="bg-yellow-50 border-b border-yellow-200 px-4 py-3 text-sm text-yellow-800 flex items-center justify-between">
+        <div className="bg-amber-50 border-b border-amber-100 px-6 py-3 text-xs text-amber-800 flex items-center justify-between shadow-inner animate-pulse">
           <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            <span>Request pending. You can start chatting once the other user accepts.</span>
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span className="font-medium">Connection request is pending. Chatting will enable once they accept.</span>
           </div>
           <button
             onClick={handleCancelRequest}
-            className="px-3 py-1.5 text-xs text-red-600 border border-red-600 rounded hover:bg-red-50"
+            className="px-3 py-1.5 text-[10px] text-rose-600 border border-rose-200 hover:border-rose-500 hover:bg-rose-500 hover:text-white rounded-lg transition-all font-bold"
           >
             Cancel Request
           </button>
         </div>
       )}
 
-      {/* Messages */}
+      {/* Messages List */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto p-4 space-y-1 bg-gradient-to-b from-gray-50 to-gray-100"
+        className="flex-1 overflow-y-auto p-6 space-y-3 bg-gradient-to-b from-slate-50 to-slate-100/50"
       >
         {hasMore && (
-          <div className="text-center mb-4">
+          <div className="text-center mb-6">
             <button
               onClick={loadMore}
               disabled={loadingMore}
-              className="px-4 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-50 transition-all shadow-sm bg-white"
+              className="px-4 py-2 text-xs text-blue-600 hover:text-blue-700 bg-white border border-slate-200 hover:border-blue-600 rounded-xl disabled:opacity-50 transition-all shadow-sm font-semibold inline-flex items-center gap-2 active:scale-95"
             >
               {loadingMore ? (
-                <span className="flex items-center gap-2">
-                  <Loader className="w-4 h-4 animate-spin" />
-                  Loading...
-                </span>
+                <>
+                  <Loader className="w-3.5 h-3.5 animate-spin" />
+                  Loading older messages...
+                </>
               ) : (
                 'Load older messages'
               )}
@@ -394,19 +401,23 @@ const ChatThread = () => {
         )}
 
         {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400">
-            <Send className="w-16 h-16 mb-4 opacity-20" />
-            <p className="text-lg font-medium">No messages yet</p>
-            <p className="text-sm mt-2">Start the conversation!</p>
+          <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-300 shadow-md shadow-slate-100/50 mb-4 animate-pulse">
+              <Send className="w-6 h-6 stroke-[1.8]" />
+            </div>
+            <h3 className="text-sm font-semibold text-slate-700">No messages yet</h3>
+            <p className="text-xs text-slate-400 mt-1 max-w-[200px] leading-relaxed">Say hello to your teammate and start collaborating!</p>
           </div>
         )}
 
         {Object.entries(groupedMessages).map(([date, msgs]) => (
-          <div key={date}>
-            <div className="flex items-center justify-center my-4">
-              <span className="px-3 py-1 bg-gray-200 text-gray-600 text-xs rounded-full">
+          <div key={date} className="space-y-3">
+            <div className="flex items-center justify-center my-6">
+              <div className="h-[1px] bg-slate-200 flex-1"></div>
+              <span className="px-3.5 py-1 bg-white border border-slate-200/80 text-slate-500 text-[10px] font-bold uppercase tracking-wider rounded-full mx-4 shadow-sm">
                 {date}
               </span>
+              <div className="h-[1px] bg-slate-200 flex-1"></div>
             </div>
             
             {msgs.map((msg, idx) => {
@@ -423,70 +434,66 @@ const ChatThread = () => {
                   key={msg._id}
                   className={`flex ${isOwn ? 'justify-end' : 'justify-start'} ${isLastInGroup ? 'mb-3' : 'mb-0.5'} group`}
                 >
-                  <div className="flex items-end gap-2 max-w-[75%]">
+                  <div className="flex items-end gap-2.5 max-w-[75%]">
                     {!isOwn && isLastInGroup && (
-                      <div className="w-6 h-6 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+                      <div className="w-7 h-7 rounded-full bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 shadow-sm">
                         {peer?.username?.[0]?.toUpperCase() || '?'}
                       </div>
                     )}
-                    {!isOwn && !isLastInGroup && <div className="w-6" />}
+                    {!isOwn && !isLastInGroup && <div className="w-7" />}
                     
                     <div className="flex flex-col">
                       <div
-                        className={`relative px-4 py-2 ${
+                        className={`relative px-4 py-2.5 ${
                           isOwn
-                            ? `bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-md ${
-                                isFirstInGroup ? 'rounded-t-2xl' : 'rounded-t-md'
-                              } ${
-                                isLastInGroup ? 'rounded-bl-2xl rounded-br-sm' : 'rounded-b-md'
+                            ? `bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/10 ${
+                                isFirstInGroup ? 'rounded-2xl rounded-br-sm' : 'rounded-2xl rounded-tr-md rounded-br-sm'
                               }`
-                            : `bg-white text-gray-900 border border-gray-200 shadow-sm ${
-                                isFirstInGroup ? 'rounded-t-2xl' : 'rounded-t-md'
-                              } ${
-                                isLastInGroup ? 'rounded-br-2xl rounded-bl-sm' : 'rounded-b-md'
+                            : `bg-white text-slate-800 border border-slate-200/80 shadow-sm ${
+                                isFirstInGroup ? 'rounded-2xl rounded-bl-sm' : 'rounded-2xl rounded-tl-md rounded-bl-sm'
                               }`
-                        } ${msg.status === 'failed' ? 'opacity-60' : ''} transition-all hover:shadow-lg`}
+                        } ${msg.status === 'failed' ? 'border-rose-300 bg-rose-50/80 text-rose-900 shadow-none' : ''} transition-all duration-200 hover:shadow-md`}
                       >
-                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed select-text">{msg.body}</p>
                         
-                        {/* Message actions */}
-                        <div className="absolute -top-8 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-white rounded-lg shadow-lg p-1">
+                        {/* Hover Quick Actions */}
+                        <div className={`absolute -top-9 ${isOwn ? 'right-2' : 'left-2'} opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-1 bg-white border border-slate-100 rounded-lg shadow-md p-0.5 z-20`}>
                           <button
                             onClick={() => copyMessage(msg.body, msg._id)}
-                            className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-                            title="Copy message"
+                            className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-50 rounded transition-colors"
+                            title="Copy Message"
                           >
                             {copiedMessageId === msg._id ? (
-                              <Check className="w-3.5 h-3.5 text-green-600" />
+                              <Check className="w-3.5 h-3.5 text-emerald-500 stroke-[2.5]" />
                             ) : (
-                              <Copy className="w-3.5 h-3.5 text-gray-600" />
+                              <Copy className="w-3.5 h-3.5" />
                             )}
                           </button>
                           {msg.status === 'failed' && (
                             <button
                               onClick={() => retryMessage(msg)}
-                              className="p-1.5 hover:bg-gray-100 rounded transition-colors"
-                              title="Retry"
+                              className="p-1 text-rose-600 hover:bg-rose-50 rounded transition-colors"
+                              title="Retry Send"
                             >
-                              <RotateCcw className="w-3.5 h-3.5 text-red-600" />
+                              <RotateCcw className="w-3.5 h-3.5 stroke-[2]" />
                             </button>
                           )}
                         </div>
                       </div>
                       
                       {showTime && (
-                        <div className={`text-xs mt-1 px-2 ${isOwn ? 'text-right text-gray-500' : 'text-left text-gray-500'} flex items-center gap-1.5 ${
-                          isOwn ? 'justify-end' : 'justify-start'
+                        <div className={`text-[10px] mt-1.5 px-2 text-slate-400 font-medium flex items-center gap-1 ${
+                          isOwn ? 'justify-end text-right' : 'justify-start text-left'
                         }`}>
                           <span>{formatTime(msg.createdAt)}</span>
                           {msg.status === 'sending' && (
-                            <Loader className="w-3 h-3 animate-spin text-blue-600" />
+                            <Loader className="w-2.5 h-2.5 animate-spin text-blue-500" />
                           )}
                           {msg.status === 'sent' && isOwn && (
-                            <Check className="w-3 h-3 text-gray-400" />
+                            <Check className="w-2.5 h-2.5 text-slate-400" />
                           )}
                           {msg.status === 'failed' && (
-                            <span className="text-red-500 text-xs">Failed</span>
+                            <span className="text-rose-500 font-semibold text-[9px] uppercase tracking-wider">Failed</span>
                           )}
                         </div>
                       )}
@@ -501,9 +508,9 @@ const ChatThread = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Composer */}
-      <div className="bg-white border-t border-gray-200 p-4 shadow-lg">
-        <div className="flex items-end gap-3 relative">
+      {/* Composer Input Bar */}
+      <div className="bg-white border-t border-slate-100 p-4 shadow-lg z-10">
+        <div className="flex items-end gap-3.5 max-w-4xl mx-auto relative">
           <textarea
             ref={textareaRef}
             value={messageText}
@@ -516,30 +523,31 @@ const ChatThread = () => {
                 if (connectionStatus === 'accepted' && messageText.trim()) handleSend();
               }
             }}
-            placeholder={connectionStatus === 'accepted' ? 'Type a message...' : 'Waiting for acceptance...'}
+            placeholder={connectionStatus === 'accepted' ? 'Type a message...' : 'Connection pending. Messaging disabled.'}
             rows={1}
-            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-blue-500 resize-none transition-all"
-            style={{ minHeight: '44px', maxHeight: '120px' }}
+            className="flex-1 px-4 py-3 bg-slate-50 border-2 border-slate-200/60 rounded-2xl focus:outline-none focus:bg-white focus:border-blue-500 resize-none transition-all duration-200 text-sm text-slate-800 placeholder-slate-400 min-h-[44px] max-h-[120px] leading-relaxed"
             disabled={connectionStatus !== 'accepted'}
           />
-          {/* Emoji button (fixed size) */}
+          
+          {/* Emoji Popover */}
           <div className="relative" ref={emojiRef}>
             <button
               type="button"
               onClick={() => setShowEmoji((s) => !s)}
-              className="w-10 h-10 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 text-gray-600"
-              title="Add emoji"
+              disabled={connectionStatus !== 'accepted'}
+              className="w-10 h-10 flex items-center justify-center rounded-xl border border-slate-200/80 hover:bg-slate-50 text-slate-500 hover:text-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all active:scale-95"
+              title="Add Emoji"
             >
-              <Smile className="w-5 h-5" />
+              <Smile className="w-5 h-5 stroke-[1.8]" />
             </button>
             {showEmoji && (
-              <div className="absolute bottom-12 right-0 z-20 w-64 bg-white border border-gray-200 rounded-xl shadow-xl p-2 grid grid-cols-8 gap-1">
+              <div className="absolute bottom-12 right-0 z-50 w-64 bg-white border border-slate-100 rounded-2xl shadow-xl p-2.5 grid grid-cols-8 gap-1.5 animate-fadeIn">
                 {['😀','😁','😂','🤣','😊','😍','😘','😜','🤗','👍','👏','🙏','🔥','✨','🎉','❤️','🫶','👌','😉','😎','😇','😅','🤝','💯','✅','❌','🤩','🤔','🤞','😢','😭','😡','🤯','😴'].map((e, i) => (
                   <button
                     key={`${e}-${i}`}
                     type="button"
                     onClick={() => insertEmoji(e)}
-                    className="text-xl leading-none p-1 hover:bg-gray-100 rounded"
+                    className="text-lg leading-none p-1.5 hover:bg-slate-50 rounded-lg transition-colors"
                     aria-label={`emoji ${e}`}
                   >
                     {e}
@@ -548,18 +556,20 @@ const ChatThread = () => {
               </div>
             )}
           </div>
+
           <button
             onClick={handleSend}
             disabled={!messageText.trim() || sending || connectionStatus !== 'accepted'}
-            className="p-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-full hover:from-blue-700 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95 shadow-lg"
+            className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 shadow-md shadow-blue-500/10 hover:shadow-lg hover:shadow-blue-500/20 active:scale-95"
+            title="Send Message"
           >
-            <Send className="w-5 h-5" />
+            <Send className="w-4 h-4 stroke-[2.2]" />
           </button>
         </div>
-        <div className="mt-2 text-xs text-gray-400 flex items-center justify-between">
-          <span>Press Enter to send, Shift+Enter for new line</span>
+        <div className="mt-2 max-w-4xl mx-auto flex items-center justify-between text-[10px] text-slate-400 font-medium px-1">
+          <span>Enter to send, Shift + Enter for newline</span>
           {messageText.length > 0 && (
-            <span className="text-gray-500">{messageText.length} characters</span>
+            <span className="bg-slate-100 px-2 py-0.5 rounded-md text-slate-500 font-semibold">{messageText.length} characters</span>
           )}
         </div>
       </div>

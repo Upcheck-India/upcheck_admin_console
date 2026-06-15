@@ -14,6 +14,14 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Conversation ID required' }, { status: 400 });
     }
 
+    if (!ObjectId.isValid(conversationId)) {
+      return NextResponse.json({ error: 'Invalid Conversation ID' }, { status: 400 });
+    }
+
+    if (before && !ObjectId.isValid(before)) {
+      return NextResponse.json({ error: 'Invalid before cursor' }, { status: 400 });
+    }
+
     const cookieStore = cookies();
     const token = cookieStore.get('admin_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

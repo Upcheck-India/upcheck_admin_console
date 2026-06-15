@@ -20,15 +20,31 @@ export async function GET(request) {
     if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const sinceDate = since ? new Date(since) : new Date(Date.now() - 60000); // Default: last 1 min
+    const serverTimestamp = new Date().toISOString();
 
     const updates = {
       newMessages: [],
       pendingRequests: [],
-      connectionUpdates: []
+      connectionUpdates: [],
+      serverTimestamp
     };
 
     // If polling specific conversation
     if (conversationId) {
+      if (!ObjectId.isValid(conversationId)) {
+        return NextResponse.json({ error: 'Invalid Conversation ID' }, { status: 400 });
+      }
+
+      // Verify authorization: current user must be a participant of the conversation
+      const conversation = await db.collection('conversations').findOne({
+        _id: new ObjectId(conversationId),
+        participants: currentUser._id.toString()
+      });
+
+      if (!conversation) {
+        return NextResponse.json({ error: 'Conversation not found or access denied' }, { status: 403 });
+      }
+
       const newMessages = await db.collection('chat_messages')
         .find({
           conversationId,

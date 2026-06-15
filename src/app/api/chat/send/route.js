@@ -11,6 +11,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Conversation ID and message body required' }, { status: 400 });
     }
 
+    if (!ObjectId.isValid(conversationId)) {
+      return NextResponse.json({ error: 'Invalid Conversation ID' }, { status: 400 });
+    }
+
     const cookieStore = cookies();
     const token = cookieStore.get('admin_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

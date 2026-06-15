@@ -150,69 +150,78 @@ const MessagesSettings = () => {
   const blockedConnections = connections.filter(c => c.status === 'blocked');
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-slate-50 font-sans overflow-x-hidden pb-12">
+      <div className="max-w-3xl mx-auto">
         {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-4 py-4">
-          <div className="flex items-center gap-3">
+        <div className="bg-white border-b border-slate-200/80 px-6 py-5 shadow-sm sticky top-0 z-20">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/messages')}
-              className="p-2 hover:bg-gray-100 rounded-lg"
+              className="p-2.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
+              title="Go Back"
             >
-              <ArrowLeft className="w-5 h-5 text-gray-600" />
+              <ArrowLeft className="w-5 h-5 stroke-[2.2]" />
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">Messages Settings</h1>
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Direct Messaging Settings</h1>
           </div>
         </div>
 
         <div className="p-6 space-y-6">
           {/* Messaging ID Card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Messaging ID</h2>
-            <p className="text-sm text-gray-600 mb-3">
-              Share this ID with others to allow them to start a conversation with you. If you regenerate your ID, all your chats and connections will be cleared.
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+            <h2 className="text-md font-bold text-slate-800 tracking-tight mb-2">Workspace Discovery ID</h2>
+            <p className="text-xs text-slate-500 leading-relaxed mb-4">
+              Teammates need this unique ID to initiate direct messaging requests with you. Regenerating your ID resets your address book and securely deletes all message threads.
             </p>
             
             {user?.messagingId ? (
-              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-                <code className="flex-1 text-sm font-mono text-blue-700">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-3.5 bg-slate-50 rounded-xl border border-slate-200/60">
+                <code className="flex-1 text-sm font-mono text-blue-600 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-inner select-all truncate">
                   {user.messagingId}
                 </code>
-                <button
-                  onClick={copyMessagingId}
-                  className="p-2 text-blue-600 hover:bg-blue-100 rounded"
-                  title="Copy ID"
-                >
-                  {copiedId ? (
-                    <CheckCircle className="w-5 h-5" />
-                  ) : (
-                    <Copy className="w-5 h-5" />
-                  )}
-                </button>
-                <button
-                  onClick={rotateMessagingId}
-                  disabled={rotating}
-                  className="px-3 py-2 text-sm text-red-600 border border-red-600 rounded hover:bg-red-50 disabled:opacity-50"
-                  title="Regenerate ID and wipe chats"
-                >
-                  {rotating ? 'Regenerating...' : 'Regenerate'}
-                </button>
+                <div className="flex items-stretch gap-2">
+                  <button
+                    onClick={copyMessagingId}
+                    className="flex-1 sm:flex-initial px-4 py-2 text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl transition-all duration-200 font-semibold text-xs flex items-center justify-center gap-1.5 active:scale-95"
+                    title="Copy ID"
+                  >
+                    {copiedId ? (
+                      <>
+                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                        Copied
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4 text-slate-500" />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={rotateMessagingId}
+                    disabled={rotating}
+                    className="flex-1 sm:flex-initial px-4 py-2 text-xs text-rose-600 bg-rose-50 border border-rose-100 hover:bg-rose-600 hover:text-white rounded-xl transition-all duration-200 font-bold active:scale-95 disabled:opacity-50"
+                  >
+                    {rotating ? 'Regenerating...' : 'Regenerate'}
+                  </button>
+                </div>
               </div>
             ) : (
-              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="p-4 bg-amber-50/70 border border-amber-200/60 rounded-2xl">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="text-sm text-yellow-800 mb-3">
-                      Messaging ID not set. Click below to create your Messaging ID to start using chat.
+                    <p className="text-xs text-amber-800 font-medium mb-3">
+                      Messaging ID has not been initialized yet. Create your ID to start messaging teammates.
                     </p>
                     <button
                       onClick={initializeChat}
                       disabled={initializing}
-                      className="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 disabled:opacity-50 flex items-center gap-2"
+                      className="px-4 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 disabled:opacity-50 flex items-center justify-center gap-2 text-xs font-bold transition-all active:scale-95 shadow-md shadow-amber-600/10"
                     >
-                      <RefreshCw className={`w-4 h-4 ${initializing ? 'animate-spin' : ''}`} />
-                      {initializing ? 'Creating...' : 'Create Messaging ID'}
+                      <RefreshCw className={`w-3.5 h-3.5 ${initializing ? 'animate-spin' : ''}`} />
+                      {initializing ? 'Initializing...' : 'Create Discovery ID'}
                     </button>
                   </div>
                 </div>
@@ -220,97 +229,107 @@ const MessagesSettings = () => {
             )}
           </div>
 
-          {/* Tabs */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="border-b border-gray-200">
-              <nav className="flex">
+          {/* Connections Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm overflow-hidden">
+            <div className="border-b border-slate-100 bg-slate-50/50">
+              <nav className="flex px-4">
                 <button
                   onClick={() => setActiveTab('active')}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`px-5 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all duration-200 flex items-center gap-2 ${
                     activeTab === 'active'
                       ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Active Connections ({activeConnections.length})
+                  Active Connections
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    activeTab === 'active' ? 'bg-blue-50 text-blue-600' : 'bg-slate-200/60 text-slate-600'
+                  }`}>
+                    {activeConnections.length}
+                  </span>
                 </button>
                 <button
                   onClick={() => setActiveTab('blocked')}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={`px-5 py-4 text-xs font-bold uppercase tracking-wider border-b-2 transition-all duration-200 flex items-center gap-2 ${
                     activeTab === 'blocked'
                       ? 'border-blue-600 text-blue-600'
-                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  Blocked ({blockedConnections.length})
+                  Blocked Users
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    activeTab === 'blocked' ? 'bg-blue-50 text-blue-600' : 'bg-slate-200/60 text-slate-600'
+                  }`}>
+                    {blockedConnections.length}
+                  </span>
                 </button>
               </nav>
             </div>
 
             <div className="p-6">
               {loading ? (
-                <div>
-                  <div className="h-6 w-40 bg-gray-200 rounded animate-pulse mb-4" />
-                  <div className="space-y-3">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg">
-                        <div className="w-12 h-12 rounded-full bg-gray-200 animate-pulse" />
-                        <div className="flex-1">
-                          <div className="h-4 w-1/3 bg-gray-200 rounded mb-2 animate-pulse" />
-                          <div className="h-3 w-1/2 bg-gray-100 rounded animate-pulse" />
-                        </div>
-                        <div className="h-8 w-24 bg-gray-100 rounded animate-pulse" />
+                <div className="space-y-4">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 p-4 border border-slate-100 rounded-2xl animate-pulse">
+                      <div className="w-10 h-10 rounded-full bg-slate-200" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-1/3 bg-slate-200 rounded" />
+                        <div className="h-3 w-1/2 bg-slate-100 rounded" />
                       </div>
-                    ))}
-                  </div>
+                      <div className="h-8 w-20 bg-slate-100 rounded-lg" />
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <>
                   {activeTab === 'active' && (
                     <div className="space-y-3">
                       {activeConnections.length === 0 ? (
-                        <p className="text-center text-gray-500 py-8">No active connections</p>
+                        <p className="text-center text-slate-400 py-10 text-xs font-medium">No active connections found</p>
                       ) : (
                         <>
                         {activeConnections.slice(0, visibleActive).map((conn) => (
                           <div
                             key={conn._id}
-                            className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                            className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl bg-white hover:bg-slate-50/50 hover:border-slate-200 transition-all duration-200"
                           >
-                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold">
-                              {conn.peer?.username?.[0]?.toUpperCase() || '?'}
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                                {conn.peer?.username?.[0]?.toUpperCase() || '?'}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-slate-900 truncate">
+                                  {conn.peer?.name || conn.peer?.username || 'Teammate'}
+                                </p>
+                                <p className="text-xs text-slate-400 truncate">{conn.peer?.email}</p>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900">
-                                {conn.peer?.name || conn.peer?.username || 'Unknown'}
-                              </p>
-                              <p className="text-sm text-gray-600 truncate">{conn.peer?.email}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
+                            
+                            <div className="flex items-center gap-1.5 ml-4">
                               <button
                                 onClick={() => handleBlock(conn.peerId, conn.peer?.name || conn.peer?.username)}
-                                className="p-2 text-yellow-600 hover:bg-yellow-50 rounded-lg"
-                                title="Block"
+                                className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-all duration-200 active:scale-90"
+                                title="Block User"
                               >
-                                <Shield className="w-5 h-5" />
+                                <Shield className="w-4.5 h-4.5" />
                               </button>
                               <button
                                 onClick={() => handleRevoke(conn.peerId, conn.peer?.name || conn.peer?.username)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                                title="Remove"
+                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all duration-200 active:scale-90"
+                                title="Remove Connection"
                               >
-                                <Trash2 className="w-5 h-5" />
+                                <Trash2 className="w-4.5 h-4.5" />
                               </button>
                             </div>
                           </div>
                         ))}
                         {activeConnections.length > visibleActive && (
-                          <div className="text-center">
+                          <div className="text-center pt-2">
                             <button
                               onClick={() => setVisibleActive(c => c + 20)}
-                              className="mt-2 px-4 py-2 text-blue-600 border border-blue-600 rounded hover:bg-blue-50"
+                              className="px-4 py-2 text-xs text-blue-600 hover:text-blue-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl font-bold transition-all"
                             >
-                              Load more
+                              Load More Connections
                             </button>
                           </div>
                         )}
@@ -322,39 +341,42 @@ const MessagesSettings = () => {
                   {activeTab === 'blocked' && (
                     <div className="space-y-3">
                       {blockedConnections.length === 0 ? (
-                        <p className="text-center text-gray-500 py-8">No blocked users</p>
+                        <p className="text-center text-slate-400 py-10 text-xs font-medium">No blocked users</p>
                       ) : (
                         <>
                         {blockedConnections.slice(0, visibleBlocked).map((conn) => (
                           <div
                             key={conn._id}
-                            className="flex items-center gap-4 p-4 border border-gray-200 rounded-lg bg-gray-50"
+                            className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl bg-slate-50/50"
                           >
-                            <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">
-                              {conn.peer?.username?.[0]?.toUpperCase() || '?'}
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-sm">
+                                {conn.peer?.username?.[0]?.toUpperCase() || '?'}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="text-sm font-bold text-slate-800 truncate">
+                                  {conn.peer?.name || conn.peer?.username || 'Teammate'}
+                                </p>
+                                <p className="text-xs text-slate-400 truncate">{conn.peer?.email}</p>
+                                <p className="text-[9px] text-rose-500 font-bold uppercase tracking-wider mt-1">Blocked</p>
+                              </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-semibold text-gray-900">
-                                {conn.peer?.name || conn.peer?.username || 'Unknown'}
-                              </p>
-                              <p className="text-sm text-gray-600 truncate">{conn.peer?.email}</p>
-                              <p className="text-xs text-red-600 mt-1">Blocked</p>
-                            </div>
+                            
                             <button
                               onClick={() => handleUnblock(conn.peerId, conn.peer?.name || conn.peer?.username)}
-                              className="px-4 py-2 text-sm text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50"
+                              className="px-4 py-2 text-xs text-blue-600 border border-blue-200 hover:border-blue-600 bg-white rounded-xl font-bold transition-all active:scale-95 shadow-sm"
                             >
                               Unblock
                             </button>
                           </div>
                         ))}
                         {blockedConnections.length > visibleBlocked && (
-                          <div className="text-center">
+                          <div className="text-center pt-2">
                             <button
                               onClick={() => setVisibleBlocked(c => c + 20)}
-                              className="mt-2 px-4 py-2 text-blue-600 border border-blue-600 rounded hover:bg-blue-50"
+                              className="px-4 py-2 text-xs text-blue-600 hover:text-blue-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl font-bold transition-all"
                             >
-                              Load more
+                              Load More Blocked
                             </button>
                           </div>
                         )}
@@ -368,13 +390,21 @@ const MessagesSettings = () => {
           </div>
 
           {/* Info Card */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">About Messaging</h3>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Only users with your Messaging ID can send you chat requests</li>
-              <li>• You must accept a request before you can chat</li>
-              <li>• Blocking prevents a user from messaging you</li>
-              <li>• Messages are stored securely and updated every 5 seconds</li>
+          <div className="bg-blue-50/70 border border-blue-100 rounded-2xl p-5 shadow-inner">
+            <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider mb-2">Direct Messaging Guidelines</h3>
+            <ul className="text-xs text-blue-800 space-y-2 leading-relaxed">
+              <li className="flex items-start gap-1.5">
+                <span className="text-blue-500">•</span>
+                <span>Direct messaging is point-to-point and relies on teammate discovery using messaging IDs.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-blue-500">•</span>
+                <span>You will only receive direct messages once you accept their connection request.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-blue-500">•</span>
+                <span>Blocking a connection prevents the user from requesting or sending you direct messages.</span>
+              </li>
             </ul>
           </div>
         </div>

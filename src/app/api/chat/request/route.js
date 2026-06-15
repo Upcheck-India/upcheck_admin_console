@@ -11,6 +11,10 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Peer ID required' }, { status: 400 });
     }
 
+    if (!ObjectId.isValid(peerId)) {
+      return NextResponse.json({ error: 'Invalid Peer ID' }, { status: 400 });
+    }
+
     const cookieStore = cookies();
     const token = cookieStore.get('admin_token')?.value;
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

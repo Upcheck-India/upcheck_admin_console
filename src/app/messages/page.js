@@ -22,7 +22,7 @@ const MessagesHome = () => {
   const [findingUser, setFindingUser] = useState(false);
   const [foundUser, setFoundUser] = useState(null);
   const [error, setError] = useState('');
-  const [lastPoll, setLastPoll] = useState(new Date().toISOString());
+  const [lastPoll, setLastPoll] = useState('');
   const [copiedId, setCopiedId] = useState(false);
 
   const fetchConnections = useCallback(async () => {
@@ -66,7 +66,9 @@ const MessagesHome = () => {
         fetchConnections();
       }
       
-      setLastPoll(new Date().toISOString());
+      if (data.serverTimestamp) {
+        setLastPoll(data.serverTimestamp);
+      }
     } catch (e) {
       console.error('Poll error:', e);
     }
@@ -223,25 +225,25 @@ const MessagesHome = () => {
   }
 
   return (
-    <div className="flex h-screen bg-white">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       {/* Left Sidebar - Conversations List */}
-      <div className="w-full md:w-96 border-r border-gray-200 flex flex-col">
+      <div className="w-full md:w-96 border-r border-slate-200/80 bg-white flex flex-col shadow-sm z-10">
         {/* Header */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-5 border-b border-slate-100">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
-            <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Messages</h1>
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowNewChat(true)}
                 disabled={!user?.messagingId}
-                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                title={user?.messagingId ? 'New chat' : 'Generate Messaging ID to start'}
+                className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 hover:scale-105 active:scale-95"
+                title={user?.messagingId ? 'New Chat' : 'Generate Messaging ID to start'}
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-5 h-5 stroke-[2.5]" />
               </button>
               <button
                 onClick={() => router.push('/messages/settings')}
-                className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                className="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95"
                 title="Settings"
               >
                 <Settings className="w-5 h-5" />
@@ -249,25 +251,26 @@ const MessagesHome = () => {
             </div>
           </div>
 
-          {/* User's messaging ID */}
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            <div className="text-xs text-gray-600 mb-1">Your Messaging ID</div>
+          {/* User's messaging ID - Premium Slate/Cyan Card */}
+          <div className="mb-4 p-4 bg-gradient-to-tr from-slate-900 to-slate-800 text-white rounded-2xl shadow-md border border-slate-700/30 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-xl pointer-events-none"></div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">Your Messaging ID</div>
             <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm font-mono text-blue-700 truncate">
-                {user?.messagingId || 'Not set'}
+              <code className="flex-1 text-xs font-mono text-cyan-300 bg-slate-950/50 px-2.5 py-1.5 rounded-lg border border-slate-800/80 truncate select-all">
+                {user?.messagingId || 'Not generated yet'}
               </code>
               {user?.messagingId ? (
                 <button
                   onClick={copyMessagingId}
-                  className="p-1.5 text-blue-600 hover:bg-blue-100 rounded transition-colors"
+                  className="p-2 text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg transition-all duration-200 active:scale-90"
                   title="Copy ID"
                 >
-                  {copiedId ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copiedId ? <CheckCircle className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                 </button>
               ) : (
                 <button
                   onClick={generateMessagingId}
-                  className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  className="px-3.5 py-1.5 text-xs bg-cyan-400 text-slate-950 font-bold rounded-lg hover:bg-cyan-300 transition-all duration-200 shadow-sm"
                 >
                   Generate
                 </button>
@@ -276,50 +279,50 @@ const MessagesHome = () => {
           </div>
 
           {!user?.messagingId && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 flex-shrink-0" />
-              <div className="text-xs text-yellow-800">
-                <p className="font-medium">Messaging ID not set</p>
-                <p>Generate your Messaging ID to start or receive chat requests. This keeps discovery private.</p>
+            <div className="mb-4 p-3 bg-amber-50/70 border border-amber-200/60 rounded-xl flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+              <div className="text-xs text-amber-800 leading-relaxed">
+                <p className="font-semibold">Discovery details are hidden</p>
+                <p className="opacity-90">Generate your Messaging ID to send or receive secure chat requests.</p>
               </div>
             </div>
           )}
 
-          {/* Search */}
+          {/* Search Bar */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
               placeholder="Search conversations..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 hover:bg-slate-100/50 border border-slate-200/80 focus:bg-white rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all duration-200 text-sm placeholder-slate-400 text-slate-800"
             />
           </div>
         </div>
 
         {/* Pending Requests */}
         {pendingRequests.length > 0 && (
-          <div className="p-4 bg-yellow-50 border-b border-yellow-200">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">Pending Requests</h3>
+          <div className="p-4 bg-amber-50/40 border-b border-amber-100 flex-shrink-0 max-h-48 overflow-y-auto">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2.5">Pending Requests</h3>
             {pendingRequests.map((req) => (
-              <div key={req._id} className="flex items-center gap-3 p-2 bg-white rounded-lg mb-2 last:mb-0">
-                <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700 font-semibold flex-shrink-0">
+              <div key={req._id} className="flex items-center gap-3 p-2.5 bg-white rounded-xl mb-2 last:mb-0 shadow-sm border border-amber-200/30">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-amber-400 to-amber-500 flex items-center justify-center text-white font-bold flex-shrink-0 text-sm shadow-sm">
                   {req.peer?.username?.[0]?.toUpperCase() || '?'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-xs font-semibold text-slate-900 truncate">
                     {req.peer?.name || req.peer?.username}
                   </p>
-                  <p className="text-xs text-gray-500">wants to chat</p>
+                  <p className="text-[10px] text-slate-500">Wants to connect</p>
                 </div>
                 {req.initiatedBy === (user?.id || user?._id) ? (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500">Request sent</span>
+                    <span className="text-[10px] text-slate-400 font-medium">Sent</span>
                     <button
                       onClick={() => handleRevoke(req.peerId)}
-                      className="px-2 py-1 text-xs text-red-600 border border-red-600 rounded hover:bg-red-50"
-                      title="Cancel request"
+                      className="px-2.5 py-1 text-[10px] text-rose-600 hover:text-white border border-rose-200 hover:border-rose-500 hover:bg-rose-500 rounded-lg transition-all duration-200 font-semibold"
+                      title="Cancel Request"
                     >
                       Cancel
                     </button>
@@ -328,17 +331,17 @@ const MessagesHome = () => {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleAccept(req.peerId)}
-                      className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                      className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all duration-200"
                       title="Accept"
                     >
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 stroke-[2.5]" />
                     </button>
                     <button
                       onClick={() => handleRevoke(req.peerId)}
-                      className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                      className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-200"
                       title="Decline"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-4 h-4 stroke-[2.5]" />
                     </button>
                   </div>
                 )}
@@ -348,42 +351,48 @@ const MessagesHome = () => {
         )}
 
         {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
           {acceptedChats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-500 p-8">
-              <MessageCircle className="w-16 h-16 mb-4 text-gray-300" />
-              <p className="text-lg font-medium">No conversations yet</p>
-              <p className="text-sm text-center mt-2">
-                Click the <Plus className="w-4 h-4 inline" /> button to start a new chat
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 mb-3 border border-slate-100 shadow-inner">
+                <MessageCircle className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-semibold text-slate-700">No chats yet</p>
+              <p className="text-xs mt-1 text-slate-400 max-w-[200px] leading-relaxed">
+                Click the plus icon above and search for a teammate's ID to start.
               </p>
             </div>
           ) : (
-            <ul className="divide-y divide-gray-200">
+            <ul className="divide-y divide-slate-50">
               {acceptedChats.slice(0, visibleCount).map((chat) => (
                 <li
                   key={chat._id}
                   onClick={() => router.push(`/messages/${chat.conversationId}`)}
-                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="p-4 hover:bg-slate-50/80 cursor-pointer transition-all duration-200 group border-l-2 border-transparent hover:border-blue-500 hover:translate-x-0.5"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold flex-shrink-0">
-                      {chat.peer?.username?.[0]?.toUpperCase() || '?'}
+                    <div className="relative flex-shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-sm">
+                        {chat.peer?.username?.[0]?.toUpperCase() || '?'}
+                      </div>
+                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
                     </div>
+                    
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-semibold text-gray-900 truncate">
-                          {chat.peer?.name || chat.peer?.username || 'Unknown'}
+                        <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+                          {chat.peer?.name || chat.peer?.username || 'Teammate'}
                         </p>
-                        <span className="text-xs text-gray-500 ml-2 flex-shrink-0">
+                        <span className="text-[10px] text-slate-400 ml-2 font-medium flex-shrink-0">
                           {formatTime(chat.lastMessage?.createdAt || chat.updatedAt)}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-gray-600 truncate">
+                        <p className="text-xs text-slate-500 truncate pr-2">
                           {chat.lastMessage?.body || 'No messages yet'}
                         </p>
                         {chat.unreadCount > 0 && (
-                          <span className="ml-2 px-2 py-0.5 bg-blue-600 text-white text-xs font-semibold rounded-full flex-shrink-0">
+                          <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex-shrink-0 shadow-sm animate-pulse">
                             {chat.unreadCount}
                           </span>
                         )}
@@ -396,9 +405,9 @@ const MessagesHome = () => {
                 <li className="p-4 text-center">
                   <button
                     onClick={() => setVisibleCount(c => c + 20)}
-                    className="px-4 py-2 text-blue-600 border border-blue-600 rounded hover:bg-blue-50 transition-colors"
+                    className="px-4 py-2 text-xs text-blue-600 border border-slate-200 hover:border-blue-600 rounded-xl hover:bg-blue-50 transition-all duration-200 font-semibold shadow-sm"
                   >
-                    Load more
+                    Load More Conversations
                   </button>
                 </li>
               )}
@@ -409,10 +418,10 @@ const MessagesHome = () => {
 
       {/* New Chat Modal */}
       {showNewChat && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Start New Chat</h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden transform scale-100 transition-all duration-300">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h2 className="text-md font-bold text-slate-900">Start a Teammate Chat</h2>
               <button
                 onClick={() => {
                   setShowNewChat(false);
@@ -420,16 +429,16 @@ const MessagesHome = () => {
                   setFoundUser(null);
                   setError('');
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Enter User's Messaging ID
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Enter Messaging ID
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -437,13 +446,13 @@ const MessagesHome = () => {
                     value={newChatId}
                     onChange={(e) => setNewChatId(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleFindUser()}
-                    placeholder="e.g., a1b2c3d4e5f6..."
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., a1b2c3d4..."
+                    className="flex-1 px-3.5 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-slate-800 placeholder-slate-400 bg-slate-50"
                   />
                   <button
                     onClick={handleFindUser}
                     disabled={findingUser || !newChatId.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4.5 py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-md shadow-blue-500/10 active:scale-95"
                   >
                     {findingUser ? 'Finding...' : 'Find'}
                   </button>
@@ -451,23 +460,23 @@ const MessagesHome = () => {
               </div>
 
               {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                  <span className="text-sm text-red-700">{error}</span>
+                <div className="p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                  <span className="text-xs text-rose-700 font-medium">{error}</span>
                 </div>
               )}
 
               {foundUser && (
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-semibold flex-shrink-0">
+                <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl shadow-inner">
+                  <div className="flex items-center gap-3.5 mb-4">
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0 text-md shadow-md">
                       {foundUser.user.username?.[0]?.toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">
+                      <p className="text-sm font-bold text-slate-900 truncate">
                         {foundUser.user.name || foundUser.user.username}
                       </p>
-                      <p className="text-sm text-gray-600 truncate">{foundUser.user.email}</p>
+                      <p className="text-xs text-slate-500 truncate">{foundUser.user.email}</p>
                     </div>
                   </div>
 
@@ -475,7 +484,9 @@ const MessagesHome = () => {
                     <div className="space-y-2">
                       {foundUser.connection.status === 'accepted' && (
                         <>
-                          <p className="text-green-600 text-sm">✓ Already connected</p>
+                          <p className="text-emerald-600 text-xs font-semibold flex items-center gap-1 mb-2">
+                            <Check className="w-4 h-4 stroke-[2.5]" /> Already connected
+                          </p>
                           {foundUser.connection.conversationId && (
                             <button
                               onClick={() => {
@@ -485,35 +496,39 @@ const MessagesHome = () => {
                                 setError('');
                                 router.push(`/messages/${foundUser.connection.conversationId}`);
                               }}
-                              className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 transition-all shadow-md active:scale-95 text-center"
                             >
-                              Open Chat
+                              Open Conversation
                             </button>
                           )}
                         </>
                       )}
                       {foundUser.connection.status === 'pending' && (
-                        <p className="text-yellow-600 text-sm">⏳ Request pending</p>
+                        <p className="text-amber-600 text-xs font-semibold bg-amber-50 p-2.5 rounded-xl border border-amber-100 text-center">
+                          ⏳ Request already pending
+                        </p>
                       )}
                       {foundUser.connection.status === 'revoked' && (
                         <button
                           onClick={handleStartChat}
-                          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors"
+                          className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
                         >
-                          <UserPlus className="w-4 h-4" />
+                          <UserPlus className="w-4 h-4 stroke-[2]" />
                           Re-send Chat Request
                         </button>
                       )}
                       {foundUser.connection.status === 'blocked' && (
-                        <p className="text-red-600 text-sm">🚫 You cannot send a request to this user.</p>
+                        <p className="text-rose-600 text-xs font-semibold bg-rose-50 p-2.5 rounded-xl border border-rose-100 text-center">
+                          🚫 You cannot connect with this user.
+                        </p>
                       )}
                     </div>
                   ) : (
                     <button
                       onClick={handleStartChat}
-                      className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors"
+                      className="w-full py-2.5 bg-blue-600 text-white text-sm font-semibold rounded-xl hover:bg-blue-700 flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
                     >
-                      <UserPlus className="w-4 h-4" />
+                      <UserPlus className="w-4 h-4 stroke-[2]" />
                       Send Chat Request
                     </button>
                   )}
@@ -524,12 +539,18 @@ const MessagesHome = () => {
         </div>
       )}
 
-      {/* Empty state for desktop */}
-      <div className="hidden md:flex flex-1 items-center justify-center bg-gray-50">
-        <div className="text-center text-gray-500">
-          <MessageCircle className="w-24 h-24 mx-auto mb-4 text-gray-300" />
-          <p className="text-xl font-medium">Select a conversation</p>
-          <p className="text-sm mt-2">Choose a chat from the list to start messaging</p>
+      {/* Empty State for Desktop */}
+      <div className="hidden md:flex flex-1 flex-col items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 relative">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#8080800a_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px] pointer-events-none"></div>
+        <div className="text-center p-8 max-w-sm relative">
+          <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-blue-500/10 border border-blue-400/20 relative animate-bounce [animation-duration:3s]">
+            <MessageCircle className="w-9 h-9 stroke-[1.8]" />
+            <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
+          </div>
+          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Your Direct Workspace Messaging</h2>
+          <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+            Select a direct teammate from the sidebar or click <Plus className="w-3.5 h-3.5 inline mx-0.5" /> to add a new teammate via their Messaging ID.
+          </p>
         </div>
       </div>
     </div>
