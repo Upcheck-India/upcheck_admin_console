@@ -35,8 +35,7 @@ export async function POST(req) {
       let isMatch = false;
 
       if (isBcrypt) {
-        // Direct ESM node_modules import workaround
-        const bcrypt = (await import('file:///d:/Projects/upcheck_admin/upcheck_admin/node_modules/bcryptjs/index.js')).default;
+        const bcrypt = (await import('bcryptjs')).default;
         isMatch = await bcrypt.compare(password, user.password);
       } else {
         isMatch = (user.password === shaPassword);
