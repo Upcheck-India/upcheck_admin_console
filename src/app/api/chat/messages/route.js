@@ -42,6 +42,18 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
+    // Mark messages as read for this user in this conversation
+    await db.collection('chat_messages').updateMany(
+      {
+        conversationId,
+        recipientId: currentUser._id.toString(),
+        status: { $ne: 'read' }
+      },
+      {
+        $set: { status: 'read' }
+      }
+    );
+
     const query = { conversationId };
     if (before) {
       try {

@@ -347,10 +347,13 @@ const ChatThread = () => {
           </div>
           
           <div>
-            <h2 className="text-md font-bold text-slate-800 tracking-tight leading-none mb-1">
-              {peer?.name || peer?.username || 'Teammate'}
-            </h2>
-            <p className="text-xs text-slate-400 font-medium">{peer?.email}</p>
+            <div className="flex items-center gap-1.5 mb-1">
+              <h2 className="text-md font-bold text-slate-800 tracking-tight leading-none">
+                {peer?.name || peer?.username || 'Teammate'}
+              </h2>
+              <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 px-1 py-0.5 rounded tracking-wider uppercase">DM</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-medium leading-none">{peer?.email}</p>
           </div>
         </div>
 

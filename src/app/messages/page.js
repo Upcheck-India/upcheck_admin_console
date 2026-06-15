@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import {
   MessageCircle, Search, Settings, Plus, X, Check,
-  AlertCircle, UserPlus, Copy, CheckCircle
+  AlertCircle, UserPlus, Copy, CheckCircle, Hash, Users
 } from 'lucide-react';
 
 const POLL_INTERVAL = 5000; // 5 seconds
@@ -231,7 +231,7 @@ const MessagesHome = () => {
         {/* Header */}
         <div className="p-5 border-b border-slate-100">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Messages</h1>
+            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Direct Messaging</h1>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowNewChat(true)}
@@ -351,68 +351,99 @@ const MessagesHome = () => {
         )}
 
         {/* Conversation List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-          {acceptedChats.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-slate-400 p-8 text-center">
-              <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-300 mb-3 border border-slate-100 shadow-inner">
-                <MessageCircle className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-semibold text-slate-700">No chats yet</p>
-              <p className="text-xs mt-1 text-slate-400 max-w-[200px] leading-relaxed">
-                Click the plus icon above and search for a teammate's ID to start.
-              </p>
+        <div className="flex-1 overflow-y-auto divide-y divide-slate-100/50">
+          <div>
+            <div className="px-4.5 pt-4 pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span>Direct Messages</span>
+              <span className="text-[9px] text-blue-500 font-semibold bg-blue-50 px-1.5 py-0.5 rounded-md">DMs</span>
             </div>
-          ) : (
-            <ul className="divide-y divide-slate-50">
-              {acceptedChats.slice(0, visibleCount).map((chat) => (
-                <li
-                  key={chat._id}
-                  onClick={() => router.push(`/messages/${chat.conversationId}`)}
-                  className="p-4 hover:bg-slate-50/80 cursor-pointer transition-all duration-200 group border-l-2 border-transparent hover:border-blue-500 hover:translate-x-0.5"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="relative flex-shrink-0">
-                      <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-sm">
-                        {chat.peer?.username?.[0]?.toUpperCase() || '?'}
-                      </div>
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
-                          {chat.peer?.name || chat.peer?.username || 'Teammate'}
-                        </p>
-                        <span className="text-[10px] text-slate-400 ml-2 font-medium flex-shrink-0">
-                          {formatTime(chat.lastMessage?.createdAt || chat.updatedAt)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-slate-500 truncate pr-2">
-                          {chat.lastMessage?.body || 'No messages yet'}
-                        </p>
-                        {chat.unreadCount > 0 && (
-                          <span className="px-2 py-0.5 bg-blue-600 text-white text-[10px] font-bold rounded-full flex-shrink-0 shadow-sm animate-pulse">
-                            {chat.unreadCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-              {acceptedChats.length > visibleCount && (
-                <li className="p-4 text-center">
-                  <button
-                    onClick={() => setVisibleCount(c => c + 20)}
-                    className="px-4 py-2 text-xs text-blue-600 border border-slate-200 hover:border-blue-600 rounded-xl hover:bg-blue-50 transition-all duration-200 font-semibold shadow-sm"
+            {acceptedChats.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 px-4 text-slate-400 text-center">
+                <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-300 mb-2 border border-slate-100 shadow-inner">
+                  <MessageCircle className="w-5 h-5" />
+                </div>
+                <p className="text-xs font-semibold text-slate-600">No chats yet</p>
+                <p className="text-[10px] mt-0.5 text-slate-400 max-w-[180px] leading-relaxed">
+                  Click the plus icon above to find a teammate.
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-slate-50">
+                {acceptedChats.slice(0, visibleCount).map((chat) => (
+                  <li
+                    key={chat._id}
+                    onClick={() => router.push(`/messages/${chat.conversationId}`)}
+                    className="p-3 hover:bg-slate-50/80 cursor-pointer transition-all duration-200 group border-l-2 border-transparent hover:border-blue-500 hover:translate-x-0.5"
                   >
-                    Load More Conversations
-                  </button>
-                </li>
-              )}
-            </ul>
-          )}
+                    <div className="flex items-start gap-3">
+                      <div className="relative flex-shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-xs">
+                          {chat.peer?.username?.[0]?.toUpperCase() || '?'}
+                        </div>
+                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <p className="text-xs font-semibold text-slate-800 truncate group-hover:text-blue-600 transition-colors">
+                            {chat.peer?.name || chat.peer?.username || 'Teammate'}
+                          </p>
+                          <span className="text-[9px] text-slate-400 ml-2 font-medium flex-shrink-0">
+                            {formatTime(chat.lastMessage?.createdAt || chat.updatedAt)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[11px] text-slate-500 truncate pr-2">
+                            {chat.lastMessage?.body || 'No messages yet'}
+                          </p>
+                          {chat.unreadCount > 0 && (
+                            <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full flex-shrink-0 shadow-sm animate-pulse">
+                              {chat.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+                {acceptedChats.length > visibleCount && (
+                  <li className="p-3 text-center">
+                    <button
+                      onClick={() => setVisibleCount(c => c + 20)}
+                      className="px-3 py-1.5 text-[10px] text-blue-600 border border-slate-200 hover:border-blue-600 rounded-lg hover:bg-blue-50 transition-all duration-200 font-semibold shadow-sm"
+                    >
+                      Load More
+                    </button>
+                  </li>
+                )}
+              </ul>
+            )}
+          </div>
+
+          {/* Channels & Teams (Coming Soon Section) */}
+          <div className="pt-2">
+            <div className="px-4.5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span>Channels & Teams</span>
+              <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
+            </div>
+            <div className="space-y-0.5 pb-4">
+              {[
+                { name: 'announcements', type: 'announce' },
+                { name: 'general', type: 'channel' },
+                { name: 'engineering-hub', type: 'team' },
+                { name: 'design-feedback', type: 'team' }
+              ].map((channel, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2.5 px-4.5 py-2 text-xs font-semibold text-slate-400/80 bg-slate-50/10 select-none cursor-not-allowed border-l-2 border-transparent group"
+                >
+                  <Hash className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
+                  <span className="truncate flex-1">{channel.name}</span>
+                  <span className="opacity-0 group-hover:opacity-100 text-[8px] text-slate-300 font-medium transition-opacity duration-200">Disabled</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -547,10 +578,16 @@ const MessagesHome = () => {
             <MessageCircle className="w-9 h-9 stroke-[1.8]" />
             <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Your Direct Workspace Messaging</h2>
+          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Direct Messaging</h2>
           <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-            Select a direct teammate from the sidebar or click <Plus className="w-3.5 h-3.5 inline mx-0.5" /> to add a new teammate via their Messaging ID.
+            Select a direct teammate from the sidebar to chat.
           </p>
+          <div className="mt-6 p-4 bg-white/60 border border-slate-200/55 rounded-2xl shadow-sm backdrop-blur-sm">
+            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Roadmap</span>
+            <p className="text-xs text-slate-600 mt-2 font-medium">
+              Group Chats, Channels, and Team spaces will be available in a future update!
+            </p>
+          </div>
         </div>
       </div>
     </div>

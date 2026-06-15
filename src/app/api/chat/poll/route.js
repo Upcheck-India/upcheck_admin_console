@@ -45,6 +45,18 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Conversation not found or access denied' }, { status: 403 });
       }
 
+      // Mark messages as read for this user in this conversation since they have it open
+      await db.collection('chat_messages').updateMany(
+        {
+          conversationId,
+          recipientId: currentUser._id.toString(),
+          status: { $ne: 'read' }
+        },
+        {
+          $set: { status: 'read' }
+        }
+      );
+
       const newMessages = await db.collection('chat_messages')
         .find({
           conversationId,
