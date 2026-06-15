@@ -131,10 +131,11 @@ const useUserOptions = () => {
     const fetchUsers = async () => {
       try {
         setLoadingUsers(true);
-        const res = await fetch('/api/users', { credentials: 'include' });
+        const res = await fetch('/api/users?limit=500', { credentials: 'include' });
         if (!res.ok) throw new Error('Failed to fetch users');
         const data = await res.json();
-        setUsersOptions(data.map(u => ({ 
+        const usersArray = data.users || [];
+        setUsersOptions(usersArray.map(u => ({ 
           value: u.email, 
           label: `${u.username} (${u.email})` 
         })));

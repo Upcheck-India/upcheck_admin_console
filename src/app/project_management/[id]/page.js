@@ -26,7 +26,7 @@ const ProjectDetailPage = () => {
     try {
       const [projectRes, usersRes] = await Promise.all([
         fetch(`/api/projects/${id}`),
-        fetch('/api/users')
+        fetch('/api/users?limit=500')
       ]);
 
       if (!projectRes.ok) {
@@ -38,7 +38,7 @@ const ProjectDetailPage = () => {
 
       if (usersRes.ok) {
         const usersData = await usersRes.json();
-        setAllUsers(usersData);
+        setAllUsers(usersData.users || []);
       } else {
         console.error('Failed to fetch users');
         // Continue without all users if it fails, the UI will handle it

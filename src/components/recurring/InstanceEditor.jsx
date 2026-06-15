@@ -90,10 +90,11 @@ const InstanceEditor = ({
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetch('/api/users', { credentials: 'include' });
+        const response = await fetch('/api/users?limit=500', { credentials: 'include' });
         if (response.ok) {
           const data = await response.json();
-          setUsers(data.map(user => ({ 
+          const usersArray = data.users || [];
+          setUsers(usersArray.map(user => ({ 
             value: user.email, 
             label: `${user.username} (${user.email})` 
           })));

@@ -53,10 +53,11 @@ const EventDetailPage = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch('/api/users', { credentials: 'include' });
+        const res = await fetch('/api/users?limit=500', { credentials: 'include' });
         if (!res.ok) return;
         const data = await res.json();
-        setInternalEmails(data.map(u => u.email?.toLowerCase()).filter(Boolean));
+        const usersArray = data.users || [];
+        setInternalEmails(usersArray.map(u => u.email?.toLowerCase()).filter(Boolean));
       } catch {}
     };
     fetchUsers();

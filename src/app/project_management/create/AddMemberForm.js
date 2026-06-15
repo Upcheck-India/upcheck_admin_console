@@ -14,12 +14,12 @@ const AddMemberForm = ({ members, setMembers }) => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users?limit=500');
         if (!response.ok) {
           throw new Error('Failed to fetch users');
         }
         const data = await response.json();
-        setAllUsers(data);
+        setAllUsers(data.users || []);
       } catch (err) {
         setError(err.message);
       }

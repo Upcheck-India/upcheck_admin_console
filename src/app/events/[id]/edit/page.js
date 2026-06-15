@@ -36,9 +36,10 @@ const EditEventPage = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const response = await fetch('/api/users', { credentials: 'include' });
+        const response = await fetch('/api/users?limit=500', { credentials: 'include' });
         const data = await response.json();
-        setAllUsers(data.map(u => ({ value: u.email, label: `${u.username || u.email} (${u.email})` })));
+        const usersArray = data.users || [];
+        setAllUsers(usersArray.map(u => ({ value: u.email, label: `${u.username || u.email} (${u.email})` })));
       } catch (err) {
         console.error('Failed to load users:', err);
       }

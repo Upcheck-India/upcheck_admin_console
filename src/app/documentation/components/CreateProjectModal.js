@@ -273,8 +273,11 @@ export default function CreateProjectModal({ isOpen, onClose, onSuccess, current
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/users');
-      if (res.ok) setAllUsers(await res.json());
+      const res = await fetch('/api/users?limit=500');
+      if (res.ok) {
+        const data = await res.json();
+        setAllUsers(data.users || []);
+      }
     } catch { /* silent */ }
   };
 

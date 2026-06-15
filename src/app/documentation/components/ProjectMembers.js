@@ -253,10 +253,10 @@ export default function ProjectMembers({ project, onMembersUpdate, currentUser =
     const fetch_ = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/users');
+        const res = await fetch('/api/users?limit=500');
         if (!res.ok) throw new Error(`Failed to fetch users (${res.status})`);
         const data = await res.json();
-        setAllUsers(Array.isArray(data) ? data : []);
+        setAllUsers(data.users || []);
       } catch (err) {
         setError(err.message);
       } finally {

@@ -97,10 +97,11 @@ const CreateRecurringMeetingPage = () => {
         const fetchUsers = async () => {
             try {
                 setLoadingUsers(true);
-                const response = await fetch('/api/users', { credentials: 'include' });
+                const response = await fetch('/api/users?limit=500', { credentials: 'include' });
                 if (!response.ok) throw new Error('Failed to fetch users');
                 const data = await response.json();
-                setUsers(data.map(user => ({ value: user.email, label: `${user.username} (${user.email})` })));
+                const usersArray = data.users || [];
+                setUsers(usersArray.map(user => ({ value: user.email, label: `${user.username} (${user.email})` })));
             } catch (err) {
                 setError('Could not load users. Please try again later.');
             } finally {

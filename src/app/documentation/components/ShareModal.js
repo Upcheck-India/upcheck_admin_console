@@ -338,9 +338,9 @@ export default function ShareModal({ isOpen, onClose, file, projectId }) {
   // Fetch org users
   useEffect(() => {
     if (!isOpen) return;
-    fetch('/api/users')
-      .then(r => r.ok ? r.json() : [])
-      .then(d => setOrgMembers(Array.isArray(d) ? d : []))
+    fetch('/api/users?limit=500')
+      .then(r => r.ok ? r.json() : {})
+      .then(d => setOrgMembers(d.users || []))
       .catch(() => {});
   }, [isOpen]);
 

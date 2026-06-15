@@ -527,11 +527,12 @@ const ComposeEmail = ({ onClose, onSend }) => {
     const fetchMembers = async () => {
       try {
         setIsLoadingMembers(true);
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users?limit=500');
         if (response.ok) {
           const data = await response.json();
+          const usersArray = data.users || [];
           // Transform the data to match our expected format
-          const formattedMembers = data.map(user => ({
+          const formattedMembers = usersArray.map(user => ({
             _id: user._id,
             email: user.email,
             name: user.name || user.email.split('@')[0],

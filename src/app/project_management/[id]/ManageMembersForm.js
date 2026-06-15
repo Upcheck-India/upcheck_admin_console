@@ -30,12 +30,12 @@ const ManageMembersForm = ({ initialMembers, onMembersChange, superManager, proj
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/users');
+        const response = await fetch('/api/users?limit=500');
         if (!response.ok) {
           throw new Error(`Failed to fetch users: ${response.status}`);
         }
         const data = await response.json();
-        setAllUsers(Array.isArray(data) ? data : []);
+        setAllUsers(data.users || []);
       } catch (err) {
         console.error('Error fetching users:', err);
         setError(err.message);
