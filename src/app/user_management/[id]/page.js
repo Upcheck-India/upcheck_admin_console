@@ -612,7 +612,14 @@ export default function UserProfilePage() {
                     <Lock className="w-10 h-10 mx-auto mb-3 opacity-40" />
                     <p className="text-sm">This person does not have a system account</p>
                     {isAdmin && (
-                      <button className="mt-4 text-sm text-blue-600 hover:underline">
+                      <button
+                        onClick={() => {
+                          // Redirect to user management dashboard to trigger addition
+                          router.push('/user_management');
+                          toast('Tip: Click "Add User" and fill in their email to assign a login credentials.', { icon: 'ℹ️' });
+                        }}
+                        className="mt-4 text-sm text-blue-600 hover:underline"
+                      >
                         Create system account →
                       </button>
                     )}

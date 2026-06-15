@@ -272,7 +272,7 @@ const UserManagement = () => {
       setLoading(true);
       console.log('Fetching users with role:', userRole);
 
-      const response = await fetch('/api/users', {
+      const response = await fetch('/api/users?limit=500', {
         headers: {
           'x-user-role': userRole,
           'Content-Type': 'application/json'

@@ -72,8 +72,25 @@ export async function POST(req) {
       return NextResponse.json({ error: 'A person with this email already exists' }, { status: 409 });
     }
 
+    // Validate systemUserId existence if provided
+    if (systemUserId) {
+      const parsedSystemUserId = safeObjectId(systemUserId);
+      if (!parsedSystemUserId) {
+        return NextResponse.json({ error: 'Invalid systemUserId format' }, { status: 400 });
+      }
+      const systemUserExists = await db.collection('admin_users').findOne({ _id: parsedSystemUserId });
+      if (!systemUserExists) {
+        return NextResponse.json({ error: 'System account not found' }, { status: 400 });
+      }
+    }
+
     // Atomically generate employee ID
     const employeeId = await generateEmployeeId(db, type);
+
+    // Add safeObjectId helper locally if not present, but wait, we already imported ObjectId. Let's make a local helper:
+    function safeObjectId(id) {
+      try { return new ObjectId(id); } catch { return null; }
+    }
 
     const now = new Date();
 

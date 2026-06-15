@@ -114,7 +114,19 @@ export async function PUT(req, { params }) {
       if (field === 'managerId') {
         $set.managerId = body.managerId ? safeObjectId(body.managerId) : null;
       } else if (field === 'systemUserId') {
-        $set.systemUserId = body.systemUserId ? safeObjectId(body.systemUserId) : null;
+        if (body.systemUserId) {
+          const parsedSystemUserId = safeObjectId(body.systemUserId);
+          if (!parsedSystemUserId) {
+            return NextResponse.json({ error: 'Invalid systemUserId format' }, { status: 400 });
+          }
+          const systemUserExists = await db.collection('admin_users').findOne({ _id: parsedSystemUserId });
+          if (!systemUserExists) {
+            return NextResponse.json({ error: 'System account not found' }, { status: 400 });
+          }
+          $set.systemUserId = parsedSystemUserId;
+        } else {
+          $set.systemUserId = null;
+        }
       } else if (field === 'exitDate') {
         $set.exitDate = body.exitDate ? new Date(body.exitDate) : null;
       } else if (field === 'reHireEligible') {
