@@ -1250,6 +1250,7 @@ function BookingsTab({ onBookingsUpdated }) {
       )}
 
       {selectedBookingForReply && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-200 flex flex-col md:flex-row h-[600px] max-h-[90vh]">
             
             {/* Left Column: Templates Sidebar */}
