@@ -32,6 +32,12 @@ export async function GET() {
       return NextResponse.json({ user: null });
     }
 
+    if (user.employmentStatus === 'suspended' || user.employmentStatus === 'terminated') {
+      console.log('Session invalid: User status is suspended or terminated:', user.username);
+      remove('admin_token');
+      return NextResponse.json({ user: null });
+    }
+
     const userData = {
       username: user.username,
       role: user.role,

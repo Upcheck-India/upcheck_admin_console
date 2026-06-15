@@ -551,8 +551,8 @@ const UserManagement = () => {
 
   const filterUsers = (users) => {
     return users.filter(user => {
-      const matchesSearch = user.username.toLowerCase().includes(filters.search.toLowerCase()) ||
-        user.email?.toLowerCase().includes(filters.search.toLowerCase());
+      const matchesSearch = (user.username || '').toLowerCase().includes(filters.search.toLowerCase()) ||
+        (user.email || '').toLowerCase().includes(filters.search.toLowerCase());
       const matchesRole = filterConfig.role === 'all' || user.role === filterConfig.role;
       const matchesDepartment = filterConfig.department === 'all' ||
         user.department === filterConfig.department;

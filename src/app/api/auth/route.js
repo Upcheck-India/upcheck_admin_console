@@ -30,6 +30,14 @@ export async function POST(req) {
       password: hashedPassword 
     });
 
+    if (user && (user.employmentStatus === 'suspended' || user.employmentStatus === 'terminated')) {
+      console.log('Login denied: Account is suspended or terminated:', username);
+      return NextResponse.json(
+        { error: 'Your account is suspended or terminated. Please contact support.' },
+        { status: 403 }
+      );
+    }
+
     if (user) {
       const sessionToken = crypto.randomBytes(32).toString('hex');
       console.log('Generated session token for user:', user.username);

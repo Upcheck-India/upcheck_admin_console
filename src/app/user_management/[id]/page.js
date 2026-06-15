@@ -118,7 +118,7 @@ export default function UserProfilePage() {
         throw new Error(d.error || 'Failed to load profile');
       }
       const data = await res.json();
-      setUserData(data);
+      setUserData(isPeopleRecord ? data.person : data);
     } catch (e) {
       setError(e.message);
     } finally {
