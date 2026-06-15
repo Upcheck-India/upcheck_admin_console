@@ -20,15 +20,32 @@ export async function POST(req) {
     }
 
     const db = client.db("resources");
-    const hashedPassword = crypto
+    const shaPassword = crypto
       .createHash('sha256')
       .update(password)
       .digest('hex');
 
-    const user = await db.collection('admin_users').findOne({ 
-      username, 
-      password: hashedPassword 
+    // Find the user by username first
+    let user = await db.collection('admin_users').findOne({ 
+      username
     });
+
+    if (user) {
+      const isBcrypt = user.password && user.password.startsWith('$');
+      let isMatch = false;
+
+      if (isBcrypt) {
+        // Direct ESM node_modules import workaround
+        const bcrypt = (await import('file:///d:/Projects/upcheck_admin/upcheck_admin/node_modules/bcryptjs/index.js')).default;
+        isMatch = await bcrypt.compare(password, user.password);
+      } else {
+        isMatch = (user.password === shaPassword);
+      }
+
+      if (!isMatch) {
+        user = null; // Deny entry
+      }
+    }
 
     if (user && (user.employmentStatus === 'suspended' || user.employmentStatus === 'terminated')) {
       console.log('Login denied: Account is suspended or terminated:', username);
