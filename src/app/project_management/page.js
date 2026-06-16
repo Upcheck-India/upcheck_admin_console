@@ -244,7 +244,7 @@ const ProjectManagementPage = () => {
       const userData = await userResponse.json();
 
       setProjects(projectsData);
-      setCurrentUser(userData);
+      setCurrentUser(userData.user);
     } catch (e) {
       setError(e.message);
       toast(e.message, 'error');
@@ -357,11 +357,7 @@ const ProjectManagementPage = () => {
       const matchSearch = p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q);
       const matchStatus = statusFilter === 'all' || (p.status || 'active') === statusFilter;
       const matchTag = !selectedTag || (p.tags && p.tags.includes(selectedTag));
-      const matchTab = activeTab === 'all' ||
-        (activeTab === 'my' && (
-          p.superManager === currentUser?.username ||
-          p.members?.some(m => m.user === currentUser?.username)
-        ));
+      const matchTab = activeTab === 'all' || activeTab === 'my';
       return matchSearch && matchStatus && matchTag && matchTab;
     })
     .sort((a, b) => {

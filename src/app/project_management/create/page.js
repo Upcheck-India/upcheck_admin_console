@@ -28,9 +28,9 @@ const CreateProjectPage = () => {
           router.push('/login');
           return;
         }
-        const user = await res.json();
-        setCurrentUser(user);
-        if (user.role === 'Intern') {
+        const data = await res.json();
+        setCurrentUser(data.user);
+        if (data.user?.role === 'Intern') {
           router.push('/project_management');
         }
       } catch (err) {
