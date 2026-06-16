@@ -429,6 +429,7 @@ const EditEventPage = () => {
                 const email = inputValue.trim();
                 const option = { value: email, label: email };
                 setSelectedParticipants(prev => [...prev, option]);
+              }}
             />
             <p className="text-xs text-gray-500 mt-2">Type an email and press Enter to add as an external participant.</p>
             </div>
