@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject, getUserPermissionLevel } from '../../../../../lib/projectPermissions';
 
 // Helper to verify auth and permissions
 async function getAuthorizedUserAndProject(req, params) {
@@ -12,16 +13,26 @@ async function getAuthorizedUserAndProject(req, params) {
   const user = await db.collection('admin_users').findOne({ sessionToken: token });
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 
-  const { id } = params;
+  const { id } = await params;
   if (!ObjectId.isValid(id)) return { error: NextResponse.json({ error: 'Invalid project ID' }, { status: 400 }) };
 
   const project = await db.collection('projects').findOne({ _id: new ObjectId(id) });
   if (!project) return { error: NextResponse.json({ error: 'Project not found' }, { status: 404 }) };
 
-  const isSuperManager = project.superManager === user.username;
-  const isProjectManager = project.members?.some(m => m.user === user.username && m.role === 'Project Manager');
-  const canEdit = isSuperManager || isProjectManager;
-  const isMember = project.members?.some(m => m.user === user.username);
+  // Fetch teams for permission checks
+  const userIdStr = user._id?.toString();
+  const userTeams = await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+
+  const isMember = canAccessProject(user, project, userTeams);
+  const perms = getUserPermissionLevel(user, project, userTeams);
+  const canEdit = perms && (perms.level === 'full' || perms.level === 'write');
 
   return { client, db, user, project, canEdit, isMember };
 }

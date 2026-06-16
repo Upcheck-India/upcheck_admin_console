@@ -16,17 +16,25 @@ const ProjectDetailPage = () => {
 
   const [project, setProject] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
+  const [allTeams, setAllTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('tasks'); // tasks, members, settings, canvas
 
   const fetchData = async () => {
+    if (!user) return;
     setLoading(true);
     setError(null);
     try {
-      const [projectRes, usersRes] = await Promise.all([
+      const headers = {
+        'x-user-role': user.role || '',
+        'x-user-id': user._id || ''
+      };
+
+      const [projectRes, usersRes, teamsRes] = await Promise.all([
         fetch(`/api/projects/${id}`),
-        fetch('/api/users?limit=500')
+        fetch('/api/users?limit=500', { headers }),
+        fetch('/api/teams?limit=500', { headers })
       ]);
 
       if (!projectRes.ok) {
@@ -41,7 +49,13 @@ const ProjectDetailPage = () => {
         setAllUsers(usersData.users || []);
       } else {
         console.error('Failed to fetch users');
-        // Continue without all users if it fails, the UI will handle it
+      }
+
+      if (teamsRes.ok) {
+        const teamsData = await teamsRes.json();
+        setAllTeams(teamsData.teams || []);
+      } else {
+        console.error('Failed to fetch teams');
       }
 
     } catch (err) {
@@ -52,11 +66,11 @@ const ProjectDetailPage = () => {
   };
 
   useEffect(() => {
-    if (id) {
+    if (id && user) {
         fetchData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, user]);
 
   if (loading || authLoading) {
     return (
@@ -94,7 +108,14 @@ const ProjectDetailPage = () => {
       case 'tasks':
         return <TasksTab projectId={project._id} project={project} allUsers={allUsers} />;
       case 'members':
-        return <MembersTab members={project.members} superManager={project.superManager} />;
+        return (
+          <MembersTab
+            members={project.members}
+            superManager={project.superManager}
+            project={project}
+            allTeams={allTeams}
+          />
+        );
       case 'settings':
         return <SettingsTab project={project} user={user} allUsers={allUsers} onProjectUpdate={fetchData} />;
       case 'canvas':

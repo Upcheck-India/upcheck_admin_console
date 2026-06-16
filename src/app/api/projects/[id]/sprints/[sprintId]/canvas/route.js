@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject, getUserPermissionLevel } from '../../../../../../../lib/projectPermissions';
 
 // Helper to verify auth and permissions
 async function getAuthorizedUserProjectSprint(req, params) {
@@ -12,7 +13,7 @@ async function getAuthorizedUserProjectSprint(req, params) {
   const user = await db.collection('admin_users').findOne({ sessionToken: token });
   if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
 
-  const { id: projectId, sprintId } = params;
+  const { id: projectId, sprintId } = await params;
   if (!ObjectId.isValid(projectId) || !ObjectId.isValid(sprintId)) {
     return { error: NextResponse.json({ error: 'Invalid ID' }, { status: 400 }) };
   }
@@ -23,10 +24,20 @@ async function getAuthorizedUserProjectSprint(req, params) {
   const sprint = await db.collection('project_sprints').findOne({ _id: new ObjectId(sprintId), projectId: project._id });
   if (!sprint) return { error: NextResponse.json({ error: 'Sprint not found' }, { status: 404 }) };
 
-  const isSuperManager = project.superManager === user.username;
-  const isProjectManager = project.members?.some(m => m.user === user.username && m.role === 'Project Manager');
-  const canEdit = isSuperManager || isProjectManager;
-  const isMember = project.members?.some(m => m.user === user.username);
+  // Fetch teams for permission checks
+  const userIdStr = user._id?.toString();
+  const userTeams = await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+
+  const isMember = canAccessProject(user, project, userTeams);
+  const perms = getUserPermissionLevel(user, project, userTeams);
+  const canEdit = perms && (perms.level === 'full' || perms.level === 'write');
 
   return { client, db, user, project, sprint, canEdit, isMember };
 }

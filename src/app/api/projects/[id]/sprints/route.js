@@ -1,21 +1,16 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { canAccessProject, getUserPermissionLevel } from '../../../../../lib/projectPermissions';
 
 /**
  * GET  /api/projects/:id/sprints
  *      Returns list of sprints for the project (sorted by createdAt ascending)
  * POST /api/projects/:id/sprints
- *      Creates a new sprint (only Super Manager or Project Manager)
+ *      Creates a new sprint (only Super Manager or Project Manager / full permission users)
  *      Body: { name?: string, startDate?: string, endDate?: string }
  *      If name is not provided, auto-generate 'Sprint X'.
  *      After creation, all existing project tasks without a sprintId will be migrated to the first sprint created.
- * PUT  /api/projects/:id/sprints
- *      Updates a sprint (only Super Manager or Project Manager)
- *      Body: { sprintId: string, name?: string, startDate?: string, endDate?: string }
- * DELETE /api/projects/:id/sprints
- *      Deletes a sprint (only Super Manager or Project Manager)
- *      Body: { sprintId: string }
  *      Tasks in the sprint will be moved to backlog (sprintId set to null)
  */
 
@@ -35,10 +30,20 @@ async function authAndGetDb(request) {
   return { db, user };
 }
 
-// Helper to check if user is manager of the project
-function isProjectManager(user, project) {
-  return project.superManager === user.username ||
-         project.members.some(m => m.user === user.username && m.role === 'Project Manager');
+// Helper to check if user has manager/full permission on the project
+async function checkManagerPermission(db, user, project) {
+  const userIdStr = user._id?.toString();
+  const userTeams = await db.collection('teams')
+    .find({
+      $or: [
+        { members: userIdStr },
+        { lead: userIdStr },
+      ],
+    })
+    .toArray();
+
+  const perms = getUserPermissionLevel(user, project, userTeams);
+  return perms?.level === 'full';
 }
 
 export async function GET(request, { params }) {
@@ -54,13 +59,23 @@ export async function GET(request, { params }) {
 
     const projectId = new ObjectId(id);
 
-    // Verify membership
     const project = await db.collection('projects').findOne({ _id: projectId });
     if (!project) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
-    const isMember = project.superManager === user.username || project.members.some(m => m.user === user.username);
-    if (!isMember) {
+
+    // Verify membership / access using the permission system
+    const userIdStr = user._id?.toString();
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { members: userIdStr },
+          { lead: userIdStr },
+        ],
+      })
+      .toArray();
+
+    if (!canAccessProject(user, project, userTeams)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -95,11 +110,9 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Only Super Manager or Project Manager can create sprints
-    const memberInfo = project.members.find(m => m.user === user.username);
-    const isManager = memberInfo?.role === 'Project Manager';
-    const isSuperManager = project.superManager === user.username;
-    if (!isManager && !isSuperManager) {
+    // Only user with full manager permission can create sprints
+    const isManager = await checkManagerPermission(db, user, project);
+    if (!isManager) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -153,8 +166,9 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Only Super Manager or Project Manager can update sprints
-    if (!isProjectManager(user, project)) {
+    // Only user with full manager permission can update sprints
+    const isManager = await checkManagerPermission(db, user, project);
+    if (!isManager) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -205,8 +219,9 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Only Super Manager or Project Manager can delete sprints
-    if (!isProjectManager(user, project)) {
+    // Only user with full manager permission can delete sprints
+    const isManager = await checkManagerPermission(db, user, project);
+    if (!isManager) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
