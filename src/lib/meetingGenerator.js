@@ -144,6 +144,7 @@ export async function createMeetingInstance(seriesData, occurrenceDate) {
       hostId: seriesData.hostId,
       duration: seriesData.duration,
       participants: [...seriesData.participants],
+      teams: seriesData.teams ? [...seriesData.teams] : [],
       startTime,
       endTime,
       provider: seriesData.provider,

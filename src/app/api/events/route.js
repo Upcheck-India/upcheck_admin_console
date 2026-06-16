@@ -78,7 +78,7 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db("resources");
 
-    const { title, description, participants, startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '', trackOpens = false, trackClicks = false, trackAck = false, inviteUpcheckBot = false, useInterstitialJoin = true, redirectDelay = 5, includeDirectMeetingLink = true } = await request.json();
+    const { title, description, participants, teams = [], startTime, duration, sendNotification, zoomSettings, provider = 'zoom', joinUrl, includeAgenda = true, includeParticipants = true, includeNotes = false, notes = '', trackOpens = false, trackClicks = false, trackAck = false, inviteUpcheckBot = false, useInterstitialJoin = true, redirectDelay = 5, includeDirectMeetingLink = true } = await request.json();
 
     if (!title || !description || !startTime || !duration) {
         return NextResponse.json({ error: 'Missing required fields: title, description, startTime, and duration are required.' }, { status: 400 });
@@ -104,6 +104,7 @@ export async function POST(request) {
         hostId: user._id.toString(),
         duration: parseInt(duration, 10),
         participants: participants || [],
+        teams: teams || [],
         startTime: new Date(startTime),
         endTime: new Date(new Date(startTime).getTime() + parseInt(duration, 10) * 60000),
         sendNotification: !!sendNotification,
@@ -181,6 +182,7 @@ export async function POST(request) {
               provider: eventData.provider,
             },
             participants: includeParticipants ? eventData.participants : undefined,
+            teams: eventData.teams || [],
             notes: includeNotes ? notes : undefined,
             openPixelUrl,
             trackedJoinUrl,

@@ -294,6 +294,22 @@ const EventDetailPage = () => {
                   <p className="text-gray-700">{event.duration} minutes</p>
                 </div>
 
+                {event.teams && event.teams.length > 0 && (
+                  <div className="mb-4">
+                    <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
+                      <span className="w-5 h-5 mr-2 text-indigo-600 flex items-center justify-center font-normal">👥</span>
+                      Invited Groups/Teams ({event.teams.length})
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {event.teams.map((teamName, idx) => (
+                        <span key={idx} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-sm transition-all hover:bg-emerald-100">
+                          {teamName}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <h3 className="font-semibold text-gray-800 mb-2 flex items-center">
                     <Users className="w-5 h-5 mr-2 text-indigo-600"/>

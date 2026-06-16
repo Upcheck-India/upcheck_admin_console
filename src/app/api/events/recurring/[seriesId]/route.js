@@ -83,6 +83,7 @@ export async function PUT(request, { params }) {
       title,
       description,
       participants,
+      teams,
       duration,
       recurrencePattern,
       reminderSettings,
@@ -105,6 +106,7 @@ export async function PUT(request, { params }) {
     if (title !== undefined) updateData.title = title;
     if (description !== undefined) updateData.description = description;
     if (participants !== undefined) updateData.participants = participants;
+    if (teams !== undefined) updateData.teams = teams;
     if (reminderSettings !== undefined) updateData.reminderSettings = reminderSettings;
     if (seriesNotification !== undefined) updateData.seriesNotification = seriesNotification;
     if (trackOpens !== undefined) updateData.trackOpens = !!trackOpens;

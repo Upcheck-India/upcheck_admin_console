@@ -119,7 +119,7 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { title, description, startTime, duration, participants, provider, joinUrl } = body;
+    const { title, description, startTime, duration, participants, provider, joinUrl, teams } = body;
 
     const updatedEventData = {
       title,
@@ -127,6 +127,7 @@ export async function PUT(request, { params }) {
       startTime,
       duration,
       participants,
+      teams: teams || [],
       updatedAt: new Date(),
     };
 

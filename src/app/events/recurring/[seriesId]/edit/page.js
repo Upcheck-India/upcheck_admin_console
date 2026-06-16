@@ -22,6 +22,7 @@ const EditRecurringSeriesPage = () => {
     description: '',
     duration: 60,
     participants: [],
+    teams: [],
   });
   const [recurrencePattern, setRecurrencePattern] = useState(null);
   const [seriesNotificationSettings, setSeriesNotificationSettings] = useState({
@@ -51,6 +52,7 @@ const EditRecurringSeriesPage = () => {
           description: data.description || '',
           duration: data.duration || 60,
           participants: data.participants || [],
+          teams: data.teams || [],
         });
         
         setRecurrencePattern(data.recurrencePattern);

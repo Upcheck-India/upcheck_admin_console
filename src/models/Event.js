@@ -63,6 +63,10 @@ const EventOverridesSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  teams: [{
+    type: String,
+    trim: true
+  }],
   duration: {
     type: Number,
     min: 1,
@@ -101,6 +105,10 @@ const EventSchema = new mongoose.Schema({
     max: 300
   },
   participants: [{
+    type: String,
+    trim: true
+  }],
+  teams: [{
     type: String,
     trim: true
   }],
@@ -264,6 +272,11 @@ EventSchema.virtual('effectiveDescription').get(function() {
 // Virtual for getting effective participants (with overrides)
 EventSchema.virtual('effectiveParticipants').get(function() {
   return this.overrides?.participants || this.participants;
+});
+
+// Virtual for getting effective teams (with overrides)
+EventSchema.virtual('effectiveTeams').get(function() {
+  return this.overrides?.teams || this.teams;
 });
 
 // Virtual for getting effective duration (with overrides)

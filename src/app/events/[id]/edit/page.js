@@ -22,6 +22,86 @@ const EditEventPage = () => {
   });
   const [selectedParticipants, setSelectedParticipants] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
+  
+  const [teams, setTeams] = useState([]);
+  const [selectedTeams, setSelectedTeams] = useState([]);
+  const [loadingTeams, setLoadingTeams] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchTeams = async () => {
+      try {
+        setLoadingTeams(true);
+        const response = await fetch('/api/teams?limit=500', {
+          headers: {
+            'x-user-role': user.role,
+            'x-user-id': user.id || user._id,
+          },
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setTeams(data.teams || []);
+        }
+      } catch (err) {
+        console.error('Failed to load teams:', err);
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+    fetchTeams();
+  }, [user]);
+
+  const handleTeamsChange = (selectedOptions) => {
+    const prevTeams = selectedTeams;
+    const nextTeams = selectedOptions || [];
+    setSelectedTeams(nextTeams);
+
+    // Find added/removed teams
+    const addedTeams = nextTeams.filter(t => !prevTeams.some(pt => pt.value === t.value));
+    const removedTeams = prevTeams.filter(pt => !nextTeams.some(t => t.value === pt.value));
+
+    let updatedParticipants = [...selectedParticipants];
+
+    addedTeams.forEach(teamOpt => {
+      const teamObj = teams.find(t => t._id === teamOpt.value);
+      if (teamObj && teamObj.members) {
+        teamObj.members.forEach(member => {
+          if (member && member.email) {
+            const email = member.email.toLowerCase();
+            if (!updatedParticipants.some(p => p.value.toLowerCase() === email)) {
+              updatedParticipants.push({
+                value: member.email,
+                label: `${member.username || member.email.split('@')[0]} (${member.email})`
+              });
+            }
+          }
+        });
+      }
+    });
+
+    removedTeams.forEach(teamOpt => {
+      const teamObj = teams.find(t => t._id === teamOpt.value);
+      if (teamObj && teamObj.members) {
+        teamObj.members.forEach(member => {
+          if (member && member.email) {
+            const email = member.email.toLowerCase();
+            const inOtherTeam = nextTeams.some(remainingTeamOpt => {
+              const remainingTeamObj = teams.find(t => t._id === remainingTeamOpt.value);
+              return remainingTeamObj && remainingTeamObj.members && 
+                     remainingTeamObj.members.some(m => m && m.email && m.email.toLowerCase() === email);
+            });
+
+            if (!inOtherTeam) {
+              updatedParticipants = updatedParticipants.filter(p => p.value.toLowerCase() !== email);
+            }
+          }
+        });
+      }
+    });
+
+    setSelectedParticipants(updatedParticipants);
+  };
   // --- Bug Fix #1.3: Separate loading states for auth vs event data ---
   // Previously a single `loading` state caused the page to hang if user wasn't
   // loaded yet, because fetchEvent() was gated on `user` being truthy.
@@ -79,6 +159,11 @@ const EditEventPage = () => {
           duration: eventData.duration.toString(),
         });
         setSelectedParticipants(eventData.participants.map(p => ({ value: p, label: p })));
+        if (eventData.teams) {
+          setSelectedTeams(eventData.teams.map(t => ({ value: t, label: t })));
+        } else {
+          setSelectedTeams([]);
+        }
         setProvider(eventData.provider || 'zoom');
         setJoinUrl(eventData.joinUrl || '');
         // Store existing Zoom URL separately for display purposes
@@ -121,6 +206,7 @@ const EditEventPage = () => {
     const finalData = {
       ...formData,
       participants: selectedParticipants.map(p => p.value),
+      teams: selectedTeams.map(t => t.label),
       provider,
       ...(provider === 'google_meet' ? { joinUrl } : {}),
     };
@@ -297,8 +383,34 @@ const EditEventPage = () => {
               </div>
               <h2 className="text-lg font-semibold text-gray-900">Participants</h2>
             </div>
-            <CreatableSelect
-              isMulti
+            <div className="space-y-4">
+              {/* Select Teams */}
+              <div>
+                <label htmlFor="teams" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Add Members from Groups/Teams
+                </label>
+                <Select
+                  id="teams"
+                  isMulti
+                  options={teams.map(team => ({ value: team._id, label: team.name }))}
+                  isLoading={loadingTeams}
+                  value={selectedTeams}
+                  onChange={handleTeamsChange}
+                  placeholder="Select teams..."
+                  closeMenuOnSelect={false}
+                  menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+                  styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+                />
+              </div>
+
+              <div className="border-t border-gray-150 my-2 pt-2">
+                <label htmlFor="participants" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  Individual Participants
+                </label>
+              </div>
+
+              <CreatableSelect
+                isMulti
               options={allUsers}
               value={selectedParticipants}
               onChange={setSelectedParticipants}

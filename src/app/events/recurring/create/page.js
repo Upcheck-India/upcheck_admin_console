@@ -8,6 +8,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { ArrowLeft, Video, Users, Calendar, Clock, Settings, Mail, AlertCircle, Check, ExternalLink, Repeat, Save } from 'lucide-react';
 import { RecurrencePatternSelector, SeriesNotificationSettings } from '../../../../components/recurring';
+import { useAuth } from '../../../../hooks/useAuth';
 
 const InputField = memo(({ label, name, type = 'text', value, onChange, required = false, error, ...props }) => (
     <div className="space-y-2">
@@ -83,6 +84,87 @@ const CreateRecurringMeetingPage = () => {
     const [fieldErrors, setFieldErrors] = useState({});
     const [provider, setProvider] = useState('zoom');
     const [joinUrl, setJoinUrl] = useState('');
+
+    const { user: authUser } = useAuth(true);
+    const [teams, setTeams] = useState([]);
+    const [selectedTeams, setSelectedTeams] = useState([]);
+    const [loadingTeams, setLoadingTeams] = useState(false);
+
+    useEffect(() => {
+        if (!authUser) return;
+        const fetchTeams = async () => {
+            try {
+                setLoadingTeams(true);
+                const response = await fetch('/api/teams?limit=500', {
+                    headers: {
+                        'x-user-role': authUser.role,
+                        'x-user-id': authUser.id || authUser._id,
+                    },
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setTeams(data.teams || []);
+                }
+            } catch (err) {
+                console.error('Failed to load teams:', err);
+            } finally {
+                setLoadingTeams(false);
+            }
+        };
+        fetchTeams();
+    }, [authUser]);
+
+    const handleTeamsChange = (selectedOptions) => {
+        const prevTeams = selectedTeams;
+        const nextTeams = selectedOptions || [];
+        setSelectedTeams(nextTeams);
+
+        // Find added/removed teams
+        const addedTeams = nextTeams.filter(t => !prevTeams.some(pt => pt.value === t.value));
+        const removedTeams = prevTeams.filter(pt => !nextTeams.some(t => t.value === pt.value));
+
+        let updatedParticipants = [...selectedParticipants];
+
+        addedTeams.forEach(teamOpt => {
+            const teamObj = teams.find(t => t._id === teamOpt.value);
+            if (teamObj && teamObj.members) {
+                teamObj.members.forEach(member => {
+                    if (member && member.email) {
+                        const email = member.email.toLowerCase();
+                        if (!updatedParticipants.some(p => p.value.toLowerCase() === email)) {
+                            updatedParticipants.push({
+                                value: member.email,
+                                label: `${member.username || member.email.split('@')[0]} (${member.email})`
+                            });
+                        }
+                    }
+                });
+            }
+        });
+
+        removedTeams.forEach(teamOpt => {
+            const teamObj = teams.find(t => t._id === teamOpt.value);
+            if (teamObj && teamObj.members) {
+                teamObj.members.forEach(member => {
+                    if (member && member.email) {
+                        const email = member.email.toLowerCase();
+                        const inOtherTeam = nextTeams.some(remainingTeamOpt => {
+                            const remainingTeamObj = teams.find(t => t._id === remainingTeamOpt.value);
+                            return remainingTeamObj && remainingTeamObj.members && 
+                                   remainingTeamObj.members.some(m => m && m.email && m.email.toLowerCase() === email);
+                        });
+
+                        if (!inOtherTeam) {
+                            updatedParticipants = updatedParticipants.filter(p => p.value.toLowerCase() !== email);
+                        }
+                    }
+                });
+            }
+        });
+
+        setSelectedParticipants(updatedParticipants);
+    };
 
     // Recurring-specific state
     const [recurrencePattern, setRecurrencePattern] = useState(null);
@@ -212,6 +294,7 @@ const CreateRecurringMeetingPage = () => {
                 ...formData,
                 zoomSettings,
                 participants: selectedParticipants.map(p => p.value),
+                teams: selectedTeams.map(t => t.label),
                 provider,
                 recurrencePattern,
                 seriesNotification: seriesNotificationSettings,
@@ -437,6 +520,34 @@ const CreateRecurringMeetingPage = () => {
                                     <h2 className="text-xl font-semibold text-gray-900">Participants</h2>
                                 </div>
                                 <div className="space-y-4">
+                                    {/* Select Teams */}
+                                    <div>
+                                        <label htmlFor="teams" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                            Add Members from Groups/Teams
+                                        </label>
+                                        <Select
+                                            id="teams"
+                                            isMulti
+                                            options={teams.map(team => ({ value: team._id, label: team.name }))}
+                                            isLoading={loadingTeams}
+                                            value={selectedTeams}
+                                            onChange={handleTeamsChange}
+                                            placeholder="Select teams..."
+                                            closeMenuOnSelect={false}
+                                            menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+                                            styles={{
+                                                ...customSelectStyles,
+                                                menuPortal: (base) => ({ ...base, zIndex: 9999 })
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="border-t border-gray-150 my-2 pt-2">
+                                        <label htmlFor="participants" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                                            Individual Participants
+                                        </label>
+                                    </div>
+
                                     <CreatableSelect
                                         id="participants"
                                         isMulti

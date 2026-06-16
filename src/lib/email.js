@@ -52,7 +52,7 @@ const getMonthShort = (date) => {
  * Sends a styled invitation email with improved design.
  */
 export const sendEmail = async (to, subject, options) => {
-  const { host, event, participants = [], notes, openPixelUrl, trackedJoinUrl, ackUrl } = options;
+  const { host, event, participants = [], teams = [], notes, openPixelUrl, trackedJoinUrl, ackUrl } = options;
   const joinLink = event.joinUrl || event.zoomMeetingUrl;
   const providerLabel = event.provider === 'google_meet' ? 'Google Meet' : 'Zoom';
   const providerColor = event.provider === 'google_meet' ? '#0F9D58' : '#2D8CFF';
@@ -569,6 +569,18 @@ export const sendEmail = async (to, subject, options) => {
                 <a href="${joinLink}" class="direct-link">${joinLink}</a>
               ` : ''}
             </div>
+
+            ${teams && teams.length ? `
+              <div class="participants-section" style="background: #f0fdf4; border-color: #bbf7d0; margin-bottom: 16px;">
+                <div class="participants-title" style="color: #166534;">
+                  <span>👥</span>
+                  <span>Invited Teams (${teams.length})</span>
+                </div>
+                <ul class="participants-list">
+                  ${teams.map(t => `<li class="participant-tag" style="background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); color: #166534; border-color: #bbf7d0;">${t}</li>`).join('')}
+                </ul>
+              </div>
+            ` : ''}
 
             ${participants.length ? `
               <div class="participants-section">

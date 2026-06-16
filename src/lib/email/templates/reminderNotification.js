@@ -755,6 +755,17 @@ export function generateReminderNotificationHtml(meeting, options = {}) {
                     </div>
                   </div>
                 ` : ''}
+
+                ${meeting.teams && meeting.teams.length ? `
+                  <div style="background: #f0fdf4; border: 2px solid #bbf7d0; border-radius: 12px; padding: 20px; margin-top: 24px;">
+                    <div style="font-size: 14px; font-weight: 700; color: #166534; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                      👥 Selected Teams
+                    </div>
+                    <div style="font-size: 15px; color: #14532d; font-weight: 600;">
+                      ${meeting.teams.join(', ')}
+                    </div>
+                  </div>
+                ` : ''}
               </div>
             </div>
 

@@ -105,6 +105,10 @@ const RecurringSeriesSchema = new mongoose.Schema({
     type: String,
     trim: true
   }],
+  teams: [{
+    type: String,
+    trim: true
+  }],
   provider: {
     type: String,
     enum: ['zoom', 'google_meet'],
