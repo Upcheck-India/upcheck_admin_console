@@ -1,13 +1,5 @@
-import nodemailer from 'nodemailer';
 import * as ics from 'ics';
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'upcheck.team@gmail.com',
-    pass: process.env.EMAIL_PASS || 'znko yoeq uvbc anvy',
-  },
-});
+import { sendEmail as sendUnifiedEmail } from './emailService.js';
 
 const formatDate = (date) => {
   return new Intl.DateTimeFormat('en-IN', {
@@ -629,24 +621,27 @@ export const sendEmail = async (to, subject, options) => {
     </html>
   `;
 
-  const mailOptions = {
-    from: `Upcheck Meetings <${process.env.EMAIL_USER}>`,
-    to,
-    subject,
-    html: htmlBody,
-    attachments: icsContent ? [
-      {
-        filename: `${safeTitle}.ics`,
-        content: icsContent,
-        contentType: 'text/calendar; charset=utf-8; method=REQUEST'
-      }
-    ] : undefined,
-  };
-
   try {
-    const info = await transporter.sendMail(mailOptions);
+    const result = await sendUnifiedEmail({
+      to,
+      subject,
+      html: htmlBody,
+      attachments: icsContent ? [
+        {
+          filename: `${safeTitle}.ics`,
+          content: icsContent,
+          contentType: 'text/calendar; charset=utf-8; method=REQUEST'
+        }
+      ] : undefined,
+      type: 'meeting_invite'
+    });
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to send email');
+    }
+
     console.log(`✅ Email sent successfully to ${to}`);
-    return info;
+    return result;
   } catch (error) {
     console.error(`❌ Error sending email to ${to}:`, error);
     throw new Error('Failed to send email');

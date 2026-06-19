@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../../../../../lib/emailService';
 
 // POST /api/dataroom/external-auth/send-verification - Send verification code to email
 export async function POST(request) {
@@ -38,21 +38,11 @@ export async function POST(request) {
       }
     );
 
-    // Send email with verification code
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.SMTP_PORT || '587'),
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const mailOptions = {
-      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+    // Send email with verification code via centralized email service
+    await sendEmail({
       to: emailLower,
       subject: 'Verify Your Email - Upcheck Data Room',
+      type: 'verification_code',
       html: `
         <!DOCTYPE html>
         <html>
@@ -100,9 +90,7 @@ export async function POST(request) {
         </body>
         </html>
       `,
-    };
-
-    await transporter.sendMail(mailOptions);
+    });
 
     return NextResponse.json({
       success: true,

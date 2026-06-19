@@ -3,7 +3,7 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { clerkClient } from '@clerk/nextjs/server';
 import bcrypt from 'bcryptjs';
-import { sendTemplatedEmail, EMAIL_TYPES } from '../../../../lib/emailService.js';
+import { sendTemplatedEmail, EMAIL_TYPES, sendEmail } from '../../../../lib/emailService.js';
 
 // External user roles - these have no permissions by default
 const EXTERNAL_ROLES = [
@@ -229,25 +229,14 @@ export async function POST(request) {
       // Send invite email if requested
       if (sendInviteEmail) {
         try {
-          const nodemailer = await import('nodemailer');
-          const transporter = nodemailer.default.createTransport({
-            host: process.env.SMTP_HOST || 'smtp.gmail.com',
-            port: parseInt(process.env.SMTP_PORT || '587'),
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: {
-              user: process.env.SMTP_USER,
-              pass: process.env.SMTP_PASS,
-            },
-          });
-
           const expiryInfo = expiresAt
             ? `<p><strong>⚠️ Temporary Access:</strong> Your access will expire on ${new Date(expiresAt).toLocaleDateString()}. After this date, you will no longer be able to login.</p>`
             : '';
 
-          const mailOptions = {
-            from: process.env.SMTP_FROM || process.env.SMTP_USER,
+          await sendEmail({
             to: emailLower,
             subject: `You've been invited to Upcheck Data Room as ${role}`,
+            type: 'custom',
             html: `
               <!DOCTYPE html>
               <html>
@@ -290,9 +279,7 @@ export async function POST(request) {
               </body>
               </html>
             `,
-          };
-
-          await transporter.sendMail(mailOptions);
+          });
         } catch (emailError) {
           console.error('Failed to send invite email:', emailError);
           // Don't fail creation if email fails

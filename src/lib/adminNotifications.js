@@ -385,34 +385,16 @@ ${data.failedChecks.map(check => `- ${check.name}: ${check.error}`).join('\n')}`
  */
 export async function emailNotificationHandler(notification) {
   try {
-    const nodemailer = await import('nodemailer');
+    const { sendAdminEmail } = await import('./emailService.js');
     
-    const transporter = nodemailer.default.createTransporter({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    const adminEmails = (process.env.ADMIN_EMAILS || '').split(',').filter(email => email.trim());
-    
-    if (adminEmails.length === 0) {
-      console.warn('No admin emails configured for notifications');
-      return;
-    }
-
-    const mailOptions = {
-      from: `Upcheck Admin <${process.env.EMAIL_USER}>`,
-      to: adminEmails.join(', '),
+    await sendAdminEmail({
       subject: notification.content.subject,
       text: notification.content.text,
       html: notification.content.html,
-      priority: notification.severity === ERROR_SEVERITY.CRITICAL ? 'high' : 'normal'
-    };
-
-    await transporter.sendMail(mailOptions);
-    console.log(`Admin notification email sent to ${adminEmails.length} recipients`);
+      type: 'system_alert'
+    });
+    
+    console.log(`Admin notification email sent`);
 
   } catch (error) {
     console.error('Error sending admin notification email:', error);

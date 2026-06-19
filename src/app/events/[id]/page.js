@@ -18,6 +18,7 @@ const EventDetailPage = () => {
   const [internalEmails, setInternalEmails] = useState([]);
   const [forcingBot, setForcingBot] = useState(false);
   const [forceMsg, setForceMsg] = useState('');
+  const [resending, setResending] = useState(false);
   
   // MOM file upload states
   const [momFiles, setMomFiles] = useState([]);
@@ -108,6 +109,25 @@ const EventDetailPage = () => {
     } finally {
       setForcingBot(false);
       setTimeout(() => setForceMsg(''), 4000);
+    }
+  };
+
+  const handleResendNotifications = async () => {
+    try {
+      setResending(true);
+      const res = await fetch(`/api/events/${id}/resend`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to resend notifications');
+      }
+      toast.success(data.message || 'Notifications resent successfully!');
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setResending(false);
     }
   };
 
@@ -258,16 +278,33 @@ const EventDetailPage = () => {
           Back to Dashboard
         </button>
 
-        {user && event && user.email === event.host && (
+        {user && event && (event.host === user.email || user.role === 'Admin' || user.role === 'Console admin') && (
           <div className="flex justify-end items-center gap-4 mb-4">
-            <button onClick={() => router.push(`/events/${id}/edit`)} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-              <Pencil className="w-4 h-4 mr-2" />
-              Edit Event
+            <button onClick={handleResendNotifications} disabled={resending} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-emerald-700 bg-emerald-100 hover:bg-emerald-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 disabled:opacity-50">
+              {resending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Resending...
+                </>
+              ) : (
+                <>
+                  <MailCheck className="w-4 h-4 mr-2" />
+                  Resend Invites
+                </>
+              )}
             </button>
-            <button onClick={() => setIsDeleteModalOpen(true)} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete Event
-            </button>
+            {user.email === event.host && (
+              <>
+                <button onClick={() => router.push(`/events/${id}/edit`)} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Edit Event
+                </button>
+                <button onClick={() => setIsDeleteModalOpen(true)} className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Event
+                </button>
+              </>
+            )}
           </div>
         )}
 

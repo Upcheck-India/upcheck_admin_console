@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../../../lib/emailService';
 import clientPromise from '../../../lib/mongodb';
 
 export async function POST(request) {
@@ -42,14 +42,7 @@ export async function POST(request) {
       );
     }
 
-    // Create transporter
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER || 'upcheck.team@gmail.com',
-        pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD || 'znko yoeq uvbc anvy',
-      },
-    });
+
 
     // Handle attachments
     const attachments = [];
@@ -71,16 +64,15 @@ export async function POST(request) {
     }
 
     // Send mail
-    const fromAddress = `${user.name || user.username || user.email} <${user.email}>`;
-    const info = await transporter.sendMail({
-      from: fromAddress,
-      replyTo: user.email,
+    const info = await sendEmail({
       to: recipientEmails,
-      cc: ccEmails.length ? ccEmails : undefined,
-      bcc: bccEmails.length ? bccEmails : undefined,
+      cc: ccEmails,
+      bcc: bccEmails,
       subject: subject,
       html: body,
       attachments: attachments,
+      replyTo: { email: user.email, name: user.name || user.username || user.email },
+      type: 'custom'
     });
 
     // Save to DB: Sent for sender

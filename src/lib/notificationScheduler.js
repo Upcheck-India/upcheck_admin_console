@@ -179,25 +179,15 @@ export async function sendReminder(notificationId) {
       baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
     });
 
-    // Send enhanced reminder email
-    const nodemailer = await import('nodemailer');
-    const transporter = nodemailer.default.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    });
-
-    const mailOptions = {
-      from: `Upcheck Meetings <${process.env.EMAIL_USER}>`,
-      to: notification.recipient,
-      subject,
-      html: htmlContent,
-      text: textContent
-    };
-
-    await transporter.sendMail(mailOptions);
+     // Send enhanced reminder email via centralized email service
+     const { sendEmail } = await import('./emailService.js');
+     await sendEmail({
+       to: notification.recipient,
+       subject,
+       html: htmlContent,
+       text: textContent,
+       type: 'meeting_reminder'
+     });
 
     // Update notification status
     notification.status = 'sent';
@@ -342,25 +332,15 @@ async function sendSeriesNotificationEmail(notification, series, upcomingMeeting
     recipient: notification.recipient
   });
 
-  // Send email using premium template
-  const mailOptions = {
-    from: `Upcheck Meetings <${process.env.EMAIL_USER}>`,
+  // Send email using premium template via centralized email service
+  const { sendEmail } = await import('./emailService.js');
+  await sendEmail({
     to: notification.recipient,
     subject,
     html: htmlContent,
-    text: textContent
-  };
-
-  const nodemailer = await import('nodemailer');
-  const transporter = nodemailer.default.createTransport({
-    service: 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
+    text: textContent,
+    type: 'meeting_invite'
   });
-
-  await transporter.sendMail(mailOptions);
 }
 
 

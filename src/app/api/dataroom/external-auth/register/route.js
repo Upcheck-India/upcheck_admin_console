@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../../../../../lib/emailService';
 
 // POST /api/dataroom/external-auth/register - Register external user for data room access
 export async function POST(request) {
@@ -111,20 +111,10 @@ export async function POST(request) {
 
     // Send verification email
     try {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
-        },
-      });
-
-      const mailOptions = {
-        from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      await sendEmail({
         to: emailLower,
         subject: 'Verify Your Email - Upcheck Data Room',
+        type: 'verification_code',
         html: `
           <!DOCTYPE html>
           <html>
@@ -178,9 +168,7 @@ export async function POST(request) {
           </body>
           </html>
         `,
-      };
-
-      await transporter.sendMail(mailOptions);
+      });
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
       // Don't fail registration if email fails

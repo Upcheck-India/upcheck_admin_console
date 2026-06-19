@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../../../lib/emailService';
 
 export async function POST(request) {
   try {
@@ -9,29 +9,21 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Missing required fields: to, subject, and html/text' }, { status: 400 });
     }
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER || 'upcheck.team@gmail.com',
-        pass: process.env.EMAIL_PASS || 'znko yoeq uvbc anvy',
-      },
+    const info = await sendEmail({
+      to,
+      subject,
+      text,
+      html: html || text,
+      type: 'custom'
     });
 
-    const mailOptions = {
-      from: `"Upcheck" <${process.env.EMAIL_USER || 'upcheck.team@gmail.com'}>`,
-      to: to,
-      subject: subject,
-      text: text,
-      html: html,
-    };
+    console.log('Email sent successfully via unified service:', info.messageId);
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.response);
-
-    return NextResponse.json({ message: 'Email sent successfully', info: info.response });
+    return NextResponse.json({ message: 'Email sent successfully', info: info.messageId });
 
   } catch (error) {
     console.error('Error sending email:', error);
     return NextResponse.json({ error: 'Failed to send email', details: error.message }, { status: 500 });
   }
 }
+

@@ -82,22 +82,19 @@ let brevoClient = null;
 let brevoTransactionalEmailsApi = null;
 
 const initializeBrevoClient = () => {
-  if (!config.brevo.apiKey) {
+  if (!config.brevo.apiKey || config.brevo.apiKey === 'your-api-key') {
     console.warn('Brevo API key not configured, using nodemailer fallback');
     return false;
   }
 
   try {
-    if (BrevoApi) {
-      brevoClient = new BrevoApi({
+    if (BrevoApi && BrevoApi.BrevoClient) {
+      brevoClient = new BrevoApi.BrevoClient({
         apiKey: config.brevo.apiKey,
       });
 
       // Get the transactional emails API
-      if (BrevoApi.TransactionalEmailsApi) {
-        brevoTransactionalEmailsApi = new BrevoApi.TransactionalEmailsApi();
-        brevoTransactionalEmailsApi.setApiKey(BrevoApi.TransactionalEmailsApiApiKeys.apiKey, config.brevo.apiKey);
-      }
+      brevoTransactionalEmailsApi = brevoClient.transactionalEmails;
 
       console.log('Brevo client initialized successfully');
       return true;
