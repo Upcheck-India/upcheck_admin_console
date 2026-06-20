@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2 } from 'lucide-react';
+import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
 import TaskDetailsModal from './TaskDetailsModal';
 import AddSprintModal from './AddSprintModal';
 import ShareLinksModal from './ShareLinksModal';
 import { useAuth } from '../../../hooks/useAuth';
+import { getUserPermissionLevel } from '../../../lib/projectPermissions';
 import { 
   DndContext, 
   closestCenter, 
@@ -39,7 +40,7 @@ const typeColors = {
   Epic: 'bg-purple-100 text-purple-800',
 };
 
-const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
+const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, isFirst, isLast, onMoveUp, onMoveDown }) => {
   const { 
     attributes, 
     listeners, 
@@ -49,7 +50,7 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
     isDragging 
   } = useSortable({ 
     id: task._id,
-    disabled: !isManager,
+    disabled: !canDrag,
   });
 
   const style = {
@@ -74,13 +75,40 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
     onDelete(task._id);
   };
 
+  const dateStatus = useMemo(() => {
+    if (!task.dueDate || task.status === 'Done') return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const due = new Date(task.dueDate);
+    due.setHours(0, 0, 0, 0);
+    const diffTime = due - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 0) {
+      return {
+        label: 'Overdue',
+        textClass: 'text-red-600 font-semibold',
+        cardClass: 'border-red-200 bg-red-50/40 hover:bg-red-50/60',
+        badgeClass: 'bg-red-100 text-red-800 border border-red-200',
+      };
+    } else if (diffDays <= 2) {
+      return {
+        label: 'Due Soon',
+        textClass: 'text-amber-600 font-semibold',
+        cardClass: 'border-amber-200 bg-amber-50/40 hover:bg-amber-50/60',
+        badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+      };
+    }
+    return null;
+  }, [task.dueDate, task.status]);
+
   return (
     <div 
       ref={setNodeRef} 
       style={style} 
       {...attributes} 
       {...listeners} 
-      className="bg-white p-3 rounded-lg shadow-sm border relative group touch-none"
+      className={`bg-white p-3 rounded-lg shadow-sm border relative group touch-none ${dateStatus?.cardClass || 'border-gray-200'}`}
     >
       <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white bg-opacity-75 rounded-md">
         {/* View button for all users */}
@@ -92,25 +120,45 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
         >
           <Eye className="h-4 w-4" />
         </button>
-        {isManager && (
-          <>
-            <button 
-              onClick={handleEdit} 
-              className="text-gray-500 hover:text-blue-600 p-1"
-              type="button"
-              title="Edit task"
-            >
-              <Edit className="h-4 w-4" />
-            </button>
-            <button 
-              onClick={handleDelete} 
-              className="text-gray-500 hover:text-red-600 p-1"
-              type="button"
-              title="Delete task"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </>
+        {canDrag && !isFirst && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onMoveUp(); }} 
+            className="text-gray-500 hover:text-blue-600 p-1"
+            type="button"
+            title="Move up"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+        )}
+        {canDrag && !isLast && (
+          <button 
+            onClick={(e) => { e.stopPropagation(); onMoveDown(); }} 
+            className="text-gray-500 hover:text-blue-600 p-1"
+            type="button"
+            title="Move down"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        )}
+        {canEdit && (
+          <button 
+            onClick={handleEdit} 
+            className="text-gray-500 hover:text-blue-600 p-1"
+            type="button"
+            title="Edit task"
+          >
+            <Edit className="h-4 w-4" />
+          </button>
+        )}
+        {canDelete && (
+          <button 
+            onClick={handleDelete} 
+            className="text-gray-500 hover:text-red-600 p-1"
+            type="button"
+            title="Delete task"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         )}
       </div>
       
@@ -118,11 +166,19 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
         <h4 className="font-semibold text-gray-800 pr-4 text-sm flex-1">
           {task.title}
         </h4>
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-          typeColors[task.type] || 'bg-gray-100 text-gray-800'
-        }`}>
-          {task.type}
-        </span>
+        <div className="flex items-center space-x-1.5 flex-shrink-0">
+          {dateStatus && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${dateStatus.badgeClass}`}>
+              <AlertTriangle className="h-3 w-3 flex-shrink-0" />
+              {dateStatus.label}
+            </span>
+          )}
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            typeColors[task.type] || 'bg-gray-100 text-gray-800'
+          }`}>
+            {task.type}
+          </span>
+        </div>
       </div>
       
       {task.description && (
@@ -131,7 +187,7 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
       
       <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
         <div className="flex items-center">
-          <span className="text-xs text-gray-500">
+          <span className={`text-xs ${dateStatus ? dateStatus.textClass : 'text-gray-500'}`}>
             Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}
           </span>
         </div>
@@ -155,34 +211,55 @@ const TaskCard = ({ task, userMap, isManager, onEdit, onDelete, onView }) => {
   );
 };
 
-const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete, onView }) => {
-  const { setNodeRef } = useDroppable({ id });
+const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, canCreate, onAddTask, onMoveUp, onMoveDown }) => {
+  const { setNodeRef } = useDroppable({ 
+    id,
+    disabled: !canDrag
+  });
 
   return (
     <div ref={setNodeRef} className="bg-gray-100 rounded-lg p-4 flex flex-col">
       <h3 className="font-semibold text-gray-700 mb-4 border-b pb-2 flex justify-between items-center">
-        {title}
-        <span className="text-sm font-normal bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">
-          {tasks.length}
-        </span>
+        <div className="flex items-center space-x-2">
+          <span>{title}</span>
+          <span className="text-sm font-normal bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">
+            {tasks.length}
+          </span>
+        </div>
+        {canCreate && (
+          <button
+            onClick={() => onAddTask(id)}
+            className="text-gray-500 hover:text-blue-600 p-1 rounded hover:bg-gray-200 transition-colors"
+            type="button"
+            title={`Add task to ${title}`}
+          >
+            <PlusCircle className="h-4 w-4" />
+          </button>
+        )}
       </h3>
       
       <SortableContext 
         id={id} 
         items={tasks.map(t => t._id)} 
         strategy={verticalListSortingStrategy}
-        disabled={!isManager}
+        disabled={!canDrag}
       >
         <div className="space-y-4 overflow-y-auto flex-grow min-h-[100px]">
-          {tasks.map(task => (
+          {tasks.map((task, idx) => (
             <TaskCard 
               key={task._id} 
               task={task} 
               userMap={userMap} 
-              isManager={isManager} 
+              canEdit={canEdit} 
+              canDelete={canDelete}
+              canDrag={canDrag}
               onEdit={onEdit} 
               onDelete={onDelete}
-              onView={onView} 
+              onView={onView}
+              isFirst={idx === 0}
+              isLast={idx === tasks.length - 1}
+              onMoveUp={() => onMoveUp(task._id)}
+              onMoveDown={() => onMoveDown(task._id)}
             />
           ))}
           {tasks.length === 0 && (
@@ -196,7 +273,7 @@ const Column = ({ id, title, tasks, userMap, isManager, onEdit, onDelete, onView
   );
 };
 
-const TasksTab = ({ projectId, project, allUsers = [] }) => {
+const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   const { user: currentUser } = useAuth();
   const router = useRouter();
   const [tasks, setTasks] = useState([]);
@@ -223,13 +300,34 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   );
 
-  // Permissions
-  const isManager = useMemo(() => {
-    if (!currentUser || !project) return false;
-    if (project.superManager === currentUser.username) return true;
-    const memberInfo = project.members.find(m => m.user === currentUser.username);
-    return memberInfo?.role === 'Project Manager';
-  }, [currentUser, project]);
+  // Resolve user teams
+  const userTeams = useMemo(() => {
+    if (!currentUser || !allTeams) return [];
+    const userId = currentUser.id;
+    return allTeams.filter(team => 
+      team.lead === userId || 
+      (Array.isArray(team.members) && team.members.includes(userId))
+    );
+  }, [currentUser, allTeams]);
+
+  // Permissions Level
+  const perms = useMemo(() => {
+    if (!currentUser || !project) return null;
+    return getUserPermissionLevel(currentUser, project, userTeams);
+  }, [currentUser, project, userTeams]);
+
+  const hasFullPermission = perms && perms.level === 'full';
+  const isContributor = perms && perms.level === 'write';
+
+  const settings = project.settings || {};
+  const allowContributorsUpdateTasks = settings.allowContributorsUpdateTasks !== false;
+  const allowContributorsDeleteTasks = settings.allowContributorsDeleteTasks === true;
+
+  const isManager = hasFullPermission;
+  const canDrag = hasFullPermission || (isContributor && allowContributorsUpdateTasks);
+  const canEdit = hasFullPermission || (isContributor && allowContributorsUpdateTasks);
+  const canDelete = hasFullPermission || (isContributor && allowContributorsDeleteTasks);
+  const canCreate = hasFullPermission || isContributor;
 
   // Check if user can access documentation (project members or admins can access)
   const canAccessDocumentation = useMemo(() => {
@@ -492,6 +590,66 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
     } catch (e) {
       console.error('Error deleting task:', e);
       alert(`Error deleting task: ${e.message}`);
+    }
+  };
+
+  // Move task up/down inside its column
+  const handleMoveTask = async (taskId, direction) => {
+    const taskIndex = tasks.findIndex(t => t._id === taskId);
+    if (taskIndex === -1) return;
+    const task = tasks[taskIndex];
+    
+    // Find all tasks in the same column
+    const columnTasks = tasks.filter(t => t.status === task.status);
+    const inColIndex = columnTasks.findIndex(t => t._id === taskId);
+    
+    if (direction === 'up' && inColIndex > 0) {
+      const prevTask = columnTasks[inColIndex - 1];
+      const targetIndex = tasks.findIndex(t => t._id === prevTask._id);
+      
+      const newTasks = [...tasks];
+      // Swap positions
+      newTasks[taskIndex] = prevTask;
+      newTasks[targetIndex] = task;
+      setTasks(newTasks);
+      
+      await persistReorder(task, targetIndex, newTasks);
+    } else if (direction === 'down' && inColIndex < columnTasks.length - 1) {
+      const nextTask = columnTasks[inColIndex + 1];
+      const targetIndex = tasks.findIndex(t => t._id === nextTask._id);
+      
+      const newTasks = [...tasks];
+      // Swap positions
+      newTasks[taskIndex] = nextTask;
+      newTasks[targetIndex] = task;
+      setTasks(newTasks);
+      
+      await persistReorder(task, targetIndex, newTasks);
+    }
+  };
+
+  const persistReorder = async (activeTask, newIndex, newTasks) => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/tasks/${activeTask._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          ...activeTask,
+          order: newIndex,
+          tasks: newTasks.map(t => ({ _id: t._id, order: newTasks.indexOf(t) }))
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to reorder task: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('Failed to reorder task:', error);
+      alert(`Failed to reorder task: ${error.message}`);
     }
   };
 
@@ -787,10 +945,10 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
                 </button>
               )}
             </div>
-            {isManager && (
+            {canCreate && (
               <button
                 onClick={() => handleOpenModal()}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-medium transition-colors"
                 type="button"
               >
                 <PlusCircle className="h-5 w-5 mr-2" />
@@ -808,10 +966,16 @@ const TasksTab = ({ projectId, project, allUsers = [] }) => {
                 title={status}
                 tasks={tasksInColumn}
                 userMap={userMap}
-                isManager={isManager}
+                canEdit={canEdit}
+                canDelete={canDelete}
+                canDrag={canDrag}
+                canCreate={canCreate}
                 onEdit={handleOpenModal}
                 onDelete={handleDeleteTask}
                 onView={handleOpenDetails}
+                onAddTask={(colStatus) => handleOpenModal({ status: colStatus })}
+                onMoveUp={(taskId) => handleMoveTask(taskId, 'up')}
+                onMoveDown={(taskId) => handleMoveTask(taskId, 'down')}
               />
             ))}
           </div>

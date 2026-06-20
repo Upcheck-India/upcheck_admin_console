@@ -13,6 +13,8 @@ async function getUserTeams(db, user) {
       $or: [
         { members: userIdStr },
         { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
       ],
     })
     .toArray();

@@ -26,6 +26,10 @@ async function getAuthorizedUserAndProject(req, params) {
       $or: [
         { members: userIdStr },
         { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
+        { members: user._id },
+        { lead: user._id },
       ],
     })
     .toArray();

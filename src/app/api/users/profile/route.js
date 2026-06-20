@@ -39,7 +39,9 @@ export async function GET(req) {
       .find({
         $or: [
           { members: userIdStr },
-          { lead: userIdStr }
+        { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id }
         ]
       })
       .project({ name: 1, description: 1 })

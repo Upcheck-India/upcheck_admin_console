@@ -71,8 +71,9 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
     setError(null);
 
     try {
-      const url = task ? `/api/projects/${projectId}/tasks/${task._id}` : `/api/projects/${projectId}/tasks`;
-      const method = task ? 'PUT' : 'POST';
+      const isEdit = !!(task && task._id);
+      const url = isEdit ? `/api/projects/${projectId}/tasks/${task._id}` : `/api/projects/${projectId}/tasks`;
+      const method = isEdit ? 'PUT' : 'POST';
 
       // Retrieve optional token from localStorage (older auth flow)
       const token = localStorage.getItem('token');
@@ -145,7 +146,7 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl relative flex flex-col" style={{ maxHeight: '90vh' }}>
         {/* Modal Header */}
         <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg z-10">
-          <h2 className="text-xl font-bold">{task ? 'Edit Task' : 'Add New Task'}</h2>
+          <h2 className="text-xl font-bold">{task && task._id ? 'Edit Task' : 'Add New Task'}</h2>
           <button 
             onClick={onClose} 
             className="text-gray-500 hover:text-gray-800 transition-colors"
@@ -307,7 +308,7 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
             className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
-            {task ? 'Save Changes' : 'Create Task'}
+            {task && task._id ? 'Save Changes' : 'Create Task'}
           </button>
         </div>
       </div>

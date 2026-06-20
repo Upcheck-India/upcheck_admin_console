@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject } from '../../../../lib/projectPermissions';
+import { sendEmail } from '../../../../lib/emailService';
 
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
 function sanitizeTag(tag) {
@@ -33,7 +34,7 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
@@ -53,7 +54,18 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can edit this project.' }, { status: 403 });
     }
 
-    const { name, description, logo, members, githubRepoUrl, status, tags } = await req.json();
+    const { 
+      name, description, logo, members, githubRepoUrl, status, tags,
+      allowContributorsUpdateTasks,
+      allowContributorsDeleteTasks,
+      sendNotifications,
+      sendTaskAssignmentEmails,
+      sendSprintCreationEmails,
+      sendProjectInviteEmails,
+      enableIdeaCanvas,
+      githubIntegrationEnabled,
+      trackTaskActivity
+    } = await req.json();
 
     // Build update object dynamically to only update provided fields
     const updateFields = { updatedAt: new Date() };
@@ -63,6 +75,31 @@ export async function PUT(req, { params }) {
     if (logo !== undefined) updateFields.logo = logo || '';
     if (members !== undefined) updateFields.members = members;
     if (githubRepoUrl !== undefined) updateFields.githubRepoUrl = githubRepoUrl || '';
+
+    // Construct settings object if any settings are provided
+    if (allowContributorsUpdateTasks !== undefined || 
+        allowContributorsDeleteTasks !== undefined || 
+        sendNotifications !== undefined || 
+        sendTaskAssignmentEmails !== undefined || 
+        sendSprintCreationEmails !== undefined || 
+        sendProjectInviteEmails !== undefined || 
+        enableIdeaCanvas !== undefined || 
+        githubIntegrationEnabled !== undefined || 
+        trackTaskActivity !== undefined) {
+      
+      updateFields.settings = {
+        ...(project.settings || {}),
+        ...(allowContributorsUpdateTasks !== undefined && { allowContributorsUpdateTasks }),
+        ...(allowContributorsDeleteTasks !== undefined && { allowContributorsDeleteTasks }),
+        ...(sendNotifications !== undefined && { sendNotifications }),
+        ...(sendTaskAssignmentEmails !== undefined && { sendTaskAssignmentEmails }),
+        ...(sendSprintCreationEmails !== undefined && { sendSprintCreationEmails }),
+        ...(sendProjectInviteEmails !== undefined && { sendProjectInviteEmails }),
+        ...(enableIdeaCanvas !== undefined && { enableIdeaCanvas }),
+        ...(githubIntegrationEnabled !== undefined && { githubIntegrationEnabled }),
+        ...(trackTaskActivity !== undefined && { trackTaskActivity })
+      };
+    }
 
     // Validate and set status if provided
     if (status !== undefined) {
@@ -81,7 +118,7 @@ export async function PUT(req, { params }) {
 
     await projectsCollection.updateOne({ _id: new ObjectId(id) }, updateData);
 
-    // Log activity for member changes
+    // Log activity for member changes and send emails
     if (members !== undefined) {
       const oldMembers = project.members || [];
       const newMembers = members || [];
@@ -96,6 +133,35 @@ export async function PUT(req, { params }) {
         const old = oldMembers.find(om => om.user === m.user);
         return old && old.role !== m.role;
       });
+
+      // Send email notifications to added members if enabled
+      const currentSettings = updateFields.settings || project.settings || {};
+      if (addedMembers.length > 0 && currentSettings.sendNotifications !== false && currentSettings.sendProjectInviteEmails !== false) {
+        for (const member of addedMembers) {
+          if (member.email) {
+            try {
+              await sendEmail({
+                to: member.email,
+                subject: `You have been added to the project: ${project.name}`,
+                html: `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                    <h2 style="color: #2563eb; margin-top: 0;">Project Invitation</h2>
+                    <p>Hello,</p>
+                    <p>You have been added to the project <strong>${project.name}</strong> as a <strong>${member.role || 'Contributor'}</strong>.</p>
+                    <p>Log in to the Upcheck Admin Console to view the project dashboard and start collaborating.</p>
+                    <br />
+                    <p>Best regards,</p>
+                    <p><strong>Upcheck Team</strong></p>
+                  </div>
+                `,
+                type: 'project_invite'
+              });
+            } catch (emailError) {
+              console.error(`Failed to send project invite email to ${member.email}:`, emailError);
+            }
+          }
+        }
+      }
 
       try {
         const logEntries = [];
@@ -187,7 +253,7 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
@@ -232,7 +298,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
     }
@@ -250,6 +316,8 @@ export async function GET(req, { params }) {
         $or: [
           { members: userIdStr },
           { lead: userIdStr },
+          { members: user._id },
+          { lead: user._id },
         ],
       })
       .toArray();

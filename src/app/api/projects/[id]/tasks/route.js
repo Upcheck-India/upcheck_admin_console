@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject, canCreateInProject } from '../../../../../lib/projectPermissions';
+import { sendEmail } from '../../../../../lib/emailService';
 
 // GET all tasks for a project
 export async function GET(request, { params }) {
@@ -36,7 +37,11 @@ export async function GET(request, { params }) {
       .find({
         $or: [
           { members: userIdStr },
-          { lead: userIdStr },
+        { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
+          { members: user._id },
+          { lead: user._id },
         ],
       })
       .toArray();
@@ -100,7 +105,11 @@ export async function POST(request, { params }) {
       .find({
         $or: [
           { members: userIdStr },
-          { lead: userIdStr },
+        { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
+          { members: user._id },
+          { lead: user._id },
         ],
       })
       .toArray();
@@ -131,6 +140,53 @@ export async function POST(request, { params }) {
     };
 
     const result = await db.collection('project_tasks').insertOne(newTaskDocument);
+
+    // Send email notifications to assigned users if enabled
+    const settings = project.settings || {};
+    if (Array.isArray(assignees) && assignees.length > 0 && settings.sendNotifications !== false && settings.sendTaskAssignmentEmails !== false) {
+      const resolvedUsers = await db.collection('admin_users')
+        .find({ _id: { $in: assignees.map(tId => new ObjectId(tId)) } })
+        .toArray();
+
+      for (const targetUser of resolvedUsers) {
+        if (targetUser.email) {
+          try {
+            await sendEmail({
+              to: targetUser.email,
+              subject: `New Task Assigned: ${title}`,
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                  <h2 style="color: #2563eb; margin-top: 0;">Task Assigned to You</h2>
+                  <p>Hello ${targetUser.name || targetUser.username || 'there'},</p>
+                  <p>You have been assigned a new task in project <strong>${project.name}</strong>.</p>
+                  <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <tr>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold; width: 120px;">Task Title:</td>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${title}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;">Status:</td>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${status || 'Backlog'}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;">Description:</td>
+                      <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${description || 'No description provided'}</td>
+                    </tr>
+                  </table>
+                  <p>Log in to the Upcheck Admin Console to view and update the task status.</p>
+                  <br />
+                  <p>Best regards,</p>
+                  <p><strong>Upcheck Team</strong></p>
+                </div>
+              `,
+              type: 'task_assigned'
+            });
+          } catch (emailError) {
+            console.error(`Failed to send task assignment email to ${targetUser.email}:`, emailError);
+          }
+        }
+      }
+    }
 
     return NextResponse.json({ ...newTaskDocument, _id: result.insertedId }, { status: 201 });
   } catch (error) {

@@ -52,6 +52,10 @@ async function getUserTeams(db, user) {
       $or: [
         { members: userIdStr },
         { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
+        { members: user._id },
+        { lead: user._id },
       ],
     })
     .toArray();
@@ -74,7 +78,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Handle General space specially
     if (id === 'general') {
@@ -135,7 +139,7 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Handle General space specially - only Admin/Console admin can modify
     if (id === 'general') {

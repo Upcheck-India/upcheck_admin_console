@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject, getUserPermissionLevel } from '../../../../../lib/projectPermissions';
+import { sendEmail } from '../../../../../lib/emailService';
 
 /**
  * GET  /api/projects/:id/sprints
@@ -38,6 +39,10 @@ async function checkManagerPermission(db, user, project) {
       $or: [
         { members: userIdStr },
         { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
+        { members: user._id },
+        { lead: user._id },
       ],
     })
     .toArray();
@@ -70,7 +75,11 @@ export async function GET(request, { params }) {
       .find({
         $or: [
           { members: userIdStr },
-          { lead: userIdStr },
+        { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
+          { members: user._id },
+          { lead: user._id },
         ],
       })
       .toArray();
@@ -133,6 +142,48 @@ export async function POST(request, { params }) {
 
     const insertRes = await db.collection('project_sprints').insertOne(newSprint);
     newSprint._id = insertRes.insertedId;
+
+    // Dispatch Sprint Created email if enabled
+    const settings = project.settings || {};
+    if (settings.sendNotifications !== false && settings.sendSprintCreationEmails !== false && project.members && project.members.length > 0) {
+      const memberEmails = project.members.map(m => m.email).filter(Boolean);
+      if (memberEmails.length > 0) {
+        try {
+          await sendEmail({
+            to: memberEmails,
+            subject: `New Sprint Created: ${sprintName} in Project ${project.name}`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                <h2 style="color: #2563eb; margin-top: 0;">New Sprint Created</h2>
+                <p>Hello,</p>
+                <p>A new sprint <strong>${sprintName}</strong> has been created in project <strong>${project.name}</strong> by <strong>${user.username}</strong>.</p>
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                  <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold; width: 120px;">Sprint Name:</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${sprintName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;">Start Date:</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${startDate ? new Date(startDate).toLocaleDateString() : 'Not set'}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee; font-weight: bold;">End Date:</td>
+                    <td style="padding: 8px 0; border-bottom: 1px solid #eee;">${endDate ? new Date(endDate).toLocaleDateString() : 'Not set'}</td>
+                  </tr>
+                </table>
+                <p>Log in to the Upcheck Admin Console to view the board and assign tasks.</p>
+                <br />
+                <p>Best regards,</p>
+                <p><strong>Upcheck Team</strong></p>
+              </div>
+            `,
+            type: 'sprint_created'
+          });
+        } catch (emailError) {
+          console.error(`Failed to send sprint created email:`, emailError);
+        }
+      }
+    }
 
     // If this is the first sprint, migrate existing tasks with no sprintId to this sprint
     if (totalSprints === 0) {

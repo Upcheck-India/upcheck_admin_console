@@ -15,6 +15,17 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
   const [showRepoPreview, setShowRepoPreview] = useState(false);
   const [repoValidation, setRepoValidation] = useState(null);
 
+   // Settings configuration states
+  const [allowContributorsUpdateTasks, setAllowContributorsUpdateTasks] = useState(project.settings?.allowContributorsUpdateTasks !== false);
+  const [allowContributorsDeleteTasks, setAllowContributorsDeleteTasks] = useState(project.settings?.allowContributorsDeleteTasks === true);
+  const [sendNotifications, setSendNotifications] = useState(project.settings?.sendNotifications !== false);
+  const [sendTaskAssignmentEmails, setSendTaskAssignmentEmails] = useState(project.settings?.sendTaskAssignmentEmails !== false);
+  const [sendSprintCreationEmails, setSendSprintCreationEmails] = useState(project.settings?.sendSprintCreationEmails !== false);
+  const [sendProjectInviteEmails, setSendProjectInviteEmails] = useState(project.settings?.sendProjectInviteEmails !== false);
+  const [enableIdeaCanvas, setEnableIdeaCanvas] = useState(project.settings?.enableIdeaCanvas !== false);
+  const [githubIntegrationEnabled, setGithubIntegrationEnabled] = useState(project.settings?.githubIntegrationEnabled !== false);
+  const [trackTaskActivity, setTrackTaskActivity] = useState(project.settings?.trackTaskActivity !== false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -31,16 +42,37 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
 
   // Track unsaved changes
   useEffect(() => {
+    const defaultSettings = {
+      allowContributorsUpdateTasks: true,
+      allowContributorsDeleteTasks: false,
+      sendNotifications: true,
+      enableIdeaCanvas: true,
+      githubIntegrationEnabled: true,
+      trackTaskActivity: true,
+    };
+    const currentSettings = project.settings || defaultSettings;
     const hasChanges = 
       name !== project.name ||
       description !== project.description ||
       logoUrl !== (project.logo || '') ||
       repoUrl !== (project.githubRepoUrl || '') ||
       JSON.stringify(members) !== JSON.stringify(project.members) ||
-      logoFile !== null;
+      logoFile !== null ||
+      allowContributorsUpdateTasks !== (currentSettings.allowContributorsUpdateTasks !== false) ||
+      allowContributorsDeleteTasks !== (currentSettings.allowContributorsDeleteTasks === true) ||
+      sendNotifications !== (currentSettings.sendNotifications !== false) ||
+      sendTaskAssignmentEmails !== (currentSettings.sendTaskAssignmentEmails !== false) ||
+      sendSprintCreationEmails !== (currentSettings.sendSprintCreationEmails !== false) ||
+      sendProjectInviteEmails !== (currentSettings.sendProjectInviteEmails !== false) ||
+      enableIdeaCanvas !== (currentSettings.enableIdeaCanvas !== false) ||
+      githubIntegrationEnabled !== (currentSettings.githubIntegrationEnabled !== false) ||
+      trackTaskActivity !== (currentSettings.trackTaskActivity !== false);
     
     setHasUnsavedChanges(hasChanges);
-  }, [name, description, logoUrl, repoUrl, members, logoFile, project]);
+  }, [name, description, logoUrl, repoUrl, members, logoFile, project,
+      allowContributorsUpdateTasks, allowContributorsDeleteTasks, sendNotifications,
+      sendTaskAssignmentEmails, sendSprintCreationEmails, sendProjectInviteEmails,
+      enableIdeaCanvas, githubIntegrationEnabled, trackTaskActivity]);
 
   // Validate GitHub URL
   useEffect(() => {
@@ -121,7 +153,17 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
           description: description.trim(), 
           logo: uploadedLogoUrl, 
           members,
-          githubRepoUrl: repoUrl.trim()
+          githubRepoUrl: repoUrl.trim(),
+            allowContributorsUpdateTasks,
+            allowContributorsDeleteTasks,
+            sendNotifications,
+            sendTaskAssignmentEmails,
+            sendSprintCreationEmails,
+            sendProjectInviteEmails,
+            enableIdeaCanvas,
+            githubIntegrationEnabled,
+            trackTaskActivity,
+          }
         }),
       });
 
@@ -148,6 +190,24 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
     setMembers(project.members);
     setRepoUrl(project.githubRepoUrl || '');
     setLogoFile(null);
+    const defaultSettings = {
+      allowContributorsUpdateTasks: true,
+      allowContributorsDeleteTasks: false,
+      sendNotifications: true,
+      enableIdeaCanvas: true,
+      githubIntegrationEnabled: true,
+      trackTaskActivity: true,
+    };
+    const currentSettings = project.settings || defaultSettings;
+    setAllowContributorsUpdateTasks(currentSettings.allowContributorsUpdateTasks !== false);
+    setAllowContributorsDeleteTasks(currentSettings.allowContributorsDeleteTasks === true);
+    setSendNotifications(currentSettings.sendNotifications !== false);
+    setSendTaskAssignmentEmails(currentSettings.sendTaskAssignmentEmails !== false);
+    setSendSprintCreationEmails(currentSettings.sendSprintCreationEmails !== false);
+    setSendProjectInviteEmails(currentSettings.sendProjectInviteEmails !== false);
+    setEnableIdeaCanvas(currentSettings.enableIdeaCanvas !== false);
+    setGithubIntegrationEnabled(currentSettings.githubIntegrationEnabled !== false);
+    setTrackTaskActivity(currentSettings.trackTaskActivity !== false);
     setError(null);
     setSuccess(null);
   };
@@ -221,59 +281,66 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
                 />
               </div>
               
-              <div>
-                <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 mb-2">
-                  GitHub Repository URL
-                </label>
-                <div className="relative">
-                  <input 
-                    type="url" 
-                    id="repoUrl" 
-                    value={repoUrl} 
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    placeholder="https://github.com/owner/repo"
-                    className="block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                    {repoValidation?.status === 'validating' && (
-                      <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
-                    )}
-                    {repoValidation?.status === 'success' && (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    )}
-                    {repoValidation?.status === 'error' && (
-                      <XCircle className="h-4 w-4 text-red-500" />
-                    )}
+              {githubIntegrationEnabled ? (
+                <div>
+                  <label htmlFor="repoUrl" className="block text-sm font-medium text-gray-700 mb-2">
+                    GitHub Repository URL
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="url" 
+                      id="repoUrl" 
+                      value={repoUrl} 
+                      onChange={(e) => setRepoUrl(e.target.value)}
+                      placeholder="https://github.com/owner/repo"
+                      className="block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                      {repoValidation?.status === 'validating' && (
+                        <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
+                      )}
+                      {repoValidation?.status === 'success' && (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      )}
+                      {repoValidation?.status === 'error' && (
+                        <XCircle className="h-4 w-4 text-red-500" />
+                      )}
+                    </div>
                   </div>
+                  {repoValidation?.message && (
+                    <p className={`text-xs mt-1 ${
+                      repoValidation.status === 'error' ? 'text-red-600' : 
+                      repoValidation.status === 'success' ? 'text-green-600' : 'text-gray-500'
+                    }`}>
+                      {repoValidation.message}
+                    </p>
+                  )}
+                  {repoValidation?.status === 'success' && repoValidation.data && (
+                    <button
+                      type="button"
+                      onClick={() => setShowRepoPreview(!showRepoPreview)}
+                      className="text-xs text-blue-600 hover:text-blue-800 mt-1 flex items-center"
+                    >
+                      {showRepoPreview ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
+                      {showRepoPreview ? 'Hide' : 'Show'} repository info
+                    </button>
+                  )}
+                  {showRepoPreview && repoValidation?.data && (
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md border text-xs">
+                      <p><strong>Name:</strong> {repoValidation.data.name}</p>
+                      <p><strong>Description:</strong> {repoValidation.data.description || 'No description'}</p>
+                      <p><strong>Language:</strong> {repoValidation.data.language || 'Not specified'}</p>
+                      <p><strong>Stars:</strong> {repoValidation.data.stargazers_count}</p>
+                      <p><strong>Private:</strong> {repoValidation.data.private ? 'Yes' : 'No'}</p>
+                    </div>
+                  )}
                 </div>
-                {repoValidation?.message && (
-                  <p className={`text-xs mt-1 ${
-                    repoValidation.status === 'error' ? 'text-red-600' : 
-                    repoValidation.status === 'success' ? 'text-green-600' : 'text-gray-500'
-                  }`}>
-                    {repoValidation.message}
-                  </p>
-                )}
-                {repoValidation?.status === 'success' && repoValidation.data && (
-                  <button
-                    type="button"
-                    onClick={() => setShowRepoPreview(!showRepoPreview)}
-                    className="text-xs text-blue-600 hover:text-blue-800 mt-1 flex items-center"
-                  >
-                    {showRepoPreview ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-                    {showRepoPreview ? 'Hide' : 'Show'} repository info
-                  </button>
-                )}
-                {showRepoPreview && repoValidation?.data && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md border text-xs">
-                    <p><strong>Name:</strong> {repoValidation.data.name}</p>
-                    <p><strong>Description:</strong> {repoValidation.data.description || 'No description'}</p>
-                    <p><strong>Language:</strong> {repoValidation.data.language || 'Not specified'}</p>
-                    <p><strong>Stars:</strong> {repoValidation.data.stargazers_count}</p>
-                    <p><strong>Private:</strong> {repoValidation.data.private ? 'Yes' : 'No'}</p>
-                  </div>
-                )}
-              </div>
+              ) : (
+                <div className="flex flex-col justify-center p-4 bg-gray-50 border border-dashed border-gray-300 rounded-md text-sm text-gray-500 h-full min-h-[80px]">
+                  <span className="font-semibold text-gray-700 mb-1">GitHub Integration Disabled</span>
+                  <span>Enable it in the Board & Permissions Settings below to link a repository.</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -339,6 +406,192 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
                     placeholder="Or paste an image URL"
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Project Board & Permissions Settings */}
+        <div className="bg-white rounded-lg shadow-sm border">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+              <Settings className="h-5 w-5 mr-2 text-gray-600" />
+              Project Board & Permissions Settings
+            </h3>
+          </div>
+          <div className="p-6 space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Task Permission Settings */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-700 text-sm border-b pb-1">Task Permissions</h4>
+                
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="allowContributorsUpdateTasks"
+                      name="allowContributorsUpdateTasks"
+                      type="checkbox"
+                      checked={allowContributorsUpdateTasks}
+                      onChange={(e) => setAllowContributorsUpdateTasks(e.target.checked)}
+                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="allowContributorsUpdateTasks" className="font-medium text-gray-700 cursor-pointer">
+                      Allow contributors to move/update tasks
+                    </label>
+                    <p className="text-gray-500 text-xs">
+                      If checked, non-managers (Contributors) can drag tasks and change their status.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="allowContributorsDeleteTasks"
+                      name="allowContributorsDeleteTasks"
+                      type="checkbox"
+                      checked={allowContributorsDeleteTasks}
+                      onChange={(e) => setAllowContributorsDeleteTasks(e.target.checked)}
+                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="allowContributorsDeleteTasks" className="font-medium text-gray-700 cursor-pointer">
+                      Allow contributors to delete tasks
+                    </label>
+                    <p className="text-gray-500 text-xs">
+                      If checked, non-managers can delete any tasks they have write access to.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feature Toggles */}
+              <div className="space-y-4">
+                <h4 className="font-semibold text-gray-700 text-sm border-b pb-1">Feature & Notification Toggles</h4>
+
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="sendNotifications"
+                      name="sendNotifications"
+                      type="checkbox"
+                      checked={sendNotifications}
+                      onChange={(e) => setSendNotifications(e.target.checked)}
+                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="sendNotifications" className="font-medium text-gray-700 cursor-pointer">
+                      Enable automated email alerts (Global)
+                    </label>
+                    <p className="text-gray-500 text-xs">
+                      Master toggle to turn all email alerts on or off for this project.
+                    </p>
+                  </div>
+                </div>
+
+                {sendNotifications && (
+                  <div className="ml-6 space-y-3 border-l-2 border-gray-200 pl-3">
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="sendProjectInviteEmails"
+                          name="sendProjectInviteEmails"
+                          type="checkbox"
+                          checked={sendProjectInviteEmails}
+                          onChange={(e) => setSendProjectInviteEmails(e.target.checked)}
+                          className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="sendProjectInviteEmails" className="font-medium text-gray-700 cursor-pointer">
+                          Project membership invites
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="sendTaskAssignmentEmails"
+                          name="sendTaskAssignmentEmails"
+                          type="checkbox"
+                          checked={sendTaskAssignmentEmails}
+                          onChange={(e) => setSendTaskAssignmentEmails(e.target.checked)}
+                          className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="sendTaskAssignmentEmails" className="font-medium text-gray-700 cursor-pointer">
+                          Task assignments
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="sendSprintCreationEmails"
+                          name="sendSprintCreationEmails"
+                          type="checkbox"
+                          checked={sendSprintCreationEmails}
+                          onChange={(e) => setSendSprintCreationEmails(e.target.checked)}
+                          className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label htmlFor="sendSprintCreationEmails" className="font-medium text-gray-700 cursor-pointer">
+                          Sprint creation milestones
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="enableIdeaCanvas"
+                      name="enableIdeaCanvas"
+                      type="checkbox"
+                      checked={enableIdeaCanvas}
+                      onChange={(e) => setEnableIdeaCanvas(e.target.checked)}
+                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="enableIdeaCanvas" className="font-medium text-gray-700 cursor-pointer">
+                      Enable Idea Canvas tab
+                    </label>
+                    <p className="text-gray-500 text-xs">
+                      Allow members to draft brainstorming ideas in a dedicated plain-text canvas space.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="githubIntegrationEnabled"
+                      name="githubIntegrationEnabled"
+                      type="checkbox"
+                      checked={githubIntegrationEnabled}
+                      onChange={(e) => setGithubIntegrationEnabled(e.target.checked)}
+                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="githubIntegrationEnabled" className="font-medium text-gray-700 cursor-pointer">
+                      Enable GitHub Integration
+                    </label>
+                    <p className="text-gray-500 text-xs">
+                      Toggle the GitHub Repository URL field and show repository metadata.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

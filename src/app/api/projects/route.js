@@ -12,6 +12,8 @@ async function getUserTeams(db, user) {
       $or: [
         { members: userIdStr },
         { lead: userIdStr },
+        { members: user._id },
+        { lead: user._id },
       ],
     })
     .toArray();
@@ -164,6 +166,17 @@ export async function POST(req) {
       superManager: user.username,
       members: finalMembers,
       tags: sanitizedTags,
+      settings: {
+        allowContributorsUpdateTasks: true,
+        allowContributorsDeleteTasks: false,
+        sendNotifications: true,
+        sendTaskAssignmentEmails: true,
+        sendSprintCreationEmails: true,
+        sendProjectInviteEmails: true,
+        enableIdeaCanvas: true,
+        githubIntegrationEnabled: true,
+        trackTaskActivity: true,
+      },
       createdAt: new Date(),
       updatedAt: new Date(),
     };
