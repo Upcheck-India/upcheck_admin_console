@@ -195,9 +195,11 @@ export async function POST(request) {
       );
     }
 
-    // Check if username already exists
+    // Check if username already exists (case-insensitive check)
+    const escapedUsername = data.username.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const usernameRegex = new RegExp("^" + escapedUsername + "$", "i");
     const existingUser = await db.collection('admin_users').findOne({
-      username: data.username.trim().toLowerCase()
+      username: { $regex: usernameRegex }
     });
 
     if (existingUser) {
@@ -246,7 +248,7 @@ export async function POST(request) {
     // Build new user object with HR fields
     const newUser = {
       // Core fields
-      username: data.username.trim().toLowerCase(),
+      username: data.username.trim(),
       email: data.email?.trim().toLowerCase() || '',
       password: hashedPassword,
       role: data.role,

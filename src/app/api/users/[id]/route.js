@@ -179,10 +179,12 @@ export async function PUT(request, { params }) {
 
     // Core fields
     if (data.username !== undefined && data.username !== existingUser.username) {
-      const trimmedUsername = data.username.trim().toLowerCase();
-      // Check if new username exists
+      const trimmedUsername = data.username.trim();
+      // Check if new username exists (case-insensitive check)
+      const escapedUsername = trimmedUsername.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const usernameRegex = new RegExp("^" + escapedUsername + "$", "i");
       const existingUsername = await db.collection('admin_users').findOne({
-        username: trimmedUsername,
+        username: { $regex: usernameRegex },
         _id: { $ne: new ObjectId(userId) }
       });
       if (existingUsername) {
