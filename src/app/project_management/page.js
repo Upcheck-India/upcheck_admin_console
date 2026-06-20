@@ -392,30 +392,34 @@ const ProjectManagementPage = () => {
     );
 
     return (
-      <div className="bg-white rounded-2xl border border-gray-100 hover:shadow-md transition-all duration-200 p-5 flex flex-col justify-between relative group">
-        {/* Status badge */}
-        <div className="absolute top-4 right-4 z-10">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ${currentStatus.badge}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dot}`} />
-            {project.status || 'active'}
-          </span>
-        </div>
-
-        {/* Card content */}
-        <div className="pr-20">
-          <div className="flex items-start gap-3 mb-3">
-            {project.logo ? (
-              <img src={project.logo} alt={`${project.name} logo`} className="h-10 w-10 rounded-xl object-cover flex-shrink-0" />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-sm">
-                <FolderKanban className="w-5 h-5 text-white" />
-              </div>
-            )}
-            <div className="min-w-0">
-              <h3 className="text-base font-bold text-gray-900 truncate">{project.name}</h3>
-              <p className="text-sm text-gray-500 truncate">{project.description || 'No description'}</p>
-            </div>
+      <div className="group relative bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col justify-between">
+        {/* Full gradient overlay that fades in on hover */}
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        
+        <div className="relative z-10 p-5 flex flex-col flex-grow">
+          {/* Status badge */}
+          <div className="absolute top-0 right-0">
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-bl-xl text-xs font-semibold ${currentStatus.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dot}`} />
+              {project.status || 'active'}
+            </span>
           </div>
+
+          {/* Card content */}
+          <div className="pr-16 mb-4">
+            <div className="flex items-start gap-4 mb-3">
+              {project.logo ? (
+                <img src={project.logo} alt={`${project.name} logo`} className="h-12 w-12 rounded-xl object-cover flex-shrink-0 shadow-sm border border-gray-100" />
+              ) : (
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                  <FolderKanban className="w-6 h-6 text-white" />
+                </div>
+              )}
+              <div className="min-w-0 mt-1">
+                <h3 className="text-lg font-bold text-gray-900 truncate group-hover:text-blue-700 transition-colors duration-300">{project.name}</h3>
+                <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{project.description || 'No description'}</p>
+              </div>
+            </div>
 
           {/* Tags */}
           {project.tags && project.tags.length > 0 && (
@@ -445,10 +449,10 @@ const ProjectManagementPage = () => {
         </div>
 
         {/* Actions row */}
-        <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+        <div className="relative z-10 flex gap-2 mt-auto pt-4 border-t border-gray-100/50">
           <button
             onClick={() => router.push(`/project_management/${project._id}`)}
-            className="flex-1 text-center bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-2 px-4 rounded-lg transition-colors duration-200 text-sm"
+            className="flex-1 text-center bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 text-sm shadow-sm hover:shadow"
           >
             View Project
           </button>
@@ -473,7 +477,7 @@ const ProjectManagementPage = () => {
         </div>
 
         {/* Hover actions dropdown */}
-        <div className="absolute top-4 left-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="absolute top-3 left-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
           <ProjectCardActions
             project={project}
             onEdit={handleEditProject}

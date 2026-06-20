@@ -64,7 +64,12 @@ export async function PUT(req, { params }) {
       sendProjectInviteEmails,
       enableIdeaCanvas,
       githubIntegrationEnabled,
-      trackTaskActivity
+      trackTaskActivity,
+      githubPAT,
+      showFileBrowser,
+      showCommits,
+      showBranches,
+      showContributors
     } = await req.json();
 
     // Build update object dynamically to only update provided fields
@@ -85,7 +90,12 @@ export async function PUT(req, { params }) {
         sendProjectInviteEmails !== undefined || 
         enableIdeaCanvas !== undefined || 
         githubIntegrationEnabled !== undefined || 
-        trackTaskActivity !== undefined) {
+        trackTaskActivity !== undefined ||
+        githubPAT !== undefined ||
+        showFileBrowser !== undefined ||
+        showCommits !== undefined ||
+        showBranches !== undefined ||
+        showContributors !== undefined) {
       
       updateFields.settings = {
         ...(project.settings || {}),
@@ -97,7 +107,17 @@ export async function PUT(req, { params }) {
         ...(sendProjectInviteEmails !== undefined && { sendProjectInviteEmails }),
         ...(enableIdeaCanvas !== undefined && { enableIdeaCanvas }),
         ...(githubIntegrationEnabled !== undefined && { githubIntegrationEnabled }),
-        ...(trackTaskActivity !== undefined && { trackTaskActivity })
+        ...(trackTaskActivity !== undefined && { trackTaskActivity }),
+        ...(githubPAT !== undefined || showFileBrowser !== undefined || showCommits !== undefined || showBranches !== undefined || showContributors !== undefined ? {
+          github: {
+            ...(project.settings?.github || {}),
+            ...(githubPAT !== undefined && { personalAccessToken: githubPAT }),
+            ...(showFileBrowser !== undefined && { showFileBrowser }),
+            ...(showCommits !== undefined && { showCommits }),
+            ...(showBranches !== undefined && { showBranches }),
+            ...(showContributors !== undefined && { showContributors }),
+          }
+        } : {})
       };
     }
 

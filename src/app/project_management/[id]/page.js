@@ -1,12 +1,13 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3 } from 'lucide-react';
 import IdeaCanvas from './IdeaCanvas';
 import { useAuth } from '../../../hooks/useAuth';
 import SettingsTab from './SettingsTab';
 import MembersTab from './MembersTab';
 import TasksTab from './TasksTab';
+import GitHubTab from './GitHubTab';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
@@ -19,7 +20,7 @@ const ProjectDetailPage = () => {
   const [allTeams, setAllTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('tasks'); // tasks, members, settings, canvas
+  const [activeTab, setActiveTab] = useState('tasks'); // tasks, members, github, canvas, settings
 
   const fetchData = async () => {
     if (!user) return;
@@ -103,6 +104,8 @@ const ProjectDetailPage = () => {
     return null; // Or a 'not found' component
   }
 
+  const showGithubTab = project.settings?.githubIntegrationEnabled !== false && project.githubRepoUrl;
+
   const TabContent = () => {
     switch (activeTab) {
       case 'tasks':
@@ -116,6 +119,8 @@ const ProjectDetailPage = () => {
             allTeams={allTeams}
           />
         );
+      case 'github':
+        return showGithubTab ? <GitHubTab project={project} projectId={id} /> : null;
       case 'settings':
         return <SettingsTab project={project} user={user} allUsers={allUsers} onProjectUpdate={fetchData} />;
       case 'canvas':
@@ -125,55 +130,162 @@ const ProjectDetailPage = () => {
     }
   };
 
+  // Determine project status color (assuming standard status string like 'Active', 'Paused', etc.)
+  let statusColor = 'bg-gray-100 text-gray-800';
+  if (project.status === 'Active') statusColor = 'bg-green-100 text-green-800';
+  else if (project.status === 'Paused') statusColor = 'bg-amber-100 text-amber-800';
+  else if (project.status === 'Completed') statusColor = 'bg-blue-100 text-blue-800';
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
+    <div className="min-h-screen bg-gray-50 pb-12">
+      {/* Gradient Hero Header */}
+      <div className="bg-gradient-to-r from-blue-600 via-blue-500 to-teal-500 pt-6 pb-16 px-4 md:px-6 relative overflow-hidden">
+        {/* Abstract background shapes */}
+        <div className="absolute top-0 right-0 -mt-20 -mr-20 w-80 h-80 bg-white opacity-5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-0 -mb-20 -ml-20 w-60 h-60 bg-teal-300 opacity-10 rounded-full blur-2xl"></div>
+
+        <div className="max-w-7xl mx-auto relative z-10">
           <button
             onClick={() => router.push('/project_management')}
-            className="flex items-center text-sm text-gray-600 hover:text-gray-900 mb-4"
+            className="flex items-center text-sm text-white/80 hover:text-white mb-6 transition-colors"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to All Projects
           </button>
-          <div className="flex items-center">
-            <Briefcase className="h-8 w-8 text-blue-600 mr-3" />
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{project.name}</h1>
-              <p className="text-gray-600 text-sm mt-1">{project.description}</p>
-              {project.githubRepoUrl && project.settings?.githubIntegrationEnabled !== false && (
-                <a href={project.githubRepoUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center mt-1">
-                  <svg className="h-4 w-4 mr-1" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2 .37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.19 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z" />
-                  </svg>
-                  {project.githubRepoUrl.replace('https://github.com/', '')}
-                </a>
+          
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center">
+              {project.logo ? (
+                <img src={project.logo} alt="Project Logo" className="h-16 w-16 rounded-xl object-cover bg-white p-1 mr-4 shadow-md" />
+              ) : (
+                <div className="h-16 w-16 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center mr-4 shadow-md border border-white/20">
+                  <Briefcase className="h-8 w-8 text-white" />
+                </div>
               )}
+              
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h1 className="text-3xl font-bold text-white tracking-tight">{project.name}</h1>
+                  {project.status && (
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wide ${statusColor} shadow-sm`}>
+                      {project.status}
+                    </span>
+                  )}
+                </div>
+                <p className="text-blue-100 text-sm max-w-2xl">{project.description || 'No description provided.'}</p>
+                
+                {showGithubTab && (
+                  <a 
+                    href={project.githubRepoUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="inline-flex items-center mt-2 text-sm text-white/80 hover:text-white transition-colors group"
+                  >
+                    <Github className="h-4 w-4 mr-1.5 group-hover:scale-110 transition-transform" />
+                    <span className="group-hover:underline underline-offset-2">{project.githubRepoUrl.replace('https://github.com/', '')}</span>
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="bg-white rounded-lg shadow-sm">
-          <div className="border-b border-gray-200">
-            <div className="flex space-x-4 px-6">
-              <button onClick={() => setActiveTab('tasks')} className={`flex items-center py-4 px-1 text-sm font-medium ${activeTab === 'tasks' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                <ListChecks className="h-5 w-5 mr-2" /> Tasks
-              </button>
-              <button onClick={() => setActiveTab('members')} className={`flex items-center py-4 px-1 text-sm font-medium ${activeTab === 'members' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                <Users className="h-5 w-5 mr-2" /> Members
-              </button>
-              {project.settings?.enableIdeaCanvas !== false && (
-                <button onClick={() => setActiveTab('canvas')} className={`flex items-center py-4 px-1 text-sm font-medium ${activeTab === 'canvas' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                  <StickyNote className="h-5 w-5 mr-2" /> Canvas
-                </button>
-              )}
-              <button onClick={() => setActiveTab('settings')} className={`flex items-center py-4 px-1 text-sm font-medium ${activeTab === 'settings' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                <Settings className="h-5 w-5 mr-2" /> Settings
-              </button>
-              
+      <div className="max-w-7xl mx-auto px-4 md:px-6">
+        {/* Stat Cards Row - Overlapping header */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 -mt-8 mb-6 relative z-20">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center hover:shadow-md transition-shadow">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg mr-4">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Members</p>
+              <p className="text-xl font-bold bg-gradient-to-r from-blue-600 to-teal-500 bg-clip-text text-transparent">
+                {project.members?.length || 0}
+              </p>
             </div>
           </div>
-          <div>
+          
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center hover:shadow-md transition-shadow">
+            <div className="p-3 bg-teal-50 text-teal-600 rounded-lg mr-4">
+              <ListChecks className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Access Mode</p>
+              <p className="text-sm font-bold text-gray-900 mt-1 capitalize">
+                {project.accessMode?.replace('_', ' ') || 'Role Based'}
+              </p>
+            </div>
+          </div>
+
+          {showGithubTab && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center hover:shadow-md transition-shadow">
+              <div className="p-3 bg-gray-50 text-gray-700 rounded-lg mr-4">
+                <Github className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Integration</p>
+                <p className="text-sm font-bold text-gray-900 mt-1">Active</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* Pill-style Tab Navigation */}
+          <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+            <div className="flex flex-wrap gap-1 bg-gray-100/80 p-1 rounded-lg w-max border border-gray-200 shadow-inner">
+              <button 
+                onClick={() => setActiveTab('tasks')} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeTab === 'tasks' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <ListChecks className="h-4 w-4 mr-2" /> Tasks
+              </button>
+              <button 
+                onClick={() => setActiveTab('members')} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <Users className="h-4 w-4 mr-2" /> Members
+              </button>
+              
+              {showGithubTab && (
+                <button 
+                  onClick={() => setActiveTab('github')} 
+                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                    activeTab === 'github' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <Github className="h-4 w-4 mr-2" /> GitHub
+                </button>
+              )}
+
+              {project.settings?.enableIdeaCanvas !== false && (
+                <button 
+                  onClick={() => setActiveTab('canvas')} 
+                  className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                    activeTab === 'canvas' ? 'bg-white text-yellow-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  <StickyNote className="h-4 w-4 mr-2" /> Canvas
+                </button>
+              )}
+              
+              <button 
+                onClick={() => setActiveTab('settings')} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeTab === 'settings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <Settings className="h-4 w-4 mr-2" /> Settings
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-2 md:p-6 bg-white min-h-[500px]">
             <TabContent />
           </div>
         </div>

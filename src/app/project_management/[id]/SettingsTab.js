@@ -26,6 +26,13 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
   const [githubIntegrationEnabled, setGithubIntegrationEnabled] = useState(project.settings?.githubIntegrationEnabled !== false);
   const [trackTaskActivity, setTrackTaskActivity] = useState(project.settings?.trackTaskActivity !== false);
 
+  // GitHub Advanced Settings
+  const [githubPAT, setGithubPAT] = useState(project.settings?.github?.personalAccessToken || '');
+  const [showFileBrowser, setShowFileBrowser] = useState(project.settings?.github?.showFileBrowser !== false);
+  const [showCommits, setShowCommits] = useState(project.settings?.github?.showCommits !== false);
+  const [showBranches, setShowBranches] = useState(project.settings?.github?.showBranches !== false);
+  const [showContributors, setShowContributors] = useState(project.settings?.github?.showContributors !== false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -66,13 +73,19 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
       sendProjectInviteEmails !== (currentSettings.sendProjectInviteEmails !== false) ||
       enableIdeaCanvas !== (currentSettings.enableIdeaCanvas !== false) ||
       githubIntegrationEnabled !== (currentSettings.githubIntegrationEnabled !== false) ||
-      trackTaskActivity !== (currentSettings.trackTaskActivity !== false);
+      trackTaskActivity !== (currentSettings.trackTaskActivity !== false) ||
+      githubPAT !== (project.settings?.github?.personalAccessToken || '') ||
+      showFileBrowser !== (project.settings?.github?.showFileBrowser !== false) ||
+      showCommits !== (project.settings?.github?.showCommits !== false) ||
+      showBranches !== (project.settings?.github?.showBranches !== false) ||
+      showContributors !== (project.settings?.github?.showContributors !== false);
     
     setHasUnsavedChanges(hasChanges);
   }, [name, description, logoUrl, repoUrl, members, logoFile, project,
       allowContributorsUpdateTasks, allowContributorsDeleteTasks, sendNotifications,
       sendTaskAssignmentEmails, sendSprintCreationEmails, sendProjectInviteEmails,
-      enableIdeaCanvas, githubIntegrationEnabled, trackTaskActivity]);
+      enableIdeaCanvas, githubIntegrationEnabled, trackTaskActivity,
+      githubPAT, showFileBrowser, showCommits, showBranches, showContributors]);
 
   // Validate GitHub URL
   useEffect(() => {
@@ -162,7 +175,12 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
           sendProjectInviteEmails,
           enableIdeaCanvas,
           githubIntegrationEnabled,
-          trackTaskActivity
+          trackTaskActivity,
+          githubPAT,
+          showFileBrowser,
+          showCommits,
+          showBranches,
+          showContributors
         }),
       });
 
@@ -207,6 +225,11 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
     setEnableIdeaCanvas(currentSettings.enableIdeaCanvas !== false);
     setGithubIntegrationEnabled(currentSettings.githubIntegrationEnabled !== false);
     setTrackTaskActivity(currentSettings.trackTaskActivity !== false);
+    setGithubPAT(project.settings?.github?.personalAccessToken || '');
+    setShowFileBrowser(project.settings?.github?.showFileBrowser !== false);
+    setShowCommits(project.settings?.github?.showCommits !== false);
+    setShowBranches(project.settings?.github?.showBranches !== false);
+    setShowContributors(project.settings?.github?.showContributors !== false);
     setError(null);
     setSuccess(null);
   };
@@ -593,6 +616,48 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
                   </div>
                 </div>
               </div>
+
+              {githubIntegrationEnabled && (
+                <div className="space-y-4 mt-6 pt-6 border-t border-gray-200">
+                  <h4 className="font-semibold text-gray-700 text-sm border-b pb-1">GitHub Advanced Settings</h4>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Personal Access Token (PAT)</label>
+                    <p className="text-xs text-gray-500 mb-2">Required for private repositories. Generate a token at github.com/settings/tokens with 'repo' scope.</p>
+                    <input 
+                      type="password"
+                      value={githubPAT}
+                      onChange={(e) => setGithubPAT(e.target.value)}
+                      placeholder="ghp_..."
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  
+                  <div className="space-y-3 mt-4">
+                    <p className="text-xs text-gray-500">Choose which GitHub features to display in the GitHub tab:</p>
+                    
+                    <div className="flex items-center">
+                      <input id="showFileBrowser" type="checkbox" checked={showFileBrowser} onChange={(e) => setShowFileBrowser(e.target.checked)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer" />
+                      <label htmlFor="showFileBrowser" className="ml-2 block text-sm text-gray-700 cursor-pointer">Show File Browser</label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input id="showCommits" type="checkbox" checked={showCommits} onChange={(e) => setShowCommits(e.target.checked)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer" />
+                      <label htmlFor="showCommits" className="ml-2 block text-sm text-gray-700 cursor-pointer">Show Commits History</label>
+                    </div>
+                    
+                    <div className="flex items-center">
+                      <input id="showBranches" type="checkbox" checked={showBranches} onChange={(e) => setShowBranches(e.target.checked)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer" />
+                      <label htmlFor="showBranches" className="ml-2 block text-sm text-gray-700 cursor-pointer">Show Branches</label>
+                    </div>
+
+                    <div className="flex items-center">
+                      <input id="showContributors" type="checkbox" checked={showContributors} onChange={(e) => setShowContributors(e.target.checked)} className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer" />
+                      <label htmlFor="showContributors" className="ml-2 block text-sm text-gray-700 cursor-pointer">Show Contributors</label>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
