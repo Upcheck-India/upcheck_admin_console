@@ -154,16 +154,15 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
           logo: uploadedLogoUrl, 
           members,
           githubRepoUrl: repoUrl.trim(),
-            allowContributorsUpdateTasks,
-            allowContributorsDeleteTasks,
-            sendNotifications,
-            sendTaskAssignmentEmails,
-            sendSprintCreationEmails,
-            sendProjectInviteEmails,
-            enableIdeaCanvas,
-            githubIntegrationEnabled,
-            trackTaskActivity,
-          }
+          allowContributorsUpdateTasks,
+          allowContributorsDeleteTasks,
+          sendNotifications,
+          sendTaskAssignmentEmails,
+          sendSprintCreationEmails,
+          sendProjectInviteEmails,
+          enableIdeaCanvas,
+          githubIntegrationEnabled,
+          trackTaskActivity
         }),
       });
 
