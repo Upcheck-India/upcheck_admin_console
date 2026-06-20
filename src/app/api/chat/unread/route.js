@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
+import { ObjectId } from 'mongodb';
 
 export async function GET(request) {
   try {
@@ -23,6 +24,7 @@ export async function GET(request) {
     };
 
     if (since) {
+      // searchParams.get() automatically decodes the URL component
       const sinceDate = new Date(since);
       if (!isNaN(sinceDate.getTime())) {
         query.createdAt = { $gt: sinceDate };
@@ -34,8 +36,24 @@ export async function GET(request) {
       .sort({ createdAt: 1 })
       .toArray();
 
+    // Look up sender details to avoid 'Unknown User'
+    const senderIds = [...new Set(messages.map(m => m.senderId))].filter(Boolean);
+    let senderMap = {};
+    if (senderIds.length > 0) {
+      const senders = await db.collection('admin_users')
+        .find({ _id: { $in: senderIds.map(id => new ObjectId(id)) } })
+        .project({ username: 1 })
+        .toArray();
+        
+      senderMap = senders.reduce((acc, user) => {
+        acc[user._id.toString()] = user.username;
+        return acc;
+      }, {});
+    }
+
     const serialized = messages.map(m => ({
       ...m,
+      senderName: senderMap[m.senderId] || 'Unknown User',
       _id: m._id.toString()
     }));
 
