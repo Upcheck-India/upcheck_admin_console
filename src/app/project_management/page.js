@@ -447,6 +447,7 @@ const ProjectManagementPage = () => {
             <span>{projectManagers.length} PMs, {otherMembers.length} members</span>
           </div>
         </div>
+      </div>
 
         {/* Actions row */}
         <div className="relative z-10 flex gap-2 mt-auto pt-4 border-t border-gray-100/50">
