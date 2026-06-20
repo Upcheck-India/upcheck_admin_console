@@ -147,6 +147,7 @@ export default function DocumentationPage() {
   const [showSortMenu, setShowSortMenu]             = useState(false);
   const [showUserDropdown, setShowUserDropdown]     = useState(false);
   const [selectedProject, setSelectedProject]       = useState(null);
+  const [openMenuProjectId, setOpenMenuProjectId]   = useState(null);
 
   // Keyboard shortcut: Cmd/Ctrl+K → focus search
   useEffect(() => {
@@ -645,13 +646,13 @@ export default function DocumentationPage() {
               : 'flex flex-col gap-3'
             }`}>
               {/* General space — always first */}
-              <div className="relative group">
+              <div className={`relative group ${openMenuProjectId === 'general' ? 'z-30' : 'hover:z-20 z-10'}`}>
                 <ProjectSpaceCard
                   project={{ _id: 'general', name: 'General', description: 'Shared documents and general files' }}
                   stats={projectStats['general'] || { fileCount: 0, folderCount: 0 }}
                   isGeneral={true}
                 />
-                <div className="absolute top-3.5 right-3.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`absolute top-3.5 right-3.5 z-10 transition-opacity ${openMenuProjectId === 'general' ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                   <ProjectCardActions
                     project={{ _id: 'general', name: 'General', permissionSettings: { accessMode: 'roles_based', allowedRoles: ['Console admin', 'Admin'], rolePermissions: {} } }}
                     onEdit={() => {}}
@@ -660,13 +661,14 @@ export default function DocumentationPage() {
                     onDetails={() => {}}
                     onStatusChange={() => {}}
                     canManagePerms={user && ['Admin', 'Console admin'].includes(user.role)}
+                    onOpenChange={(isOpen) => setOpenMenuProjectId(isOpen ? 'general' : null)}
                   />
                 </div>
               </div>
 
               {/* Project spaces */}
               {filteredProjects.map(project => (
-                <div key={project._id} className="relative group">
+                <div key={project._id} className={`relative group ${openMenuProjectId === project._id ? 'z-30' : 'hover:z-20 z-10'}`}>
                   <ProjectSpaceCard
                     project={project}
                     stats={projectStats[project._id] || { fileCount: 0, folderCount: 0 }}
@@ -674,7 +676,7 @@ export default function DocumentationPage() {
                     onSettings={p => router.push(`/project_management/${p._id}`)}
                     onDelete={handleDeleteProject}
                   />
-                  <div className="absolute top-3.5 right-3.5 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className={`absolute top-3.5 right-3.5 z-10 transition-opacity ${openMenuProjectId === project._id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     <ProjectCardActions
                       project={project}
                       onEdit={handleEditProject}
@@ -683,6 +685,7 @@ export default function DocumentationPage() {
                       onDetails={handleDetails}
                       onStatusChange={handleStatusChange}
                       canManagePerms={user && canManagePermissions(user, project)}
+                      onOpenChange={(isOpen) => setOpenMenuProjectId(isOpen ? project._id : null)}
                     />
                   </div>
                 </div>

@@ -64,12 +64,13 @@ export async function GET(request, { params }) {
     // Setup fetch options
     const headers = {
       'Accept': 'application/vnd.github.v3+json',
-      'User-Agent': 'Upcheck-Admin-Console'
+      'User-Agent': 'Upcheck-Admin-Console',
+      'X-GitHub-Api-Version': '2022-11-28'
     };
 
     const pat = project.settings?.github?.personalAccessToken;
     if (pat) {
-      headers['Authorization'] = `Bearer ${pat}`;
+      headers['Authorization'] = `Bearer ${pat.trim()}`;
     }
 
     // Check cache
@@ -214,7 +215,8 @@ export async function PUT(request, { params }) {
       headers: {
         'Accept': 'application/vnd.github.v3+json',
         'User-Agent': 'Upcheck-Admin-Console',
-        'Authorization': `Bearer ${pat}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Authorization': `Bearer ${pat.trim()}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({

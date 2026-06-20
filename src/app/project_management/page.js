@@ -383,6 +383,7 @@ const ProjectManagementPage = () => {
     const projectManagers = project.members?.filter(m => m.role === 'Project Manager') || [];
     const otherMembers = project.members?.filter(m => m.role !== 'Project Manager' && m.role !== 'Super Manager') || [];
     const currentStatus = STATUS_COLORS[project.status || 'active'];
+    const [menuOpen, setMenuOpen] = useState(false);
 
     const canManage = currentUser && (
       currentUser.role === 'Admin' ||
@@ -392,14 +393,14 @@ const ProjectManagementPage = () => {
     );
 
     return (
-      <div className="group relative bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 overflow-hidden border border-gray-100 flex flex-col justify-between">
+      <div className={`group relative bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 flex flex-col justify-between ${menuOpen ? 'z-30' : 'hover:z-20 z-10'}`}>
         {/* Full gradient overlay that fades in on hover */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-xl" />
         
         <div className="relative z-10 p-5 flex flex-col flex-grow">
           {/* Status badge */}
           <div className="absolute top-0 right-0">
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-bl-xl text-xs font-semibold ${currentStatus.badge}`}>
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-bl-xl rounded-tr-xl text-xs font-semibold ${currentStatus.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${currentStatus.dot}`} />
               {project.status || 'active'}
             </span>
@@ -478,7 +479,7 @@ const ProjectManagementPage = () => {
         </div>
 
         {/* Hover actions dropdown */}
-        <div className="absolute top-3 left-3 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        <div className={`absolute top-3 left-3 z-20 transition-opacity duration-300 ${menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <ProjectCardActions
             project={project}
             onEdit={handleEditProject}
@@ -487,6 +488,8 @@ const ProjectManagementPage = () => {
             onDetails={handleDetails}
             onStatusChange={handleStatusChange}
             canManagePerms={currentUser && canManagePermissions(currentUser, project)}
+            align="left"
+            onOpenChange={setMenuOpen}
           />
         </div>
       </div>

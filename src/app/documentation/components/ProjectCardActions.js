@@ -199,6 +199,8 @@ export default function ProjectCardActions({
   onDetails,
   onStatusChange,
   canManagePerms = false,
+  align = 'right',
+  onOpenChange,
 }) {
   const [showMenu,          setShowMenu]          = useState(false);
   const [showStatusSub,     setShowStatusSub]     = useState(false);
@@ -209,6 +211,12 @@ export default function ProjectCardActions({
   const moreRef = useRef(null);
 
   const currentStatus = STATUS_CONFIG[project.status] || STATUS_CONFIG.active;
+
+  useEffect(() => {
+    if (onOpenChange) {
+      onOpenChange(showMenu);
+    }
+  }, [showMenu, onOpenChange]);
 
   // ── Outside click handlers ────────────────────────────────────────────────
 
@@ -297,7 +305,7 @@ export default function ProjectCardActions({
         {showMenu && (
           <div
             ref={menuRef}
-            className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-menu-in"
+            className={`absolute ${align === 'left' ? 'left-0' : 'right-0'} top-full mt-1.5 w-52 bg-white rounded-xl shadow-xl border border-gray-100 py-1.5 z-50 animate-menu-in`}
             onClick={stop}
           >
             {/* Change Status — inline expandable */}
