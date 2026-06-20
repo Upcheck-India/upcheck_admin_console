@@ -29,7 +29,7 @@ export async function GET(request, { params }) {
     }
 
     const client = await clientPromise;
-    const db = client.db(process.env.MONGODB_DB);
+    const db = client.db("resources");
 
     const user = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!user) {
@@ -171,7 +171,7 @@ export async function PUT(request, { params }) {
     }
 
     const client = await clientPromise;
-    const db = client.db(process.env.MONGODB_DB);
+    const db = client.db("resources");
 
     const user = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!user) {
