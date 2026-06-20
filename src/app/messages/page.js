@@ -22,6 +22,25 @@ const MessagesHome = () => {
   const [findingUser, setFindingUser] = useState(false);
   const [foundUser, setFoundUser] = useState(null);
   const [error, setError] = useState('');
+
+  const [modalTab, setModalTab] = useState('search');
+  const [discoverableUsers, setDiscoverableUsers] = useState([]);
+  const [loadingDiscover, setLoadingDiscover] = useState(false);
+
+  const fetchDiscoverableUsers = async () => {
+    setLoadingDiscover(true);
+    try {
+      const res = await fetch('/api/chat/discover');
+      if (res.ok) {
+        const data = await res.json();
+        setDiscoverableUsers(data.users || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingDiscover(false);
+    }
+  };
   const [lastPoll, setLastPoll] = useState('');
   const [copiedId, setCopiedId] = useState(false);
 
@@ -467,7 +486,31 @@ const MessagesHome = () => {
             </div>
 
             <div className="p-5 space-y-4">
-              <div>
+              <div className="flex bg-slate-100 rounded-lg p-1 mb-4">
+                <button
+                  onClick={() => setModalTab('search')}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ${
+                    modalTab === 'search' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Find by ID
+                </button>
+                <button
+                  onClick={() => {
+                    setModalTab('discover');
+                    fetchDiscoverableUsers();
+                  }}
+                  className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition-all ${
+                    modalTab === 'discover' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  Discover Teammates
+                </button>
+              </div>
+
+              {modalTab === 'search' ? (
+                <>
+                  <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">
                   Enter Messaging ID
                 </label>
@@ -562,6 +605,44 @@ const MessagesHome = () => {
                       <UserPlus className="w-4 h-4 stroke-[2]" />
                       Send Chat Request
                     </button>
+                  )}
+                </div>
+              )}
+                </>
+              ) : (
+                <div className="h-[300px] overflow-y-auto pr-2 space-y-2">
+                  {loadingDiscover ? (
+                    <div className="flex justify-center items-center h-full text-slate-400">
+                      <Loader className="w-6 h-6 animate-spin" />
+                    </div>
+                  ) : discoverableUsers.length === 0 ? (
+                    <div className="text-center text-xs text-slate-500 mt-10">
+                      No discoverable teammates found.
+                    </div>
+                  ) : (
+                    discoverableUsers.map(u => (
+                      <div key={u.id} className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl hover:border-blue-200 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
+                            {u.username?.[0]?.toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-800 leading-none mb-1">{u.name || u.username}</p>
+                            <p className="text-[10px] text-slate-500">{u.email}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setNewChatId(u.messagingId);
+                            setModalTab('search');
+                            setFoundUser(null);
+                          }}
+                          className="px-3 py-1.5 bg-blue-50 text-blue-600 text-[10px] font-bold rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          Select
+                        </button>
+                      </div>
+                    ))
                   )}
                 </div>
               )}

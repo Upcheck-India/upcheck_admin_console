@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '../../../hooks/useAuth';
 import {
-  ArrowLeft, Send, MoreVertical, AlertCircle, Loader, Copy, RotateCcw, Check, Smile
+  ArrowLeft, Send, MoreVertical, AlertCircle, Loader, Copy, RotateCcw, Check, Smile, Pin
 } from 'lucide-react';
 
 const POLL_INTERVAL = 5000;
@@ -17,6 +17,18 @@ const ChatThread = () => {
   const conversationId = params?.conversationId;
 
   const [messages, setMessages] = useState([]);
+
+  const handlePin = () => {
+    if (!conversationId || !peer) return;
+    const pinData = {
+      conversationId,
+      peerId: peer.id || peer._id,
+      peerName: peer.name || peer.username || 'Teammate'
+    };
+    localStorage.setItem('upcheck_pinned_dm', JSON.stringify(pinData));
+    window.dispatchEvent(new Event('pinned-dm-changed'));
+    alert(`Pinned chat with ${pinData.peerName} to the floating window.`);
+  };
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -358,6 +370,14 @@ const ChatThread = () => {
         </div>
 
         <div className="flex items-center gap-1">
+          <button 
+            onClick={handlePin}
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-colors flex items-center gap-2"
+            title="Pin DM to floating window"
+          >
+            <Pin className="w-4 h-4" />
+            <span className="text-xs font-semibold hidden sm:inline">Pin</span>
+          </button>
           <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-colors">
             <MoreVertical className="w-5 h-5" />
           </button>

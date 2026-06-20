@@ -18,6 +18,8 @@ const MessagesSettings = () => {
   const [activeTab, setActiveTab] = useState('active'); // active, blocked
   const [initializing, setInitializing] = useState(false);
   const [rotating, setRotating] = useState(false);
+  const [privacy, setPrivacy] = useState(user?.messagingPrivacy || 'none');
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -96,6 +98,25 @@ const MessagesSettings = () => {
       }
     } catch (e) {
       console.error('Revoke error:', e);
+    }
+  };
+
+  const handleSavePrivacy = async (e) => {
+    const newPrivacy = e.target.value;
+    setPrivacy(newPrivacy);
+    setSavingPrivacy(true);
+    try {
+      const res = await fetch('/api/chat/privacy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ privacy: newPrivacy })
+      });
+      if (!res.ok) throw new Error('Failed to save');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save privacy setting');
+    } finally {
+      setSavingPrivacy(false);
     }
   };
 
@@ -227,6 +248,35 @@ const MessagesSettings = () => {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Privacy Settings Card */}
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600 flex-shrink-0">
+                <Shield className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-md font-bold text-slate-800 tracking-tight mb-1">Discovery Privacy</h2>
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                  Control who can discover you in the teammate directory. Regardless of this setting, anyone with your exact Messaging ID can still initiate a chat request.
+                </p>
+                <div className="flex items-center gap-3 max-w-sm">
+                  <select
+                    value={privacy}
+                    onChange={handleSavePrivacy}
+                    disabled={savingPrivacy}
+                    className="flex-1 bg-slate-50 border border-slate-200 text-sm rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium text-slate-700"
+                  >
+                    <option value="none">None (Hidden from directory)</option>
+                    <option value="teammates">Only my teammates</option>
+                    <option value="admins">Only global admins</option>
+                    <option value="everyone">Everyone</option>
+                  </select>
+                  {savingPrivacy && <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Connections Card */}

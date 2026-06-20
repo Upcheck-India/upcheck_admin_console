@@ -29,6 +29,7 @@ export async function GET() {
           email: 1,
           name: 1,
           messagingId: 1,
+          messagingPrivacy: 1,
         } 
       }
     );
@@ -51,6 +52,7 @@ export async function GET() {
           name: user.name,
           role: user.role || 'user', // Default role if not specified
           messagingId: user.messagingId || null,
+          messagingPrivacy: user.messagingPrivacy || 'none',
         }
       },
       { status: 200 }

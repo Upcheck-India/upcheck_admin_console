@@ -115,6 +115,10 @@ export async function GET(request, { params }) {
         url = `https://api.github.com/repos/${owner}/${cleanRepo}/contributors?per_page=30`;
         ttl = 15 * 60 * 1000;
         break;
+      case 'pulls':
+        url = `https://api.github.com/repos/${owner}/${cleanRepo}/pulls?state=all&per_page=30`;
+        ttl = 5 * 60 * 1000;
+        break;
       default:
         return NextResponse.json({ error: 'Invalid endpoint' }, { status: 400 });
     }

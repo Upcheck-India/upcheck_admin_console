@@ -4,8 +4,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../../hooks/useAuth';
 import { 
   Github, GitFork, Star, Eye, Code, Terminal, Monitor, Sparkles, Download, ExternalLink,
-  Copy, GitBranch, GitCommit, FileText, Folder, Check, AlertTriangle, ChevronRight, CornerDownRight, Clock, User, X
+  Copy, GitBranch, GitCommit, FileText, Folder, Check, AlertTriangle, ChevronRight, CornerDownRight, Clock, User, X, GitMerge, GitPullRequest
 } from 'lucide-react';
+import CommitTreePanel from './components/CommitTreePanel';
+import PullRequestsPanel from './components/PullRequestsPanel';
 
 // Common Language Colors
 const languageColors = {
@@ -33,11 +35,14 @@ export default function GitHubTab({ project, projectId }) {
   const showCommits = settings.showCommits !== false;
   const showBranches = settings.showBranches !== false;
   const showContributors = settings.showContributors !== false;
+  const showPullRequests = settings.showPullRequests !== false;
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: Github },
     ...(showBranches ? [{ id: 'branches', label: 'Branches', icon: GitBranch }] : []),
     ...(showCommits ? [{ id: 'commits', label: 'Commits', icon: GitCommit }] : []),
+    { id: 'commit_tree', label: 'Commit Tree', icon: GitMerge },
+    ...(showPullRequests ? [{ id: 'pull_requests', label: 'Pull Requests', icon: GitPullRequest }] : []),
     ...(showFileBrowser ? [{ id: 'files', label: 'Files', icon: Folder }] : [])
   ];
 
@@ -66,6 +71,8 @@ export default function GitHubTab({ project, projectId }) {
         {activeSubTab === 'overview' && <OverviewPanel projectId={projectId} project={project} showContributors={showContributors} />}
         {activeSubTab === 'branches' && showBranches && <BranchesPanel projectId={projectId} />}
         {activeSubTab === 'commits' && showCommits && <CommitsPanel projectId={projectId} />}
+        {activeSubTab === 'commit_tree' && <CommitTreePanel projectId={projectId} />}
+        {activeSubTab === 'pull_requests' && showPullRequests && <PullRequestsPanel projectId={projectId} />}
         {activeSubTab === 'files' && showFileBrowser && <FilesPanel projectId={projectId} project={project} user={user} />}
       </div>
     </div>

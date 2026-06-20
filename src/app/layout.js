@@ -5,6 +5,7 @@ import { Nunito, DM_Sans, DM_Mono } from 'next/font/google';
 import { ThemeProvider } from './utils/ThemeContext';
 import { ClerkProvider } from '@clerk/nextjs';
 import useHeartbeat from '../hooks/useHeartbeat';
+import GlobalChatWrapper from '../components/GlobalChatWrapper';
 
 // Upcheck brand type system: DM Sans (body/UI), Nunito (display/headings),
 // DM Mono (tabular numeric data). Exposed as CSS variables for Tailwind.
@@ -39,6 +40,7 @@ export default function RootLayout({ children }) {
       <body className={dmSans.className}>
         <ClerkProvider>
           <ThemeProvider>
+            <GlobalChatWrapper />
             {children}
           </ThemeProvider>
         </ClerkProvider>
