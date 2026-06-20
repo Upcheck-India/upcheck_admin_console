@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import {
   MessageCircle, Search, Settings, Plus, X, Check,
-  AlertCircle, UserPlus, Copy, CheckCircle, Hash, Users
+  AlertCircle, UserPlus, Copy, CheckCircle, Hash, Users, Loader
 } from 'lucide-react';
 
 const POLL_INTERVAL = 5000; // 5 seconds

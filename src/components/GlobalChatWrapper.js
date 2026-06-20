@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { MessageCircle, X, ExternalLink } from 'lucide-react';
+import { MessageCircle, X, ExternalLink, PinOff } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
 
 export default function GlobalChatWrapper() {
@@ -38,9 +38,11 @@ export default function GlobalChatWrapper() {
             // Pick the latest message to show
             const latest = validMessages[validMessages.length - 1];
             
-            toast.custom((t) => (
-              <div
-                className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-lg rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden`}
+            // Only show toast popup if it's a newly polled message (not initial load)
+            if (lastCheck) {
+              toast.custom((t) => (
+                <div
+                  className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-lg rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden`}
                 onClick={() => {
                   toast.dismiss(t.id);
                   router.push(`/messages/${latest.conversationId}`);
@@ -58,24 +60,25 @@ export default function GlobalChatWrapper() {
                         {latest.senderName || 'Unknown User'}
                       </p>
                       <p className="mt-1 text-sm text-gray-500 truncate max-w-[200px]">
-                        {latest.content || 'Sent an attachment'}
+                        {latest.body || 'Sent an attachment'}
                       </p>
                     </div>
                   </div>
                 </div>
                 <div className="flex border-l border-gray-200">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toast.dismiss(t.id);
-                    }}
-                    className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none hover:bg-gray-50"
-                  >
-                    Close
-                  </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.dismiss(t.id);
+                      }}
+                      className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-blue-600 hover:text-blue-500 focus:outline-none hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ), { duration: 5000, position: 'top-right' });
+              ), { duration: 5000, position: 'top-right' });
+            }
           }
           
           // Also check if any message belongs to the pinned DM
@@ -154,7 +157,7 @@ export default function GlobalChatWrapper() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           conversationId: pinnedDm.conversationId,
-          content: text
+          body: text
         })
       });
       if (res.ok) {
@@ -205,6 +208,18 @@ export default function GlobalChatWrapper() {
                     <ExternalLink className="w-4 h-4" />
                   </button>
                   <button 
+                    onClick={() => {
+                      localStorage.removeItem('pinned_dm');
+                      setPinnedDm(null);
+                      setIsFabExpanded(false);
+                      window.dispatchEvent(new Event('pinned-dm-changed'));
+                    }}
+                    className="p-1.5 hover:bg-white/20 rounded-md transition-colors"
+                    title="Unpin Chat"
+                  >
+                    <PinOff className="w-4 h-4" />
+                  </button>
+                  <button 
                     onClick={() => setIsFabExpanded(false)}
                     className="p-1.5 hover:bg-white/20 rounded-md transition-colors"
                     title="Minimize"
@@ -225,7 +240,7 @@ export default function GlobalChatWrapper() {
                           ? 'bg-blue-600 text-white rounded-br-sm' 
                           : 'bg-white border border-gray-100 text-gray-800 rounded-bl-sm shadow-sm'
                       }`}>
-                        {msg.content}
+                        {msg.body}
                       </div>
                     </div>
                   );
