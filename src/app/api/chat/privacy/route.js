@@ -4,11 +4,24 @@ import clientPromise from '../../../../lib/mongodb';
 
 export async function POST(request) {
   try {
-    const { privacy } = await request.json();
+    const { privacy, notificationsEnabled } = await request.json();
 
-    const validPrivacies = ['none', 'teammates', 'admins', 'everyone'];
-    if (!validPrivacies.includes(privacy)) {
-      return NextResponse.json({ error: 'Invalid privacy setting' }, { status: 400 });
+    const updateFields = {};
+
+    if (privacy !== undefined) {
+      const validPrivacies = ['none', 'teammates', 'admins', 'everyone'];
+      if (!validPrivacies.includes(privacy)) {
+        return NextResponse.json({ error: 'Invalid privacy setting' }, { status: 400 });
+      }
+      updateFields.messagingPrivacy = privacy;
+    }
+
+    if (notificationsEnabled !== undefined) {
+      updateFields.messageNotificationsEnabled = !!notificationsEnabled;
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return NextResponse.json({ error: 'No settings provided' }, { status: 400 });
     }
 
     const cookieStore = await cookies();
@@ -20,14 +33,14 @@ export async function POST(request) {
     
     const result = await db.collection('admin_users').updateOne(
       { sessionToken: token },
-      { $set: { messagingPrivacy: privacy } }
+      { $set: updateFields }
     );
 
     if (result.matchedCount === 0) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, privacy });
+    return NextResponse.json({ success: true, ...updateFields });
   } catch (err) {
     console.error('Privacy update error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

@@ -30,6 +30,7 @@ export async function GET() {
           name: 1,
           messagingId: 1,
           messagingPrivacy: 1,
+          messageNotificationsEnabled: 1,
         } 
       }
     );
@@ -53,6 +54,7 @@ export async function GET() {
           role: user.role || 'user', // Default role if not specified
           messagingId: user.messagingId || null,
           messagingPrivacy: user.messagingPrivacy || 'none',
+          messageNotificationsEnabled: user.messageNotificationsEnabled !== false,
         }
       },
       { status: 200 }

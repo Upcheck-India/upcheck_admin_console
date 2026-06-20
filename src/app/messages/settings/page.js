@@ -20,6 +20,15 @@ const MessagesSettings = () => {
   const [rotating, setRotating] = useState(false);
   const [privacy, setPrivacy] = useState(user?.messagingPrivacy || 'none');
   const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(user?.messageNotificationsEnabled !== false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      setPrivacy(user.messagingPrivacy || 'none');
+      setNotificationsEnabled(user.messageNotificationsEnabled !== false);
+    }
+  }, [user]);
 
   const fetchConnections = useCallback(async () => {
     try {
@@ -117,6 +126,27 @@ const MessagesSettings = () => {
       alert('Failed to save privacy setting');
     } finally {
       setSavingPrivacy(false);
+    }
+  };
+
+  const handleSaveNotifications = async (e) => {
+    const enabled = e.target.checked;
+    setNotificationsEnabled(enabled);
+    setSavingNotifications(true);
+    try {
+      const res = await fetch('/api/chat/privacy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationsEnabled: enabled })
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      window.dispatchEvent(new Event('user-settings-changed'));
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save notification setting');
+      setNotificationsEnabled(!enabled); // Rollback
+    } finally {
+      setSavingNotifications(false);
     }
   };
 
@@ -251,7 +281,7 @@ const MessagesSettings = () => {
           </div>
 
           {/* Privacy Settings Card */}
-          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6">
+          <div className="bg-white rounded-2xl border border-slate-200/60 shadow-sm p-6 space-y-6">
             <div className="flex items-start gap-4">
               <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600 flex-shrink-0">
                 <Shield className="w-6 h-6" />
@@ -274,6 +304,37 @@ const MessagesSettings = () => {
                     <option value="everyone">Everyone</option>
                   </select>
                   {savingPrivacy && <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />}
+                </div>
+              </div>
+            </div>
+
+            {/* Notifications Toggle */}
+            <div className="border-t border-slate-100 pt-6 flex items-start gap-4">
+              <div className="p-3 bg-blue-50 rounded-xl text-blue-600 flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-md font-bold text-slate-800 tracking-tight mb-1">Message Notifications</h2>
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                  Receive minimal toast notifications in the top-right corner when someone sends you a message.
+                </p>
+                <div className="flex items-center gap-3">
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={notificationsEnabled}
+                      onChange={handleSaveNotifications}
+                      disabled={savingNotifications}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                    <span className="ml-3 text-sm font-semibold text-slate-700">
+                      {notificationsEnabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                  </label>
+                  {savingNotifications && <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />}
                 </div>
               </div>
             </div>

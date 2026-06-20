@@ -14,15 +14,47 @@ export default function GlobalChatWrapper() {
   const [isFabExpanded, setIsFabExpanded] = useState(false);
   const [fabMessages, setFabMessages] = useState([]);
   const [fabMessageText, setFabMessageText] = useState('');
-  
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Fetch current user and listen to settings updates
+  const fetchUser = async () => {
+    try {
+      const res = await fetch('/api/auth/check');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.authenticated && data.user) {
+          setCurrentUser(data.user);
+          return;
+        }
+      }
+      setCurrentUser(null);
+      setPinnedDm(null);
+    } catch (err) {
+      console.error('Error checking user session:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUser();
+    window.addEventListener('user-settings-changed', fetchUser);
+    return () => window.removeEventListener('user-settings-changed', fetchUser);
+  }, []);
+
   // ── Notification Polling ──
   useEffect(() => {
+    if (!currentUser) return;
+
     let active = true;
     
     const pollUnread = async () => {
       try {
         const url = `/api/chat/unread${lastCheck ? `?since=${encodeURIComponent(lastCheck)}` : ''}`;
         const res = await fetch(url, { credentials: 'include' });
+        if (res.status === 401) {
+          setCurrentUser(null);
+          setPinnedDm(null);
+          return;
+        }
         if (!res.ok) return;
         const data = await res.json();
         
@@ -38,34 +70,34 @@ export default function GlobalChatWrapper() {
             // Pick the latest message to show
             const latest = validMessages[validMessages.length - 1];
             
-            // Only show toast popup if it's a newly polled message (not initial load)
-            if (lastCheck) {
+            // Only show toast popup if notifications are enabled and it's a newly polled message (not initial load)
+            if (lastCheck && currentUser.messageNotificationsEnabled !== false) {
               toast.custom((t) => (
                 <div
                   className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-lg rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden`}
-                onClick={() => {
-                  toast.dismiss(t.id);
-                  router.push(`/messages/${latest.conversationId}`);
-                }}
-              >
-                <div className="flex-1 w-0 p-4 cursor-pointer hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start">
-                    <div className="flex-shrink-0 pt-0.5">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm">
-                        {latest.senderName ? latest.senderName.charAt(0).toUpperCase() : 'U'}
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    router.push(`/messages/${latest.conversationId}`);
+                  }}
+                >
+                  <div className="flex-1 w-0 p-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0 pt-0.5">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-teal-400 flex items-center justify-center text-white font-bold text-sm">
+                          {latest.senderName ? latest.senderName.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {latest.senderName || 'Unknown User'}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-500 truncate max-w-[200px]">
+                          {latest.body || 'Sent an attachment'}
+                        </p>
                       </div>
                     </div>
-                    <div className="ml-3 flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {latest.senderName || 'Unknown User'}
-                      </p>
-                      <p className="mt-1 text-sm text-gray-500 truncate max-w-[200px]">
-                        {latest.body || 'Sent an attachment'}
-                      </p>
-                    </div>
                   </div>
-                </div>
-                <div className="flex border-l border-gray-200">
+                  <div className="flex border-l border-gray-200">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -108,27 +140,35 @@ export default function GlobalChatWrapper() {
       active = false;
       clearInterval(interval);
     };
-  }, [lastCheck, pathname, pinnedDm, isFabExpanded, router]);
+  }, [lastCheck, pathname, pinnedDm, isFabExpanded, router, currentUser]);
 
   // ── Pinned DM Listener ──
   useEffect(() => {
-    // Check localStorage for pinned DM
+    if (!currentUser) {
+      setPinnedDm(null);
+      return;
+    }
+
+    // Check localStorage for pinned DM for this specific user
     const checkPinned = () => {
-      const stored = localStorage.getItem('upcheck_pinned_dm');
+      const key = `upcheck_pinned_dm_${currentUser.id || currentUser._id}`;
+      const stored = localStorage.getItem(key);
       if (stored) {
         try {
           const parsed = JSON.parse(stored);
-          setPinnedDm(parsed);
-          
-          // Only fetch recent messages if it's a new pin
-          if (!pinnedDm || pinnedDm.conversationId !== parsed.conversationId) {
-            fetch(`/api/chat/messages?conversationId=${parsed.conversationId}&limit=20`)
-              .then(res => res.json())
-              .then(data => {
-                if (data.messages) setFabMessages(data.messages);
-              })
-              .catch(console.error);
-          }
+          setPinnedDm(prev => {
+            // Only update and fetch if the conversation ID changed or was not set
+            if (!prev || prev.conversationId !== parsed.conversationId) {
+              fetch(`/api/chat/messages?conversationId=${parsed.conversationId}&limit=20`)
+                .then(res => res.json())
+                .then(data => {
+                  if (data.messages) setFabMessages(data.messages);
+                })
+                .catch(console.error);
+              return parsed;
+            }
+            return prev;
+          });
         } catch (e) {
           console.error(e);
         }
@@ -141,7 +181,7 @@ export default function GlobalChatWrapper() {
     // Listen for custom event
     window.addEventListener('pinned-dm-changed', checkPinned);
     return () => window.removeEventListener('pinned-dm-changed', checkPinned);
-  }, []);
+  }, [currentUser]);
 
   // ── Handle Sending from FAB ──
   const sendFabMessage = async (e) => {
@@ -209,7 +249,10 @@ export default function GlobalChatWrapper() {
                   </button>
                   <button 
                     onClick={() => {
-                      localStorage.removeItem('pinned_dm');
+                      if (currentUser) {
+                        const key = `upcheck_pinned_dm_${currentUser.id || currentUser._id}`;
+                        localStorage.removeItem(key);
+                      }
                       setPinnedDm(null);
                       setIsFabExpanded(false);
                       window.dispatchEvent(new Event('pinned-dm-changed'));

@@ -19,13 +19,14 @@ const ChatThread = () => {
   const [messages, setMessages] = useState([]);
 
   const handlePin = () => {
-    if (!conversationId || !peer) return;
+    if (!conversationId || !peer || !user) return;
     const pinData = {
       conversationId,
       peerId: peer.id || peer._id,
       peerName: peer.name || peer.username || 'Teammate'
     };
-    localStorage.setItem('upcheck_pinned_dm', JSON.stringify(pinData));
+    const key = `upcheck_pinned_dm_${user.id || user._id}`;
+    localStorage.setItem(key, JSON.stringify(pinData));
     window.dispatchEvent(new Event('pinned-dm-changed'));
     alert(`Pinned chat with ${pinData.peerName} to the floating window.`);
   };
