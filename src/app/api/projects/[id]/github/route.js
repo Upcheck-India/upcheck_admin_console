@@ -31,7 +31,7 @@ export async function GET(request, { params }) {
     const client = await clientPromise;
     const db = client.db(process.env.MONGODB_DB);
 
-    const user = await db.collection('admin_users').findOne({ tokens: token });
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!user) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
@@ -172,7 +172,7 @@ export async function PUT(request, { params }) {
     const client = await clientPromise;
     const db = client.db(process.env.MONGODB_DB);
 
-    const user = await db.collection('admin_users').findOne({ tokens: token });
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
     if (!user) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }

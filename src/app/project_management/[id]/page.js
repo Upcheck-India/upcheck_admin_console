@@ -213,7 +213,7 @@ const ProjectDetailPage = () => {
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Access Mode</p>
               <p className="text-sm font-bold text-gray-900 mt-1 capitalize">
-                {project.accessMode?.replace('_', ' ') || 'Role Based'}
+                {(project.permissionSettings?.accessMode || 'members_only').replace('_', ' ')}
               </p>
             </div>
           </div>
