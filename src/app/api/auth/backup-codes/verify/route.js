@@ -106,8 +106,15 @@ export async function POST(request) {
     }
 
     // ── Credential lookup ─────────────────────────────────────────────────────
+    const escapedUsername = String(username).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const usernameRegex = new RegExp("^" + escapedUsername + "$", "i");
     const user = await db.collection('admin_users').findOne(
-      { username: String(username).trim() },
+      { 
+        $or: [
+          { username: String(username).trim() },
+          { username: { $regex: usernameRegex } }
+        ]
+      },
       { projection: { backupCodes: 1, email: 1, name: 1, role: 1, username: 1 } }
     );
 

@@ -25,9 +25,14 @@ export async function POST(req) {
       .update(password)
       .digest('hex');
 
-    // Find the user by username first
+    // Find the user by username first (case-insensitive)
+    const escapedUsername = String(username).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const usernameRegex = new RegExp("^" + escapedUsername + "$", "i");
     let user = await db.collection('admin_users').findOne({ 
-      username
+      $or: [
+        { username: String(username).trim() },
+        { username: { $regex: usernameRegex } }
+      ]
     });
 
     if (user) {

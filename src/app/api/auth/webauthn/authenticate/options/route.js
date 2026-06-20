@@ -34,8 +34,15 @@ export async function POST(request) {
 
     let user = null;
     if (username) {
+      const escapedUsername = String(username).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const usernameRegex = new RegExp("^" + escapedUsername + "$", "i");
       user = await db.collection('admin_users').findOne(
-        { username },
+        { 
+          $or: [
+            { username: String(username).trim() },
+            { username: { $regex: usernameRegex } }
+          ]
+        },
         { projection: { 'webauthn.credentials': 1, email: 1, _id: 1 } }
       );
     } else {

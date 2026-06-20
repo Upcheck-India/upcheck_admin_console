@@ -32,8 +32,15 @@ export async function POST(request) {
     //           (discoverable credential flow — browser picks from its own store).
     let user = null;
     if (username) {
+      const escapedUsername = String(username).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+      const usernameRegex = new RegExp("^" + escapedUsername + "$", "i");
       user = await db.collection('admin_users').findOne(
-        { username: String(username).trim() },
+        { 
+          $or: [
+            { username: String(username).trim() },
+            { username: { $regex: usernameRegex } }
+          ]
+        },
         { projection: { webauthn: 1, email: 1, name: 1, role: 1, username: 1 } }
       );
     } else {

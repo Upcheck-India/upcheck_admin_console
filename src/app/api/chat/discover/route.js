@@ -23,20 +23,24 @@ export async function GET(request) {
     ).toArray();
 
     // 2. Determine "teammates"
-    // Fetch all projects current user is in
+    // Fetch all projects current user is in (case-insensitive username check)
+    const escapedCurrentUsername = String(currentUser.username).trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const currentUserRegex = new RegExp("^" + escapedCurrentUsername + "$", "i");
     const userProjects = await db.collection('projects').find({
       $or: [
-        { superManager: currentUser.username },
-        { 'members.user': currentUser.username }
+        { superManager: { $regex: currentUserRegex } },
+        { 'members.user': { $regex: currentUserRegex } }
       ]
     }).toArray();
     
-    // Create a Set of teammate usernames
+    // Create a Set of teammate usernames (lowercased for case-insensitive set check)
     const teammateUsernames = new Set();
     userProjects.forEach(project => {
-      if (project.superManager) teammateUsernames.add(project.superManager);
+      if (project.superManager) teammateUsernames.add(project.superManager.toLowerCase());
       if (project.members) {
-        project.members.forEach(m => teammateUsernames.add(m.user));
+        project.members.forEach(m => {
+          if (m.user) teammateUsernames.add(m.user.toLowerCase());
+        });
       }
     });
 
@@ -47,7 +51,7 @@ export async function GET(request) {
       if (privacy === 'everyone') return true;
       if (privacy === 'none') return false;
       if (privacy === 'admins' && isAdmin) return true;
-      if (privacy === 'teammates' && teammateUsernames.has(user.username)) return true;
+      if (privacy === 'teammates' && teammateUsernames.has(user.username.toLowerCase())) return true;
       
       return false;
     });
