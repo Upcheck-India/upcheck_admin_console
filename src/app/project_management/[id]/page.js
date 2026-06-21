@@ -145,7 +145,7 @@ const ProjectDetailPage = () => {
 
   const showGithubTab = project.settings?.githubIntegrationEnabled !== false && project.githubRepoUrl;
 
-  const TabContent = () => {
+  const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
         return <OverviewTab project={project} projectId={id} onProjectUpdate={setProject} />;
@@ -378,7 +378,7 @@ const ProjectDetailPage = () => {
           </div>
           
           <div className="p-2 md:p-6 bg-white min-h-[500px]">
-            <TabContent />
+            {renderTabContent()}
           </div>
         </div>
       </div>
