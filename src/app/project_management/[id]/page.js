@@ -21,7 +21,7 @@ const ProjectDetailPage = () => {
   const [allTeams, setAllTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, tasks, members, github, canvas, settings
+  const [activeTab, setActiveTab] = useState('tasks'); // overview, tasks, members, github, canvas, settings
 
   const userTeams = React.useMemo(() => {
     if (!user || !allTeams) return [];

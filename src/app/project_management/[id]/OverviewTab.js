@@ -22,7 +22,7 @@ const OverviewTab = ({ project, projectId, onProjectUpdate }) => {
         });
         if (res.ok) {
           const data = await res.json();
-          const tasks = data.tasks || [];
+          const tasks = Array.isArray(data) ? data : (data.tasks || []);
           
           // Generate stats
           const stats = { total: tasks.length, byStatus: {} };
