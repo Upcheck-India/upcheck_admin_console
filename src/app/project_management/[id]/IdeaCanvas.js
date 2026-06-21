@@ -175,7 +175,7 @@ const IdeaCanvas = ({ project, userTeams }) => {
     } finally {
       setAutoSaving(false);
     }
-  }, [canEdit, project]);
+  }, [canEdit, project?._id]);
 
   useEffect(() => {
     if (hasUnsavedChanges) {
@@ -228,7 +228,7 @@ const IdeaCanvas = ({ project, userTeams }) => {
     } finally {
       setLoading(false);
     }
-  }, [project, setNodes, setEdges]);
+  }, [project?._id, setNodes, setEdges]);
 
   useEffect(() => {
     fetchCanvas();

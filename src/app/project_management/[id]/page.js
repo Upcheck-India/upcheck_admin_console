@@ -17,7 +17,7 @@ const ProjectDetailPage = () => {
   const router = useRouter();
   const params = useParams();
   const { id } = params;
-  const { user, loading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
 
   const [project, setProject] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
@@ -106,13 +106,13 @@ const ProjectDetailPage = () => {
   };
 
   useEffect(() => {
-    if (id && user) {
+    if (id && user?._id) {
         fetchData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user]);
+  }, [id, user?._id]);
 
-  if (loading || authLoading) {
+  if ((loading && !project) || authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Loader2 className="h-10 w-10 text-blue-600 animate-spin" />

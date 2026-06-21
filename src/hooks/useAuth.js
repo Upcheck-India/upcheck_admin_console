@@ -9,6 +9,7 @@ export function useAuth(requireAuth = true, requiredPermission = null) {
   const [authError, setAuthError] = useState(null);
   const [user, setUser] = useState(null);
   const router = useRouter();
+  const { push } = router;
 
   useEffect(() => {
     const checkAuthAndPermissions = async () => {
@@ -25,7 +26,7 @@ export function useAuth(requireAuth = true, requiredPermission = null) {
         if (!authResponse.ok) {
           console.log('Authentication failed');
           if (requireAuth) {
-            router.push('/login');
+            push('/login');
           }
           setIsAuthenticated(false);
           setIsLoading(false);
@@ -84,7 +85,7 @@ export function useAuth(requireAuth = true, requiredPermission = null) {
     };
 
     checkAuthAndPermissions();
-  }, [requireAuth, requiredPermission, router]);
+  }, [requireAuth, requiredPermission, push]);
 
   return { isLoading, isAuthenticated, hasPermission, authError, user };
 }
