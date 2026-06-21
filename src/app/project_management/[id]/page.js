@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3 } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy } from 'lucide-react';
 import IdeaCanvas from './IdeaCanvas';
 import { useAuth } from '../../../hooks/useAuth';
 import SettingsTab from './SettingsTab';
@@ -11,6 +11,7 @@ import GitHubTab from './GitHubTab';
 import OverviewTab from './OverviewTab';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
 import AvatarWithStatus from '../../../components/AvatarWithStatus';
+import LeaderboardTab from './LeaderboardTab';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
@@ -166,6 +167,8 @@ const ProjectDetailPage = () => {
         return <SettingsTab project={project} user={user} allUsers={allUsers} userTeams={userTeams} onProjectUpdate={fetchData} />;
       case 'canvas':
         return <IdeaCanvas project={project} userTeams={userTeams} />;
+      case 'leaderboard':
+        return <LeaderboardTab project={project} projectId={id} />;
       default:
         return null;
     }
@@ -353,6 +356,15 @@ const ProjectDetailPage = () => {
                   <StickyNote className="h-4 w-4 mr-2" /> Canvas
                 </button>
               )}
+              
+              <button 
+                onClick={() => setActiveTab('leaderboard')} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeTab === 'leaderboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <Trophy className="h-4 w-4 mr-2" /> Leaderboard
+              </button>
               
               <button 
                 onClick={() => setActiveTab('settings')} 

@@ -110,7 +110,7 @@ const AccessControlInfo = ({ project, allTeams }) => {
   }
 };
 
-const TeamCard = ({ team, onlineUsernames }) => {
+const TeamCard = ({ team, onlineUsernames, userBadgesMap }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -150,10 +150,24 @@ const TeamCard = ({ team, onlineUsernames }) => {
                     className="h-8 w-8 text-xs ring-2 ring-amber-100 shadow-sm"
                   />
                 </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-955 text-sm">
-                    {team.lead.firstName ? `${team.lead.firstName} ${team.lead.lastName || ''}` : team.lead.username}
-                  </p>
+                 <div className="min-w-0">
+                   <div className="flex items-center gap-2">
+                     <p className="font-semibold text-gray-955 text-sm">
+                       {team.lead.firstName ? `${team.lead.firstName} ${team.lead.lastName || ''}` : team.lead.username}
+                     </p>
+                     {/* Lead Badges */}
+                     <div className="flex flex-wrap gap-1">
+                       {userBadgesMap?.get(team.lead.username)?.map((badge, idx) => (
+                         <span 
+                           key={idx} 
+                           className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn" 
+                           title={`${badge.name}: ${badge.description}`}
+                         >
+                           {badge.icon}
+                         </span>
+                       ))}
+                     </div>
+                   </div>
                   <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                     <Mail className="h-3 w-3 flex-shrink-0" /> {team.lead.email}
                   </p>
@@ -182,9 +196,23 @@ const TeamCard = ({ team, onlineUsernames }) => {
                     />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-955 text-sm">
-                      {member.firstName ? `${member.firstName} ${member.lastName || ''}` : member.username}
-                    </p>
+                   <div className="flex items-center gap-2">
+                     <p className="font-medium text-gray-955 text-sm">
+                       {member.firstName ? `${member.firstName} ${member.lastName || ''}` : member.username}
+                     </p>
+                     {/* Member Badges */}
+                     <div className="flex flex-wrap gap-1">
+                       {userBadgesMap?.get(member.username)?.map((badge, idx) => (
+                         <span 
+                           key={idx} 
+                           className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn" 
+                           title={`${badge.name}: ${badge.description}`}
+                         >
+                           {badge.icon}
+                         </span>
+                       ))}
+                     </div>
+                   </div>
                     <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                       <Mail className="h-3 w-3 flex-shrink-0" /> {member.email}
                     </p>
@@ -209,6 +237,33 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
 
   const onlineUsers = useOnlineUsers();
   const onlineUsernames = useMemo(() => new Set(onlineUsers.map(u => u.username)), [onlineUsers]);
+
+  const [leaderboardData, setLeaderboardData] = useState([]);
+
+  useEffect(() => {
+    const fetchBadges = async () => {
+      try {
+        const res = await fetch(`/api/projects/${project._id || project.id}/leaderboard`);
+        if (res.ok) {
+          const data = await res.json();
+          setLeaderboardData(data.leaderboard || []);
+        }
+      } catch (err) {
+        console.error('Failed to load badges for MembersTab', err);
+      }
+    };
+    if (project?._id || project?.id) {
+      fetchBadges();
+    }
+  }, [project]);
+
+  const userBadgesMap = useMemo(() => {
+    const m = new Map();
+    leaderboardData.forEach(item => {
+      m.set(item.username, item.badges || []);
+    });
+    return m;
+  }, [leaderboardData]);
 
   const [subTab, setSubTab] = useState(accessMode === 'teams_based' && hasTeams ? 'teams' : 'direct');
 
@@ -264,10 +319,24 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
                         className="h-9 w-9 text-sm ring-2 ring-gray-100"
                       />
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className={`font-semibold truncate ${member.user === superManager ? 'text-blue-600' : 'text-gray-955'}`}>
-                        {member.user}
-                      </p>
+                     <div className="min-w-0 flex-1">
+                       <div className="flex items-center gap-2">
+                         <p className={`font-semibold truncate ${member.user === superManager ? 'text-blue-600' : 'text-gray-955'}`}>
+                           {member.user}
+                         </p>
+                         {/* Member Badges */}
+                         <div className="flex flex-wrap gap-1">
+                           {userBadgesMap.get(member.user)?.map((badge, idx) => (
+                             <span 
+                               key={idx} 
+                               className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn" 
+                               title={`${badge.name}: ${badge.description}`}
+                             >
+                               {badge.icon}
+                             </span>
+                           ))}
+                         </div>
+                       </div>
                       <p className="text-sm text-gray-500 truncate flex items-center gap-1 mt-0.5">
                         <Mail className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" /> {member.email}
                       </p>
@@ -292,7 +361,7 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
 
           <div className="space-y-4">
             {permSettings.allowedTeamsDetails.map((team) => (
-              <TeamCard key={team.id} team={team} onlineUsernames={onlineUsernames} />
+              <TeamCard key={team.id} team={team} onlineUsernames={onlineUsernames} userBadgesMap={userBadgesMap} />
             ))}
           </div>
         </div>

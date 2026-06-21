@@ -279,7 +279,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
   );
 };
 
-const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, canCreate, onAddTask, onMoveUp, onMoveDown }) => {
+const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, canCreate, onAddTask, onMoveUp, onMoveDown, onlineUsernames }) => {
   const { setNodeRef } = useDroppable({ 
     id,
     disabled: !canDrag
@@ -1123,6 +1123,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
                 onAddTask={(colStatus) => handleOpenModal({ status: colStatus })}
                 onMoveUp={(taskId) => handleMoveTask(taskId, 'up')}
                 onMoveDown={(taskId) => handleMoveTask(taskId, 'down')}
+                onlineUsernames={onlineUsernames}
               />
             ))}
           </div>
