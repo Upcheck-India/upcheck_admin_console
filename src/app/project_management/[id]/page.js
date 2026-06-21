@@ -20,6 +20,8 @@ const ProjectDetailPage = () => {
   const { user, isLoading: authLoading } = useAuth();
   const userId = user?._id || user?.id;
 
+  console.log('ProjectDetailPage State:', { id, userId, authLoading, hasUser: !!user });
+
   const [project, setProject] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
   const [allTeams, setAllTeams] = useState([]);
@@ -65,7 +67,11 @@ const ProjectDetailPage = () => {
   }, [allTeams, user]);
 
   const fetchData = async () => {
-    if (!user) return;
+    if (!user) {
+      console.log('fetchData aborted: no user');
+      return;
+    }
+    console.log('fetchData started. userId:', userId, 'projectId:', id);
     setLoading(true);
     setError(null);
     try {
@@ -74,11 +80,18 @@ const ProjectDetailPage = () => {
         'x-user-id': userId || ''
       };
 
+      console.log('fetchData: calling Promise.all with headers:', headers);
       const [projectRes, usersRes, teamsRes] = await Promise.all([
         fetch(`/api/projects/${id}`),
         fetch('/api/users?limit=500', { headers }),
         fetch('/api/teams?limit=500', { headers })
       ]);
+
+      console.log('fetchData responses received:', {
+        projectOk: projectRes.ok,
+        usersOk: usersRes.ok,
+        teamsOk: teamsRes.ok
+      });
 
       if (!projectRes.ok) {
         const errorData = await projectRes.json();
@@ -114,6 +127,13 @@ const ProjectDetailPage = () => {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, userId]);
+
+  console.log('ProjectDetailPage render checks:', {
+    loading,
+    hasProject: !!project,
+    authLoading,
+    spinnerCondition: (loading && !project) || authLoading
+  });
 
   if ((loading && !project) || authLoading) {
     return (
