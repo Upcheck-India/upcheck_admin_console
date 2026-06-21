@@ -367,6 +367,68 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // Populate team names and member details for allowed teams if they exist
+    if (project.permissionSettings?.allowedTeams?.length > 0) {
+      const allowedTeamIds = [];
+      project.permissionSettings.allowedTeams.forEach(tid => {
+        allowedTeamIds.push(tid);
+        try {
+          allowedTeamIds.push(new ObjectId(tid));
+        } catch (e) {
+          // ignore
+        }
+      });
+
+      const teamsData = await db.collection('teams')
+        .find({ _id: { $in: allowedTeamIds } })
+        .toArray();
+
+      // Collect all unique user IDs from these teams
+      const allUserIds = new Set();
+      teamsData.forEach(team => {
+        if (team.lead) allUserIds.add(team.lead.toString());
+        if (team.members) {
+          team.members.forEach(m => {
+            if (m) allUserIds.add(m.toString());
+          });
+        }
+      });
+
+      // Fetch user details for those users
+      const userIdArray = Array.from(allUserIds).map(id => {
+        try {
+          return new ObjectId(id);
+        } catch {
+          return id;
+        }
+      });
+
+      const usersData = await db.collection('admin_users')
+        .find({ _id: { $in: userIdArray } })
+        .project({ username: 1, email: 1, role: 1, firstName: 1, lastName: 1, department: 1, jobTitle: 1 })
+        .toArray();
+
+      const userLookup = new Map();
+      usersData.forEach(user => {
+        userLookup.set(user._id.toString(), user);
+      });
+
+      project.permissionSettings.allowedTeamsDetails = teamsData.map(team => {
+        const lead = team.lead ? userLookup.get(team.lead.toString()) : null;
+        const members = (team.members || [])
+          .map(mId => userLookup.get(mId?.toString() || mId))
+          .filter(Boolean);
+
+        return {
+          id: team._id.toString(),
+          name: team.name,
+          lead,
+          members,
+          memberCount: members.length
+        };
+      });
+    }
+
     return NextResponse.json(project);
   } catch (error) {
     console.error(`Error fetching project ${params.id}:`, error);

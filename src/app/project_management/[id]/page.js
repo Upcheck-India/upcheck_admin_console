@@ -117,6 +117,7 @@ const ProjectDetailPage = () => {
             superManager={project.superManager}
             project={project}
             allTeams={allTeams}
+            allUsers={allUsers}
           />
         );
       case 'github':

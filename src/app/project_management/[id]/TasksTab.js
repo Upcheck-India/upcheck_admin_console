@@ -24,14 +24,24 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const UserAvatar = ({ user }) => (
-  <div 
-    className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold text-gray-600 border-2 border-white" 
-    title={user?.username || 'Unknown'}
-  >
-    {user ? user.username.charAt(0).toUpperCase() : '?'}
-  </div>
-);
+const UserAvatar = ({ user }) => {
+  const tooltipText = React.useMemo(() => {
+    if (!user) return 'Unknown';
+    const teamsStr = user.teams?.length > 0 
+      ? ` - Teams: ${user.teams.map(t => t.name).join(', ')}` 
+      : '';
+    return `${user.username} (${user.role})${teamsStr}`;
+  }, [user]);
+
+  return (
+    <div 
+      className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold text-gray-600 border-2 border-white cursor-help shadow-sm hover:scale-105 transition-transform" 
+      title={tooltipText}
+    >
+      {user ? user.username.charAt(0).toUpperCase() : '?'}
+    </div>
+  );
+};
 
 const typeColors = {
   Feature: 'bg-blue-100 text-blue-800',
@@ -347,10 +357,14 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     if (!project || !allUsers.length) return map;
     
     const getTeamsForUser = (userId) => {
-      return allTeams.filter(team => 
-        team.lead === userId || 
-        (Array.isArray(team.members) && team.members.includes(userId))
-      );
+      const userIdStr = userId?.toString();
+      return allTeams.filter(team => {
+        const leadIdStr = team.lead?._id?.toString() || team.lead?.toString();
+        const memberIdsStr = Array.isArray(team.members) 
+          ? team.members.map(m => m?._id?.toString() || m?.toString() || m) 
+          : [];
+        return leadIdStr === userIdStr || memberIdsStr.includes(userIdStr);
+      });
     };
 
     allUsers.forEach(user => {
@@ -361,7 +375,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
         if (project.superManager === user.username) {
           computedRole = 'Super Manager';
         }
-        map.set(user._id, { ...user, role: computedRole });
+        map.set(user._id, { ...user, role: computedRole, teams: uTeams });
       }
     });
     

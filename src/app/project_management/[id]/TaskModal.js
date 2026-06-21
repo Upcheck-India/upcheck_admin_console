@@ -19,10 +19,14 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
   const [error, setError] = useState(null);
 
   const userOptions = useMemo(() => 
-    assignableUsers.map(user => ({
-      value: user._id,
-      label: `${user.username} (${user.role})`,
-    })),
+    assignableUsers.map(user => {
+      const teamNames = user.teams?.map(t => t.name).join(', ');
+      const teamSuffix = teamNames ? ` | Teams: ${teamNames}` : '';
+      return {
+        value: user._id,
+        label: `${user.username} (${user.role}${teamSuffix})`,
+      };
+    }),
     [assignableUsers]
   );
 
