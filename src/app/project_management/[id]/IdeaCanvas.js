@@ -3,8 +3,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2, Save, Pencil, RefreshCw, Clock, AlertCircle, CheckCircle2, X, HelpCircle } from 'lucide-react';
 import CanvasHelpModal from './CanvasHelpModal';
 import { useAuth } from '../../../hooks/useAuth';
+import { getUserPermissionLevel } from '../../../lib/projectPermissions';
 
-const IdeaCanvas = ({ project }) => {
+const IdeaCanvas = ({ project, userTeams }) => {
   const { user } = useAuth();
   const [content, setContent] = useState('');
   const [originalContent, setOriginalContent] = useState('');
@@ -22,19 +23,17 @@ const IdeaCanvas = ({ project }) => {
   const autoSaveTimeoutRef = useRef(null);
   const lastSavedContentRef = useRef('');
 
+  const perms = React.useMemo(() => {
+    return getUserPermissionLevel(user, project, userTeams);
+  }, [user, project, userTeams]);
+
   const canEdit = React.useMemo(() => {
-    if (!user || !project) return false;
-    const isSuperManager = project.superManager === user.username;
-    const isProjectManager = project.members?.some(m => m.user === user.username && m.role === 'Project Manager');
-    return isSuperManager || isProjectManager;
-  }, [project, user]);
+    return perms && (perms.level === 'full' || perms.level === 'write');
+  }, [perms]);
 
   const canView = React.useMemo(() => {
-    if (!user || !project) return false;
-    const isSuperManager = project.superManager === user.username;
-    const isMember = project.members?.some(m => m.user === user.username);
-    return isSuperManager || isMember;
-  }, [project, user]);
+    return perms !== null;
+  }, [perms]);
 
   // Auto-save functionality
   const autoSave = useCallback(async (contentToSave) => {

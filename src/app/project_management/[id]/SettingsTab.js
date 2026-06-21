@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Save, AlertTriangle, Settings, Users, Github, Image, Eye, EyeOff, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import ManageMembersForm from './ManageMembersForm';
 import { uploadFile } from '../../../lib/upload';
+import { getUserPermissionLevel } from '../../../lib/projectPermissions';
 
-const SettingsTab = ({ project, user, onProjectUpdate }) => {
+const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) => {
   const [name, setName] = useState(project.name);
   const [description, setDescription] = useState(project.description);
   const [logoFile, setLogoFile] = useState(null);
@@ -41,11 +42,12 @@ const SettingsTab = ({ project, user, onProjectUpdate }) => {
 
   useEffect(() => {
     if (project && user) {
+      const perms = getUserPermissionLevel(user, project, userTeams);
       const isSuper = project.superManager === user.username;
       const isManager = project.members?.some(m => m.user === user.username && m.role === 'Project Manager');
-      setIsAuthorized(isSuper || isManager);
+      setIsAuthorized(isSuper || isManager || (perms && perms.level === 'full'));
     }
-  }, [project, user]);
+  }, [project, user, userTeams]);
 
   // Track unsaved changes
   useEffect(() => {

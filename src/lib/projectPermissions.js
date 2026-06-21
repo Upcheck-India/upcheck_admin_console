@@ -155,7 +155,9 @@ export function getUserPermissionLevel(user, project, userTeams = null) {
     if (rolePermissions[user.role]) {
       const perms = { ...rolePermissions[user.role] };
       if (!perms.level) {
-        if (perms.writeScope === 'all' || perms.writeScope === 'own') {
+        if (perms.readScope === 'all' && perms.writeScope === 'all' && perms.downloadScope === 'all') {
+          perms.level = 'full';
+        } else if (perms.writeScope === 'all' || perms.writeScope === 'own') {
           perms.level = 'write';
         } else {
           perms.level = 'read';
@@ -200,7 +202,9 @@ export function getUserPermissionLevel(user, project, userTeams = null) {
           if (teamPermissions[teamId]) {
             const perms = { ...teamPermissions[teamId] };
             if (!perms.level) {
-              if (perms.writeScope === 'all' || perms.writeScope === 'own') {
+              if (perms.readScope === 'all' && perms.writeScope === 'all' && perms.downloadScope === 'all') {
+                perms.level = 'full';
+              } else if (perms.writeScope === 'all' || perms.writeScope === 'own') {
                 perms.level = 'write';
               } else {
                 perms.level = 'read';
@@ -210,10 +214,10 @@ export function getUserPermissionLevel(user, project, userTeams = null) {
           }
           // Default team member permissions
           return {
-            level: 'read',
+            level: 'write',
             readScope: 'all',
-            writeScope: 'own',
-            downloadScope: 'own'
+            writeScope: 'all',
+            downloadScope: 'all'
           };
         }
       }

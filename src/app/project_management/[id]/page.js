@@ -106,10 +106,18 @@ const ProjectDetailPage = () => {
 
   const showGithubTab = project.settings?.githubIntegrationEnabled !== false && project.githubRepoUrl;
 
+  const userTeams = React.useMemo(() => {
+    if (!user || !allTeams) return [];
+    return allTeams.filter(team => 
+      team.lead?._id === user._id || 
+      team.members?.some(m => m._id === user._id)
+    ).map(t => t._id);
+  }, [allTeams, user]);
+
   const TabContent = () => {
     switch (activeTab) {
       case 'tasks':
-        return <TasksTab projectId={project._id} project={project} allUsers={allUsers} allTeams={allTeams} />;
+        return <TasksTab projectId={project._id} project={project} allUsers={allUsers} allTeams={allTeams} userTeams={userTeams} />;
       case 'members':
         return (
           <MembersTab
@@ -123,9 +131,9 @@ const ProjectDetailPage = () => {
       case 'github':
         return showGithubTab ? <GitHubTab project={project} projectId={id} /> : null;
       case 'settings':
-        return <SettingsTab project={project} user={user} allUsers={allUsers} onProjectUpdate={fetchData} />;
+        return <SettingsTab project={project} user={user} allUsers={allUsers} userTeams={userTeams} onProjectUpdate={fetchData} />;
       case 'canvas':
-        return <IdeaCanvas project={project} />;
+        return <IdeaCanvas project={project} userTeams={userTeams} />;
       default:
         return null;
     }
