@@ -109,7 +109,8 @@ export async function GET(req, { params }) {
     }
 
     // Return permission settings (managers see full settings, others see limited info)
-    const canManage = canManagePermissions(user, project);
+    const userTeams = await getUserTeams(db, user);
+    const canManage = canManagePermissions(user, project, userTeams);
 
     return NextResponse.json({
       success: true,
@@ -198,7 +199,8 @@ export async function PUT(req, { params }) {
     }
 
     // Check if user can manage permissions
-    if (!canManagePermissions(user, project)) {
+    const userTeams = await getUserTeams(db, user);
+    if (!canManagePermissions(user, project, userTeams)) {
       return NextResponse.json({ error: 'Access denied: Only managers can modify permissions' }, { status: 403 });
     }
 

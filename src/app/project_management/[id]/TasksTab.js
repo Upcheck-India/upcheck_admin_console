@@ -6,7 +6,7 @@ import TaskDetailsModal from './TaskDetailsModal';
 import AddSprintModal from './AddSprintModal';
 import ShareLinksModal from './ShareLinksModal';
 import { useAuth } from '../../../hooks/useAuth';
-import { getUserPermissionLevel } from '../../../lib/projectPermissions';
+import { getUserPermissionLevel, canAccessProject } from '../../../lib/projectPermissions';
 import { 
   DndContext, 
   closestCenter, 
@@ -346,20 +346,27 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     const map = new Map();
     if (!project || !allUsers.length) return map;
     
-    project.members.forEach(member => {
-      const user = allUsers.find(u => u.username === member.user);
-      if (user) {
-        map.set(user._id, { ...user, role: member.role });
+    const getTeamsForUser = (userId) => {
+      return allTeams.filter(team => 
+        team.lead === userId || 
+        (Array.isArray(team.members) && team.members.includes(userId))
+      );
+    };
+
+    allUsers.forEach(user => {
+      const uTeams = getTeamsForUser(user._id);
+      if (canAccessProject(user, project, uTeams)) {
+        const explicitMember = project.members?.find(m => m.user === user.username);
+        let computedRole = explicitMember ? explicitMember.role : 'Team/Role Access';
+        if (project.superManager === user.username) {
+          computedRole = 'Super Manager';
+        }
+        map.set(user._id, { ...user, role: computedRole });
       }
     });
     
-    const superManagerUser = allUsers.find(u => u.username === project.superManager);
-    if (superManagerUser && !map.has(superManagerUser._id)) {
-      map.set(superManagerUser._id, { ...superManagerUser, role: 'Super Manager' });
-    }
-    
     return map;
-  }, [project, allUsers]);
+  }, [project, allUsers, allTeams]);
 
   const assignableUsers = useMemo(() => Array.from(userMap.values()), [userMap]);
 

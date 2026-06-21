@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
+import { canAccessProject, getUserPermissionLevel } from '../../../../../lib/projectPermissions';
 
 // Simple in-memory cache
 const cache = new Map();
@@ -42,10 +43,21 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
+    // Fetch teams for permission checks
+    const userIdStr = user._id?.toString();
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { members: userIdStr },
+          { lead: userIdStr },
+          { members: user._id },
+          { lead: user._id }
+        ],
+      })
+      .toArray();
+
     // Permission check
-    const isSuperManager = project.superManager === user.username;
-    const isMember = project.members?.some(m => m.username === user.username);
-    if (!isSuperManager && !isMember) {
+    if (!canAccessProject(user, project, userTeams)) {
        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -188,13 +200,24 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Edit permission check: superManager or Project Manager
-    const isSuperManager = project.superManager === user.username;
-    const member = project.members?.find(m => m.username === user.username);
-    const isProjectManager = member?.role === 'Project Manager';
+    // Edit permission check: level must be 'full' or 'write'
+    const userIdStr = user._id?.toString();
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { members: userIdStr },
+          { lead: userIdStr },
+          { members: user._id },
+          { lead: user._id }
+        ],
+      })
+      .toArray();
+
+    const perms = getUserPermissionLevel(user, project, userTeams);
+    const canEdit = perms && (perms.level === 'full' || perms.level === 'write');
     
-    if (!isSuperManager && !isProjectManager) {
-       return NextResponse.json({ error: 'Only Project Managers can edit files' }, { status: 403 });
+    if (!canEdit) {
+       return NextResponse.json({ error: 'Only members with write access can edit files' }, { status: 403 });
     }
 
     const pat = project.settings?.github?.personalAccessToken;

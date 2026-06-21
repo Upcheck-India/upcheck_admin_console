@@ -153,7 +153,15 @@ export function getUserPermissionLevel(user, project, userTeams = null) {
 
     // Check if user's role has specific permissions set
     if (rolePermissions[user.role]) {
-      return rolePermissions[user.role];
+      const perms = { ...rolePermissions[user.role] };
+      if (!perms.level) {
+        if (perms.writeScope === 'all' || perms.writeScope === 'own') {
+          perms.level = 'write';
+        } else {
+          perms.level = 'read';
+        }
+      }
+      return perms;
     }
 
     // Check if "Everyone" is selected - use default permissions
@@ -190,7 +198,15 @@ export function getUserPermissionLevel(user, project, userTeams = null) {
         if (userTeamIds.includes(teamId)) {
           // Return team-specific permissions or default
           if (teamPermissions[teamId]) {
-            return teamPermissions[teamId];
+            const perms = { ...teamPermissions[teamId] };
+            if (!perms.level) {
+              if (perms.writeScope === 'all' || perms.writeScope === 'own') {
+                perms.level = 'write';
+              } else {
+                perms.level = 'read';
+              }
+            }
+            return perms;
           }
           // Default team member permissions
           return {
@@ -348,9 +364,10 @@ export function canCreateInProject(user, project, userTeams = null) {
  * Check if user can manage project permissions
  * @param {Object} user - User object
  * @param {Object} project - Project object
+ * @param {Array} userTeams - Array of team IDs the user belongs to (optional)
  * @returns {boolean}
  */
-export function canManagePermissions(user, project) {
+export function canManagePermissions(user, project, userTeams = null) {
   if (!user || !project) return false;
 
   // Admin and Console admin can always manage
@@ -367,7 +384,15 @@ export function canManagePermissions(user, project) {
   const permSettings = project.permissionSettings;
   if (permSettings?.managedBy?.includes('projectManager')) {
     // Check if user is a Project Manager
-    return project.members?.some(m => m.user === user.username && m.role === 'Project Manager');
+    if (project.members?.some(m => m.user === user.username && m.role === 'Project Manager')) {
+      return true;
+    }
+  }
+
+  // Check if they have full access via teams or roles
+  const perms = getUserPermissionLevel(user, project, userTeams);
+  if (perms?.level === 'full') {
+    return true;
   }
 
   // By default, only Super Manager and admin roles can manage

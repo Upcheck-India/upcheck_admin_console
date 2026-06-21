@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { canAccessProject } from '../../../../lib/projectPermissions';
+import { canAccessProject, canManagePermissions } from '../../../../lib/projectPermissions';
 import { sendEmail } from '../../../../lib/emailService';
 
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
@@ -46,12 +46,22 @@ export async function PUT(req, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Security check: Only the superManager or a Project Manager can update the project.
-    const isSuperManager = project.superManager === user.username;
-    const isProjectManager = project.members?.some(member => member.user === user.username && member.role === 'Project Manager');
+    // Fetch user's teams for permission checking
+    const userIdStr = user._id?.toString();
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { members: userIdStr },
+          { lead: userIdStr },
+          { members: user._id },
+          { lead: user._id },
+        ],
+      })
+      .toArray();
 
-    if (!isSuperManager && !isProjectManager) {
-      return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can edit this project.' }, { status: 403 });
+    // Security check: must have project management permissions
+    if (!canManagePermissions(user, project, userTeams)) {
+      return NextResponse.json({ error: 'Access denied: You do not have permission to edit this project.' }, { status: 403 });
     }
 
     const { 
@@ -285,12 +295,22 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Security check: Only the superManager or a Project Manager can delete the project.
-    const isSuperManager = project.superManager === user.username;
-    const isProjectManager = project.members?.some(member => member.user === user.username && member.role === 'Project Manager');
+    // Fetch user's teams for permission checking
+    const userIdStr = user._id?.toString();
+    const userTeams = await db.collection('teams')
+      .find({
+        $or: [
+          { members: userIdStr },
+          { lead: userIdStr },
+          { members: user._id },
+          { lead: user._id },
+        ],
+      })
+      .toArray();
 
-    if (!isSuperManager && !isProjectManager) {
-      return NextResponse.json({ error: 'Access denied: Only the Super Manager or a Project Manager can delete this project.' }, { status: 403 });
+    // Security check: must have project management permissions
+    if (!canManagePermissions(user, project, userTeams)) {
+      return NextResponse.json({ error: 'Access denied: You do not have permission to delete this project.' }, { status: 403 });
     }
 
     await projectsCollection.deleteOne({ _id: new ObjectId(id) });
