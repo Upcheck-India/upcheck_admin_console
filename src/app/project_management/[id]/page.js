@@ -18,6 +18,7 @@ const ProjectDetailPage = () => {
   const params = useParams();
   const { id } = params;
   const { user, isLoading: authLoading } = useAuth();
+  const userId = user?._id || user?.id;
 
   const [project, setProject] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
@@ -55,10 +56,12 @@ const ProjectDetailPage = () => {
 
   const userTeams = React.useMemo(() => {
     if (!user || !allTeams) return [];
-    return allTeams.filter(team => 
-      team.lead?._id === user._id || 
-      team.members?.some(m => m._id === user._id)
-    ).map(t => t._id);
+    const currentUserId = user._id || user.id;
+    return allTeams.filter(team => {
+      const leadId = team.lead?._id || team.lead?.id || team.lead;
+      return leadId === currentUserId || 
+        team.members?.some(m => (m._id || m.id || m) === currentUserId);
+    }).map(t => t._id);
   }, [allTeams, user]);
 
   const fetchData = async () => {
@@ -68,7 +71,7 @@ const ProjectDetailPage = () => {
     try {
       const headers = {
         'x-user-role': user.role || '',
-        'x-user-id': user._id || ''
+        'x-user-id': userId || ''
       };
 
       const [projectRes, usersRes, teamsRes] = await Promise.all([
@@ -106,11 +109,11 @@ const ProjectDetailPage = () => {
   };
 
   useEffect(() => {
-    if (id && user?._id) {
+    if (id && userId) {
         fetchData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, user?._id]);
+  }, [id, userId]);
 
   if ((loading && !project) || authLoading) {
     return (
