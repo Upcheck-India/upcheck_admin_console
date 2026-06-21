@@ -9,6 +9,8 @@ import MembersTab from './MembersTab';
 import TasksTab from './TasksTab';
 import GitHubTab from './GitHubTab';
 import OverviewTab from './OverviewTab';
+import useOnlineUsers from '../../../hooks/useOnlineUsers';
+import AvatarWithStatus from '../../../components/AvatarWithStatus';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
@@ -22,6 +24,33 @@ const ProjectDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('tasks'); // overview, tasks, members, github, canvas, settings
+  const onlineUsers = useOnlineUsers();
+
+  const projectMemberUsernames = React.useMemo(() => {
+    if (!project) return new Set();
+    const usernames = new Set();
+    if (project.superManager) usernames.add(project.superManager);
+    
+    // Direct members
+    project.members?.forEach(m => {
+      if (m.user) usernames.add(m.user);
+      if (m.username) usernames.add(m.username);
+    });
+    
+    // Team members
+    project.permissionSettings?.allowedTeamsDetails?.forEach(team => {
+      if (team.lead?.username) usernames.add(team.lead.username);
+      team.members?.forEach(m => {
+        if (m.username) usernames.add(m.username);
+      });
+    });
+    
+    return usernames;
+  }, [project]);
+
+  const projectOnlineUsers = React.useMemo(() => {
+    return onlineUsers.filter(u => projectMemberUsernames.has(u.username));
+  }, [onlineUsers, projectMemberUsernames]);
 
   const userTeams = React.useMemo(() => {
     if (!user || !allTeams) return [];
@@ -196,6 +225,37 @@ const ProjectDetailPage = () => {
                     <Github className="h-4 w-4 mr-1.5 group-hover:scale-110 transition-transform" />
                     <span className="group-hover:underline underline-offset-2">{project.githubRepoUrl.replace('https://github.com/', '')}</span>
                   </a>
+                )}
+              </div>
+            </div>
+
+            {/* Online Members Indicator */}
+            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 self-start md:self-center shadow-sm">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+              </span>
+              <span className="text-xs font-semibold text-white mr-1.5">Online:</span>
+              <div className="flex -space-x-2 overflow-hidden">
+                {projectOnlineUsers.length === 0 ? (
+                  <span className="text-xs text-white/60 italic px-1">None online</span>
+                ) : (
+                  <>
+                    {projectOnlineUsers.slice(0, 4).map((u) => (
+                      <div key={u.username} title={`${u.username} (Online)`}>
+                        <AvatarWithStatus
+                          username={u.username}
+                          online={true}
+                          className="h-7 w-7 text-xs ring-2 ring-blue-500/50"
+                        />
+                      </div>
+                    ))}
+                    {projectOnlineUsers.length > 4 && (
+                      <div className="h-7 w-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/20 flex items-center justify-center text-xs font-bold text-white z-10" title={`${projectOnlineUsers.length - 4} more online`}>
+                        +{projectOnlineUsers.length - 4}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

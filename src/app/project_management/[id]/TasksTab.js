@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
+import useOnlineUsers from '../../../hooks/useOnlineUsers';
+import AvatarWithStatus from '../../../components/AvatarWithStatus';
 import BurndownChart from './BurndownChart';
 import TaskDetailsModal from './TaskDetailsModal';
 import AddSprintModal from './AddSprintModal';
@@ -25,21 +27,22 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-const UserAvatar = ({ user }) => {
+const UserAvatar = ({ user, online = false }) => {
   const tooltipText = React.useMemo(() => {
     if (!user) return 'Unknown';
     const teamsStr = user.teams?.length > 0 
       ? ` - Teams: ${user.teams.map(t => t.name).join(', ')}` 
       : '';
-    return `${user.username} (${user.role})${teamsStr}`;
-  }, [user]);
+    return `${user.username} (${user.role})${teamsStr}${online ? ' - Online' : ''}`;
+  }, [user, online]);
 
   return (
-    <div 
-      className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-sm font-bold text-gray-600 border-2 border-white cursor-help shadow-sm hover:scale-105 transition-transform" 
-      title={tooltipText}
-    >
-      {user ? user.username.charAt(0).toUpperCase() : '?'}
+    <div title={tooltipText}>
+      <AvatarWithStatus 
+        username={user?.username} 
+        online={online} 
+        className="w-8 h-8 text-xs border-2 border-white cursor-help shadow-sm hover:scale-105 transition-transform" 
+      />
     </div>
   );
 };
@@ -51,7 +54,7 @@ const typeColors = {
   Epic: 'bg-purple-100 text-purple-800',
 };
 
-const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, isFirst, isLast, onMoveUp, onMoveDown }) => {
+const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, isFirst, isLast, onMoveUp, onMoveDown, onlineUsernames }) => {
   const { 
     attributes, 
     listeners, 
@@ -254,7 +257,11 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
         </div>
         <div className="flex items-center -space-x-2">
           {task.assignees?.map(assigneeId => (
-            <UserAvatar key={assigneeId} user={userMap.get(assigneeId)} />
+            <UserAvatar 
+              key={assigneeId} 
+              user={userMap.get(assigneeId)} 
+              online={onlineUsernames?.has(userMap.get(assigneeId)?.username)}
+            />
           ))}
           {(!task.assignees || task.assignees.length === 0) && (
             <div className="text-xs text-gray-400 italic">Unassigned</div>
@@ -321,6 +328,7 @@ const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit
               isLast={idx === tasks.length - 1}
               onMoveUp={() => onMoveUp(task._id)}
               onMoveDown={() => onMoveDown(task._id)}
+              onlineUsernames={onlineUsernames}
             />
           ))}
           {tasks.length === 0 && (
@@ -336,6 +344,9 @@ const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit
 
 const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   const { user: currentUser } = useAuth();
+  const onlineUsers = useOnlineUsers();
+  const onlineUsernames = useMemo(() => new Set(onlineUsers.map(u => u.username)), [onlineUsers]);
+
   const router = useRouter();
   const [tasks, setTasks] = useState([]);
   const [sprints, setSprints] = useState([]);
@@ -1148,7 +1159,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               <h3 className="text-lg font-bold text-gray-900">Delete Sprint</h3>
             </div>
             <p className="text-gray-600 mb-4">
-              Are you sure you want to delete "<strong>{showDeleteSprintConfirm.name}</strong>"?
+              Are you sure you want to delete &quot;<strong>{showDeleteSprintConfirm.name}</strong>&quot;?
             </p>
             <p className="text-sm text-gray-500 mb-6">
               All tasks in this sprint will be moved to the Product Backlog.

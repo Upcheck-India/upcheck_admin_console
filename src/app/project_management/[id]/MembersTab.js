@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, Shield, Star, Users, UserCheck, ChevronDown, ChevronUp, Mail, Info } from 'lucide-react';
+import useOnlineUsers from '../../../hooks/useOnlineUsers';
+import AvatarWithStatus from '../../../components/AvatarWithStatus';
 
 const RoleIcon = ({ role }) => {
   switch (role) {
@@ -108,7 +110,7 @@ const AccessControlInfo = ({ project, allTeams }) => {
   }
 };
 
-const TeamCard = ({ team }) => {
+const TeamCard = ({ team, onlineUsernames }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -141,8 +143,12 @@ const TeamCard = ({ team }) => {
           {team.lead && (
             <div className="flex items-center justify-between p-3.5 px-6 bg-amber-50/20">
               <div className="flex items-center min-w-0">
-                <div className="mr-3 p-1.5 bg-amber-100/70 text-amber-700 rounded-full flex-shrink-0 border border-amber-200/50">
-                  <Star className="h-3.5 w-3.5" />
+                <div className="mr-3">
+                  <AvatarWithStatus
+                    username={team.lead.username}
+                    online={onlineUsernames?.has(team.lead.username)}
+                    className="h-8 w-8 text-xs ring-2 ring-amber-100 shadow-sm"
+                  />
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-955 text-sm">
@@ -168,8 +174,12 @@ const TeamCard = ({ team }) => {
             team.members.map((member) => (
               <div key={member._id || member.username} className="flex items-center justify-between p-3.5 px-6 hover:bg-gray-50/30 transition-colors">
                 <div className="flex items-center min-w-0">
-                  <div className="mr-3 w-8 h-8 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-xs font-bold text-blue-600 flex-shrink-0">
-                    {member.username.charAt(0).toUpperCase()}
+                  <div className="mr-3">
+                    <AvatarWithStatus
+                      username={member.username}
+                      online={onlineUsernames?.has(member.username)}
+                      className="h-8 w-8 text-xs ring-2 ring-blue-50/50"
+                    />
                   </div>
                   <div className="min-w-0">
                     <p className="font-medium text-gray-955 text-sm">
@@ -196,6 +206,9 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
   const permSettings = project?.permissionSettings;
   const accessMode = permSettings?.accessMode || 'members_only';
   const hasTeams = permSettings?.allowedTeamsDetails && permSettings.allowedTeamsDetails.length > 0;
+
+  const onlineUsers = useOnlineUsers();
+  const onlineUsernames = useMemo(() => new Set(onlineUsers.map(u => u.username)), [onlineUsers]);
 
   const [subTab, setSubTab] = useState(accessMode === 'teams_based' && hasTeams ? 'teams' : 'direct');
 
@@ -245,7 +258,11 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
                 <div key={index} className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm border border-gray-200/80 hover:shadow-md transition-shadow">
                   <div className="flex items-center flex-1 min-w-0">
                     <div className="mr-4 flex-shrink-0">
-                      <RoleIcon role={member.role} />
+                      <AvatarWithStatus
+                        username={member.user}
+                        online={onlineUsernames.has(member.user)}
+                        className="h-9 w-9 text-sm ring-2 ring-gray-100"
+                      />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className={`font-semibold truncate ${member.user === superManager ? 'text-blue-600' : 'text-gray-955'}`}>
@@ -275,7 +292,7 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
 
           <div className="space-y-4">
             {permSettings.allowedTeamsDetails.map((team) => (
-              <TeamCard key={team.id} team={team} />
+              <TeamCard key={team.id} team={team} onlineUsernames={onlineUsernames} />
             ))}
           </div>
         </div>
