@@ -11,6 +11,17 @@ const OverviewTab = ({ project, projectId, onProjectUpdate }) => {
   const [taskStats, setTaskStats] = useState({ total: 0, byStatus: {} });
   const [loadingTasks, setLoadingTasks] = useState(true);
 
+  // Announcements state
+  const [announcements, setAnnouncements] = useState(project.announcements || []);
+  const [newAnnouncementTitle, setNewAnnouncementTitle] = useState('');
+  const [newAnnouncementBody, setNewAnnouncementBody] = useState('');
+  const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+  const [showAnnouncementForm, setShowAnnouncementForm] = useState(false);
+
+  const isManager = user?.role === 'Admin' || user?.role === 'Console admin' ||
+    project.superManager === user?.username ||
+    project.members?.find(m => m.user === user?.username)?.role === 'Project Manager';
+
   // Fetch tasks to generate stats and recent activity
   useEffect(() => {
     const fetchTasks = async () => {
@@ -44,6 +55,56 @@ const OverviewTab = ({ project, projectId, onProjectUpdate }) => {
     
     fetchTasks();
   }, [projectId]);
+
+  const handlePostAnnouncement = async () => {
+    if (!newAnnouncementTitle.trim()) return;
+    setIsPostingAnnouncement(true);
+    const newAnn = {
+      id: Date.now().toString(),
+      title: newAnnouncementTitle,
+      body: newAnnouncementBody,
+      authorName: user?.username || 'Unknown',
+      createdAt: new Date().toISOString(),
+      reactions: {}
+    };
+    const updated = [newAnn, ...announcements];
+    setAnnouncements(updated);
+    const token = localStorage.getItem('token');
+    await fetch(`/api/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      credentials: 'include',
+      body: JSON.stringify({ announcements: updated })
+    });
+    setNewAnnouncementTitle('');
+    setNewAnnouncementBody('');
+    setShowAnnouncementForm(false);
+    setIsPostingAnnouncement(false);
+  };
+
+  const handleReact = async (annId, emoji) => {
+    const userId = user?._id || user?.id || 'unknown';
+    const updated = announcements.map(ann => {
+      if (ann.id !== annId) return ann;
+      const existing = ann.reactions?.[emoji] || [];
+      const hasReacted = existing.includes(userId);
+      return {
+        ...ann,
+        reactions: {
+          ...ann.reactions,
+          [emoji]: hasReacted ? existing.filter(id => id !== userId) : [...existing, userId]
+        }
+      };
+    });
+    setAnnouncements(updated);
+    const token = localStorage.getItem('token');
+    await fetch(`/api/projects/${projectId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+      credentials: 'include',
+      body: JSON.stringify({ announcements: updated })
+    });
+  };
 
   const handleSaveReadme = async () => {
     setIsSaving(true);
@@ -81,6 +142,71 @@ const OverviewTab = ({ project, projectId, onProjectUpdate }) => {
   };
 
   return (
+    <>
+    {/* Announcements Section */}
+    {(announcements.length > 0 || isManager) && (
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold text-gray-800 flex items-center">
+            <span className="mr-2">📌</span> Team Announcements
+          </h3>
+          {isManager && (
+            <button onClick={() => setShowAnnouncementForm(f => !f)}
+              className="text-sm text-blue-600 hover:text-blue-800 font-medium">
+              {showAnnouncementForm ? 'Cancel' : '+ Post Announcement'}
+            </button>
+          )}
+        </div>
+
+        {showAnnouncementForm && (
+          <div className="bg-white border border-blue-200 rounded-xl p-4 mb-4 shadow-sm">
+            <input value={newAnnouncementTitle} onChange={e => setNewAnnouncementTitle(e.target.value)}
+              placeholder="Announcement title..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+            <textarea value={newAnnouncementBody} onChange={e => setNewAnnouncementBody(e.target.value)}
+              placeholder="Announcement body (optional)..." rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none mb-2" />
+            <button onClick={handlePostAnnouncement} disabled={isPostingAnnouncement || !newAnnouncementTitle.trim()}
+              className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {isPostingAnnouncement ? 'Posting...' : 'Post Announcement'}
+            </button>
+          </div>
+        )}
+
+        {announcements.length === 0 && (
+          <p className="text-sm text-gray-500 italic">No announcements yet.</p>
+        )}
+
+        <div className="space-y-3">
+          {announcements.map(ann => (
+            <div key={ann.id} className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h4 className="font-bold text-gray-900 mb-1">{ann.title}</h4>
+                  {ann.body && <p className="text-sm text-gray-700 mb-2 whitespace-pre-wrap">{ann.body}</p>}
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex gap-2">
+                  {['👍', '🎉', '💯'].map(emoji => (
+                    <button key={emoji} onClick={() => handleReact(ann.id, emoji)}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
+                        (ann.reactions?.[emoji] || []).includes(user?._id || user?.id || '')
+                          ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                      }`}>
+                      {emoji} <span>{(ann.reactions?.[emoji] || []).length || ''}</span>
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-gray-500">
+                  {ann.authorName} · {new Date(ann.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Main Content (README) */}
       <div className="lg:col-span-2 space-y-6">
@@ -226,6 +352,7 @@ const OverviewTab = ({ project, projectId, onProjectUpdate }) => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 

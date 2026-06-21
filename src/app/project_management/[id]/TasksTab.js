@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
+import BurndownChart from './BurndownChart';
 import TaskDetailsModal from './TaskDetailsModal';
 import AddSprintModal from './AddSprintModal';
 import ShareLinksModal from './ShareLinksModal';
@@ -112,6 +113,16 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
     return null;
   }, [task.dueDate, task.status]);
 
+  const priorityDotColor = useMemo(() => {
+    switch (task.priority) {
+      case 'Urgent': return 'bg-red-500';
+      case 'High': return 'bg-orange-400';
+      case 'Medium': return 'bg-yellow-400';
+      case 'Low': return 'bg-green-500';
+      default: return null;
+    }
+  }, [task.priority]);
+
   return (
     <div 
       ref={setNodeRef} 
@@ -120,6 +131,14 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
       {...listeners} 
       className={`bg-white p-3 rounded-lg shadow-sm border relative group touch-none ${dateStatus?.cardClass || 'border-gray-200'}`}
     >
+      {/* Priority dot */}
+      {priorityDotColor && (
+        <span
+          className={`absolute top-2 left-2 w-2.5 h-2.5 rounded-full ${priorityDotColor}`}
+          title={task.priority}
+        />
+      )}
+
       <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white bg-opacity-75 rounded-md">
         {/* View button for all users */}
         <button 
@@ -172,7 +191,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
         )}
       </div>
       
-      <div className="flex items-start justify-between">
+      <div className={`flex items-start justify-between ${priorityDotColor ? 'pl-4' : ''}`}>
         <h4 className="font-semibold text-gray-800 pr-4 text-sm flex-1">
           {task.title}
         </h4>
@@ -190,6 +209,21 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
           </span>
         </div>
       </div>
+
+      {/* Label chips */}
+      {task.labels?.length > 0 && (
+        <div className="flex flex-wrap gap-1 mt-1.5">
+          {task.labels.map((label, idx) => (
+            <span
+              key={idx}
+              style={{ backgroundColor: label.color }}
+              className="text-xs px-1.5 py-0.5 rounded-full text-white font-medium"
+            >
+              {label.name}
+            </span>
+          ))}
+        </div>
+      )}
       
       {task.description && (
         <p className="text-xs text-gray-600 mt-1.5">{task.description}</p>
@@ -314,6 +348,11 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   const [detailsTask, setDetailsTask] = useState(null);
   const [isShareLinksModalOpen, setIsShareLinksModalOpen] = useState(false);
 
+  // Filter state (must be before any early returns)
+  const [filterPriority, setFilterPriority] = useState('All');
+  const [filterAssignee, setFilterAssignee] = useState('All');
+  const [filterSearch, setFilterSearch] = useState('');
+
   // Sprint management state
   const [editingSprint, setEditingSprint] = useState(null);
   const [editSprintName, setEditSprintName] = useState('');
@@ -401,22 +440,35 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
 
   const assignableUsers = useMemo(() => Array.from(userMap.values()), [userMap]);
 
-  // Columns grouped by status
+  // Derived: selected sprint
+  const selectedSprint = sprints.find(s => s._id === currentSprintId);
+
+  // Filtered tasks based on active filter bar state
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      if (filterPriority && filterPriority !== 'All' && task.priority !== filterPriority) return false;
+      if (filterAssignee && filterAssignee !== 'All' && !task.assignees?.includes(filterAssignee)) return false;
+      if (filterSearch && !task.title?.toLowerCase().includes(filterSearch.toLowerCase())) return false;
+      return true;
+    });
+  }, [tasks, filterPriority, filterAssignee, filterSearch]);
+
+  // Columns grouped by status (uses filteredTasks)
   const columns = useMemo(() => {
     // For Product Backlog board (no sprint selected), only show Backlog column
     if (currentSprintId === null) {
       return {
-        'Backlog': tasks.filter(t => t.status === 'Backlog'),
+        'Backlog': filteredTasks.filter(t => t.status === 'Backlog'),
       };
     }
     // For sprint boards, show full workflow columns
     return {
-      'Backlog': tasks.filter(t => t.status === 'Backlog'),
-      'To Do': tasks.filter(t => t.status === 'To Do'),
-      'In Progress': tasks.filter(t => t.status === 'In Progress'),
-      'Done': tasks.filter(t => t.status === 'Done'),
+      'Backlog': filteredTasks.filter(t => t.status === 'Backlog'),
+      'To Do': filteredTasks.filter(t => t.status === 'To Do'),
+      'In Progress': filteredTasks.filter(t => t.status === 'In Progress'),
+      'Done': filteredTasks.filter(t => t.status === 'Done'),
     };
-  }, [tasks, currentSprintId]);
+  }, [filteredTasks, currentSprintId]);
 
   // Fetch sprints
   useEffect(() => {
@@ -458,6 +510,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
           headers: {
             'Authorization': `Bearer ${localStorage.getItem('token')}`,
           },
+          credentials: 'include',
         });
         if (!res.ok) throw new Error(`Failed to fetch tasks: ${res.status}`);
         const data = await res.json();
@@ -820,6 +873,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
           projectId={projectId}
           sprints={sprints}
           defaultSprintId={currentSprintId !== null ? currentSprintId : (sprints.length > 0 ? sprints[0]._id : null)}
+          projectLabels={project?.settings?.labels || []}
         />
       )}
 
@@ -953,8 +1007,57 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               <div className="text-sm text-gray-500 ml-2">
                 {isManager ? 'No sprints yet. Click "Add Sprint" to create the first sprint.' : 'No sprints available yet.'}
               </div>
+          )}
+        </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
+            <select
+              value={filterPriority}
+              onChange={(e) => setFilterPriority(e.target.value)}
+              className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="All">All Priorities</option>
+              <option value="Urgent">🔴 Urgent</option>
+              <option value="High">🟠 High</option>
+              <option value="Medium">🟡 Medium</option>
+              <option value="Low">🟢 Low</option>
+            </select>
+
+            <select
+              value={filterAssignee}
+              onChange={(e) => setFilterAssignee(e.target.value)}
+              className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              <option value="All">All Assignees</option>
+              {Array.from(userMap.values()).map(u => (
+                <option key={u._id} value={u._id}>{u.username}</option>
+              ))}
+            </select>
+
+            <input
+              type="text"
+              placeholder="Search tasks..."
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 min-w-[160px]"
+            />
+
+            {(filterPriority !== 'All' || filterAssignee !== 'All' || filterSearch) && (
+              <button
+                type="button"
+                onClick={() => { setFilterPriority('All'); setFilterAssignee('All'); setFilterSearch(''); }}
+                className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
+              >
+                <X className="h-3 w-3" /> Clear filters
+              </button>
             )}
           </div>
+
+          {/* Burndown Chart (collapsible, shown when sprint has dates) */}
+          {currentSprintId && selectedSprint?.startDate && selectedSprint?.endDate && (
+            <BurndownChart sprint={selectedSprint} tasks={tasks} />
+          )}
 
           {/* Header */}
           <div className="flex justify-between items-center mb-6">

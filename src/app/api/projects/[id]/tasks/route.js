@@ -119,7 +119,7 @@ export async function POST(request, { params }) {
     }
 
     const body = await request.json();
-    const { title, description, status, assignees, reporter, dueDate, type, sprintId } = body;
+    const { title, description, status, assignees, reporter, dueDate, type, sprintId, subtasks, priority, labels, storyPoints, startDate, endDate } = body;
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -133,8 +133,15 @@ export async function POST(request, { params }) {
       assignees: Array.isArray(assignees) ? assignees.map(tId => new ObjectId(tId)) : [],
       reporter: reporter ? new ObjectId(reporter) : null,
       dueDate: dueDate ? new Date(dueDate) : null,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
       status: status || 'Backlog',
       type: type || 'Feature',
+      subtasks: Array.isArray(subtasks) ? subtasks : [],
+      priority: priority || 'Medium',
+      labels: Array.isArray(labels) ? labels : [],
+      storyPoints: typeof storyPoints === 'number' ? storyPoints : 0,
+      activity: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };

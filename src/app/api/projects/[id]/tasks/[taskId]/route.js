@@ -59,7 +59,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { title, description, assignees, reporter, dueDate, status, type, sprintId, subtasks } = body;
+    const { title, description, assignees, reporter, dueDate, status, type, sprintId, subtasks, priority, labels, storyPoints, linkedFiles, links, order, startDate, endDate } = body;
 
     // Send email notification if assignees changed
     if (Array.isArray(assignees)) {
@@ -134,13 +134,52 @@ export async function PUT(request, { params }) {
       }
     }
     if (dueDate !== undefined) updateData.$set.dueDate = dueDate ? new Date(dueDate) : null;
+    if (startDate !== undefined) updateData.$set.startDate = startDate ? new Date(startDate) : null;
+    if (endDate !== undefined) updateData.$set.endDate = endDate ? new Date(endDate) : null;
     if (reporter !== undefined) updateData.$set.reporter = reporter ? new ObjectId(reporter) : null;
     if (Array.isArray(assignees)) {
       updateData.$set.assignees = assignees.map(aId => new ObjectId(aId));
     }
     if (Array.isArray(subtasks)) {
-      // Validate subtasks or just pass them through
       updateData.$set.subtasks = subtasks;
+    }
+    if (priority !== undefined) updateData.$set.priority = priority;
+    if (labels !== undefined) updateData.$set.labels = Array.isArray(labels) ? labels : [];
+    if (storyPoints !== undefined) updateData.$set.storyPoints = storyPoints;
+    if (linkedFiles !== undefined) updateData.$set.linkedFiles = Array.isArray(linkedFiles) ? linkedFiles : [];
+    if (links !== undefined) updateData.$set.links = Array.isArray(links) ? links : [];
+    if (order !== undefined) updateData.$set.order = order;
+
+    // Activity tracking
+    const existingTask = await db.collection('project_tasks').findOne({ _id: new ObjectId(taskId) });
+    const activityEntry = {
+      _id: new ObjectId(),
+      type: 'update',
+      userId: user._id,
+      userName: user.username || user.name || 'Unknown',
+      changes: [],
+      createdAt: new Date()
+    };
+
+    if (existingTask) {
+      if (status !== undefined && existingTask.status !== status) {
+        activityEntry.changes.push({ field: 'status', from: existingTask.status, to: status });
+        activityEntry.type = 'status_change';
+      }
+      if (assignees !== undefined) {
+        const oldIds = (existingTask.assignees || []).map(a => a.toString());
+        const newIds = (assignees || []).map(a => a.toString());
+        const added = newIds.filter(id => !oldIds.includes(id));
+        const removed = oldIds.filter(id => !newIds.includes(id));
+        if (added.length || removed.length) {
+          activityEntry.changes.push({ field: 'assignees', added, removed });
+          activityEntry.type = 'assignee_change';
+        }
+      }
+    }
+
+    if (activityEntry.changes.length > 0) {
+      updateData.$push = { activity: activityEntry };
     }
 
     const result = await db.collection('project_tasks').updateOne(

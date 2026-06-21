@@ -27,6 +27,12 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
   const [githubIntegrationEnabled, setGithubIntegrationEnabled] = useState(project.settings?.githubIntegrationEnabled !== false);
   const [trackTaskActivity, setTrackTaskActivity] = useState(project.settings?.trackTaskActivity !== false);
 
+  // Labels state
+  const [labels, setLabels] = useState(project?.settings?.labels || []);
+  const [newLabelName, setNewLabelName] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState('#3b82f6');
+  const [isSavingLabels, setIsSavingLabels] = useState(false);
+
   // GitHub Advanced Settings
   const [githubPAT, setGithubPAT] = useState(project.settings?.github?.personalAccessToken || '');
   const [showFileBrowser, setShowFileBrowser] = useState(project.settings?.github?.showFileBrowser !== false);
@@ -234,6 +240,41 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
     setShowContributors(project.settings?.github?.showContributors !== false);
     setError(null);
     setSuccess(null);
+  };
+
+  const handleAddLabel = () => {
+    if (!newLabelName.trim()) return;
+    const newLabel = { name: newLabelName.trim(), color: newLabelColor };
+    setLabels(prev => [...prev, newLabel]);
+    setNewLabelName('');
+  };
+
+  const handleRemoveLabel = (index) => {
+    setLabels(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSaveLabels = async () => {
+    setIsSavingLabels(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/projects/${project._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ labels })
+      });
+      if (!res.ok) throw new Error('Failed to save labels');
+      const updated = await res.json();
+      onProjectUpdate(updated);
+      alert('Labels saved!');
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsSavingLabels(false);
+    }
   };
 
   if (!isAuthorized) {
@@ -660,6 +701,50 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Task Labels Section */}
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden mb-6">
+          <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+            <h3 className="font-bold text-gray-800">Task Labels</h3>
+            <p className="text-sm text-gray-500 mt-1">Create color-coded labels to categorize and filter tasks.</p>
+          </div>
+          <div className="p-5">
+            {/* Existing labels */}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {labels.map((label, index) => (
+                <span key={index} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium text-white" style={{ backgroundColor: label.color }}>
+                  {label.name}
+                  <button onClick={() => handleRemoveLabel(index)} className="hover:opacity-70">&times;</button>
+                </span>
+              ))}
+              {labels.length === 0 && <p className="text-sm text-gray-400 italic">No labels yet.</p>}
+            </div>
+            {/* Add new label */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={newLabelName}
+                onChange={e => setNewLabelName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddLabel()}
+                placeholder="Label name..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+              />
+              <input
+                type="color"
+                value={newLabelColor}
+                onChange={e => setNewLabelColor(e.target.value)}
+                className="h-9 w-9 cursor-pointer rounded border border-gray-300 p-0.5"
+                title="Label color"
+              />
+              <button onClick={handleAddLabel} className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors">Add</button>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button onClick={handleSaveLabels} disabled={isSavingLabels} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {isSavingLabels ? 'Saving...' : 'Save Labels'}
+              </button>
             </div>
           </div>
         </div>

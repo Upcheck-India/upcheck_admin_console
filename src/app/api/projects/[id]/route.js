@@ -80,7 +80,9 @@ export async function PUT(req, { params }) {
       showCommits,
       showBranches,
       showContributors,
-      readme
+      readme,
+      announcements,
+      labels
     } = await req.json();
 
     // Build update object dynamically to only update provided fields
@@ -92,6 +94,7 @@ export async function PUT(req, { params }) {
     if (members !== undefined) updateFields.members = members;
     if (githubRepoUrl !== undefined) updateFields.githubRepoUrl = githubRepoUrl || '';
     if (readme !== undefined) updateFields.readme = readme || '';
+    if (announcements !== undefined) updateFields.announcements = announcements;
 
     // Construct settings object if any settings are provided
     if (allowContributorsUpdateTasks !== undefined || 
@@ -120,6 +123,7 @@ export async function PUT(req, { params }) {
         ...(enableIdeaCanvas !== undefined && { enableIdeaCanvas }),
         ...(githubIntegrationEnabled !== undefined && { githubIntegrationEnabled }),
         ...(trackTaskActivity !== undefined && { trackTaskActivity }),
+        ...(labels !== undefined && { labels }),
         ...(githubPAT !== undefined || showFileBrowser !== undefined || showCommits !== undefined || showBranches !== undefined || showContributors !== undefined ? {
           github: {
             ...(project.settings?.github || {}),
