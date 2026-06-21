@@ -59,7 +59,7 @@ export async function PUT(request, { params }) {
     }
 
     const body = await request.json();
-    const { title, description, assignees, reporter, dueDate, status, type, sprintId } = body;
+    const { title, description, assignees, reporter, dueDate, status, type, sprintId, subtasks } = body;
 
     // Send email notification if assignees changed
     if (Array.isArray(assignees)) {
@@ -137,6 +137,10 @@ export async function PUT(request, { params }) {
     if (reporter !== undefined) updateData.$set.reporter = reporter ? new ObjectId(reporter) : null;
     if (Array.isArray(assignees)) {
       updateData.$set.assignees = assignees.map(aId => new ObjectId(aId));
+    }
+    if (Array.isArray(subtasks)) {
+      // Validate subtasks or just pass them through
+      updateData.$set.subtasks = subtasks;
     }
 
     const result = await db.collection('project_tasks').updateOne(

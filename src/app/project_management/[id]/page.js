@@ -8,6 +8,7 @@ import SettingsTab from './SettingsTab';
 import MembersTab from './MembersTab';
 import TasksTab from './TasksTab';
 import GitHubTab from './GitHubTab';
+import OverviewTab from './OverviewTab';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
@@ -20,7 +21,15 @@ const ProjectDetailPage = () => {
   const [allTeams, setAllTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('tasks'); // tasks, members, github, canvas, settings
+  const [activeTab, setActiveTab] = useState('overview'); // overview, tasks, members, github, canvas, settings
+
+  const userTeams = React.useMemo(() => {
+    if (!user || !allTeams) return [];
+    return allTeams.filter(team => 
+      team.lead?._id === user._id || 
+      team.members?.some(m => m._id === user._id)
+    ).map(t => t._id);
+  }, [allTeams, user]);
 
   const fetchData = async () => {
     if (!user) return;
@@ -106,16 +115,10 @@ const ProjectDetailPage = () => {
 
   const showGithubTab = project.settings?.githubIntegrationEnabled !== false && project.githubRepoUrl;
 
-  const userTeams = React.useMemo(() => {
-    if (!user || !allTeams) return [];
-    return allTeams.filter(team => 
-      team.lead?._id === user._id || 
-      team.members?.some(m => m._id === user._id)
-    ).map(t => t._id);
-  }, [allTeams, user]);
-
   const TabContent = () => {
     switch (activeTab) {
+      case 'overview':
+        return <OverviewTab project={project} projectId={id} onProjectUpdate={setProject} />;
       case 'tasks':
         return <TasksTab projectId={project._id} project={project} allUsers={allUsers} allTeams={allTeams} userTeams={userTeams} />;
       case 'members':
@@ -244,6 +247,14 @@ const ProjectDetailPage = () => {
           {/* Pill-style Tab Navigation */}
           <div className="p-4 border-b border-gray-100 bg-gray-50/50">
             <div className="flex flex-wrap gap-1 bg-gray-100/80 p-1 rounded-lg w-max border border-gray-200 shadow-inner">
+              <button 
+                onClick={() => setActiveTab('overview')} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeTab === 'overview' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <BarChart3 className="h-4 w-4 mr-2" /> Overview
+              </button>
               <button 
                 onClick={() => setActiveTab('tasks')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${

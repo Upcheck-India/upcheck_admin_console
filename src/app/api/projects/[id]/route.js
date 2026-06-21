@@ -79,7 +79,8 @@ export async function PUT(req, { params }) {
       showFileBrowser,
       showCommits,
       showBranches,
-      showContributors
+      showContributors,
+      readme
     } = await req.json();
 
     // Build update object dynamically to only update provided fields
@@ -90,6 +91,7 @@ export async function PUT(req, { params }) {
     if (logo !== undefined) updateFields.logo = logo || '';
     if (members !== undefined) updateFields.members = members;
     if (githubRepoUrl !== undefined) updateFields.githubRepoUrl = githubRepoUrl || '';
+    if (readme !== undefined) updateFields.readme = readme || '';
 
     // Construct settings object if any settings are provided
     if (allowContributorsUpdateTasks !== undefined || 

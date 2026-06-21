@@ -14,9 +14,14 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
     status: 'Backlog',
     type: 'Feature',
     sprintId: defaultSprintId,
+    subtasks: [],
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
+  const [comments, setComments] = useState([]);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   const userOptions = useMemo(() => 
     assignableUsers.map(user => {
@@ -41,7 +46,9 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
         status: task.status || 'Backlog',
         type: task.type || 'Feature',
         sprintId: task.sprintId || defaultSprintId || null,
+        subtasks: task.subtasks || [],
       });
+      setComments(task.comments || []);
     } else {
       setFormData({ 
         title: '', 
@@ -51,7 +58,8 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
         dueDate: '', 
         status: 'Backlog', 
         type: 'Feature', 
-        sprintId: defaultSprintId || null 
+        sprintId: defaultSprintId || null,
+        subtasks: [],
       });
     }
   }, [task, defaultSprintId]);
@@ -67,6 +75,27 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
     } else {
       setFormData(prev => ({ ...prev, [name]: selectedOption ? selectedOption.value : '' }));
     }
+  };
+
+  const addSubtask = () => {
+    setFormData(prev => ({
+      ...prev,
+      subtasks: [...prev.subtasks, { id: Date.now().toString(), title: '', isCompleted: false }]
+    }));
+  };
+
+  const updateSubtask = (id, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      subtasks: prev.subtasks.map(st => st.id === id ? { ...st, [field]: value } : st)
+    }));
+  };
+
+  const removeSubtask = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      subtasks: prev.subtasks.filter(st => st.id !== id)
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -105,6 +134,40 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
       setError(err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleCommentSubmit = async (e) => {
+    e.preventDefault();
+    if (!newCommentText.trim() || !task || !task._id) return;
+    
+    setIsSubmittingComment(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/projects/${projectId}/tasks/${task._id}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify({ text: newCommentText, mentions: [] })
+      });
+      
+      if (!res.ok) {
+        throw new Error('Failed to post comment');
+      }
+      const data = await res.json();
+      setComments(prev => [...prev, data.comment]);
+      setNewCommentText('');
+      
+      // Update the parent's task state with the new comment if necessary
+      onSave({ ...task, comments: [...comments, data.comment] }, true); // true = silent update
+    } catch (err) {
+      console.error(err);
+      alert('Failed to post comment');
+    } finally {
+      setIsSubmittingComment(false);
     }
   };
   
@@ -197,6 +260,47 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Enter task description"
             />
+          </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-medium text-gray-700">Sub-tasks</label>
+              <button 
+                type="button" 
+                onClick={addSubtask}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium bg-blue-50 px-2 py-1 rounded"
+              >
+                + Add Item
+              </button>
+            </div>
+            {formData.subtasks && formData.subtasks.length > 0 && (
+              <div className="space-y-2 mb-4">
+                {formData.subtasks.map((st, index) => (
+                  <div key={st.id || index} className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      checked={st.isCompleted} 
+                      onChange={(e) => updateSubtask(st.id, 'isCompleted', e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <input 
+                      type="text" 
+                      value={st.title} 
+                      onChange={(e) => updateSubtask(st.id, 'title', e.target.value)}
+                      placeholder="Sub-task title"
+                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => removeSubtask(st.id)}
+                      className="text-gray-400 hover:text-red-500 p-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -295,6 +399,45 @@ const TaskModal = ({ task, assignableUsers, onClose, onSave, projectId, sprints 
             />
           </div>
         </form>
+
+        {/* Comments Section */}
+        {task && task._id && (
+          <div className="px-6 pb-6 pt-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+            <h3 className="text-sm font-bold text-gray-800 mb-3">Comments ({comments.length})</h3>
+            <div className="space-y-3 mb-4 max-h-48 overflow-y-auto pr-2">
+              {comments.map((comment, index) => (
+                <div key={index} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-bold text-blue-600">{comment.authorName}</span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(comment.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
+                </div>
+              ))}
+              {comments.length === 0 && (
+                <p className="text-sm text-gray-500 italic">No comments yet. Be the first to start the discussion!</p>
+              )}
+            </div>
+            <form onSubmit={handleCommentSubmit} className="flex gap-2">
+              <input 
+                type="text" 
+                value={newCommentText}
+                onChange={(e) => setNewCommentText(e.target.value)}
+                placeholder="Type your comment... (Use @ to mention)"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+              <button 
+                type="submit" 
+                disabled={isSubmittingComment || !newCommentText.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              >
+                {isSubmittingComment ? '...' : 'Post'}
+              </button>
+            </form>
+          </div>
+        )}
 
         {/* Modal Footer */}
         <div className="flex justify-end space-x-3 p-4 border-t sticky bottom-0 bg-white rounded-b-lg z-10">

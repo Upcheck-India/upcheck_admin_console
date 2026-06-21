@@ -38,7 +38,7 @@ export default function GlobalChatWrapper() {
     fetchUser();
     window.addEventListener('user-settings-changed', fetchUser);
     return () => window.removeEventListener('user-settings-changed', fetchUser);
-  }, []);
+  }, [pathname]);
 
   // ── Notification Polling ──
   useEffect(() => {
@@ -115,6 +115,7 @@ export default function GlobalChatWrapper() {
           
           // Also check if any message belongs to the pinned DM
           if (pinnedDm) {
+            if (!pinnedDm) return null;
             const newFabMessages = data.messages.filter(m => m.conversationId === pinnedDm.conversationId);
             if (newFabMessages.length > 0) {
               setFabMessages(prev => {
@@ -254,6 +255,7 @@ export default function GlobalChatWrapper() {
                         localStorage.removeItem(key);
                       }
                       setPinnedDm(null);
+                      setFabMessages([]);
                       setIsFabExpanded(false);
                       window.dispatchEvent(new Event('pinned-dm-changed'));
                     }}

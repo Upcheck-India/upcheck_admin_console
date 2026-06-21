@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown } from 'lucide-react';
+import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
 import TaskDetailsModal from './TaskDetailsModal';
@@ -196,10 +196,27 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
       )}
       
       <div className="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-        <div className="flex items-center">
-          <span className={`text-xs ${dateStatus ? dateStatus.textClass : 'text-gray-500'}`}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={`text-[11px] ${dateStatus ? dateStatus.textClass : 'text-gray-500'}`}>
             Due: {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'N/A'}
           </span>
+          
+          {(task.subtasks?.length > 0 || task.comments?.length > 0) && (
+            <div className="flex items-center gap-2 text-[11px] text-gray-500 border-l border-gray-200 pl-2">
+              {task.subtasks?.length > 0 && (
+                <div className="flex items-center gap-1" title="Sub-tasks">
+                  <CheckSquare className="w-3 h-3" />
+                  <span>{task.subtasks.filter(st => st.isCompleted).length}/{task.subtasks.length}</span>
+                </div>
+              )}
+              {task.comments?.length > 0 && (
+                <div className="flex items-center gap-1" title="Comments">
+                  <MessageSquare className="w-3 h-3" />
+                  <span>{task.comments.length}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center -space-x-2">
           {task.assignees?.map(assigneeId => (
