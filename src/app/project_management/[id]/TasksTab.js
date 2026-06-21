@@ -1065,11 +1065,6 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
             )}
           </div>
 
-          {/* Burndown Chart (collapsible, shown when sprint has dates) */}
-          {currentSprintId && selectedSprint?.startDate && selectedSprint?.endDate && (
-            <BurndownChart sprint={selectedSprint} tasks={tasks} />
-          )}
-
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
@@ -1131,6 +1126,13 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               />
             ))}
           </div>
+
+          {/* Burndown Chart (collapsible, shown when sprint has dates - moved to bottom) */}
+          {currentSprintId && selectedSprint?.startDate && selectedSprint?.endDate && (
+            <div className="mt-8 border-t border-gray-200 pt-6">
+              <BurndownChart sprint={selectedSprint} tasks={tasks} />
+            </div>
+          )}
         </div>
       </DndContext>
 
