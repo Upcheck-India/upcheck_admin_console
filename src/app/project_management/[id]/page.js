@@ -199,7 +199,7 @@ const ProjectDetailPage = () => {
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center">
-              {project.logo ? (
+              {project.logo && (project.logo.startsWith('/') || project.logo.startsWith('http://') || project.logo.startsWith('https://') || project.logo.startsWith('data:')) ? (
                 <img src={project.logo} alt="Project Logo" className="h-16 w-16 rounded-xl object-cover bg-white p-1 mr-4 shadow-md" />
               ) : (
                 <div className="h-16 w-16 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center mr-4 shadow-md border border-white/20">

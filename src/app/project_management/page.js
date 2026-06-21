@@ -409,7 +409,7 @@ const ProjectManagementPage = () => {
           {/* Card content */}
           <div className="pr-16 mb-4">
             <div className="flex items-start gap-4 mb-3">
-              {project.logo ? (
+              {project.logo && (project.logo.startsWith('/') || project.logo.startsWith('http://') || project.logo.startsWith('https://') || project.logo.startsWith('data:')) ? (
                 <img src={project.logo} alt={`${project.name} logo`} className="h-12 w-12 rounded-xl object-cover flex-shrink-0 shadow-sm border border-gray-100" />
               ) : (
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center shadow-sm flex-shrink-0">

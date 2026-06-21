@@ -805,7 +805,7 @@ export default function ProjectDocumentationPage() {
               </Link>
               
               <div className="flex items-center gap-3">
-                {project?.logo ? (
+                {project?.logo && (project.logo.startsWith('/') || project.logo.startsWith('http://') || project.logo.startsWith('https://') || project.logo.startsWith('data:')) ? (
                   <img src={project.logo} alt="" className="w-10 h-10 rounded-lg object-cover" />
                 ) : (
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -1272,7 +1272,7 @@ export default function ProjectDocumentationPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setLockModal({ show: false, file: null, mode: 'add' })}>
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xl font-bold mb-2">Add Password Protection</h3>
-            <p className="text-sm text-gray-500 mb-4">"{lockModal.file?.name}"</p>
+            <p className="text-sm text-gray-500 mb-4">&quot;{lockModal.file?.name}&quot;</p>
 
             <div className="space-y-4">
               <div>
