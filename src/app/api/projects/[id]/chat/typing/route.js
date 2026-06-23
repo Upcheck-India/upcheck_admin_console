@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
+import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { getUserPermissionLevel } from '../../../../../lib/projectPermissions';
+import { getUserPermissionLevel } from '../../../../../../lib/projectPermissions';
 
 // GET - Retrieve users currently typing (excluding the current user)
 export async function GET(req, { params }) {
