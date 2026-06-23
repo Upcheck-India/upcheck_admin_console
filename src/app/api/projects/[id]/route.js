@@ -75,6 +75,7 @@ export async function PUT(req, { params }) {
       enableIdeaCanvas,
       githubIntegrationEnabled,
       trackTaskActivity,
+      enableLeaderboardShoutout,
       githubPAT,
       showFileBrowser,
       showCommits,
@@ -106,6 +107,7 @@ export async function PUT(req, { params }) {
         enableIdeaCanvas !== undefined || 
         githubIntegrationEnabled !== undefined || 
         trackTaskActivity !== undefined ||
+        enableLeaderboardShoutout !== undefined ||
         githubPAT !== undefined ||
         showFileBrowser !== undefined ||
         showCommits !== undefined ||
@@ -123,6 +125,7 @@ export async function PUT(req, { params }) {
         ...(enableIdeaCanvas !== undefined && { enableIdeaCanvas }),
         ...(githubIntegrationEnabled !== undefined && { githubIntegrationEnabled }),
         ...(trackTaskActivity !== undefined && { trackTaskActivity }),
+        ...(enableLeaderboardShoutout !== undefined && { enableLeaderboardShoutout }),
         ...(labels !== undefined && { labels }),
         ...(githubPAT !== undefined || showFileBrowser !== undefined || showCommits !== undefined || showBranches !== undefined || showContributors !== undefined ? {
           github: {

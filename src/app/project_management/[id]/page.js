@@ -29,6 +29,7 @@ const ProjectDetailPage = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('tasks'); // overview, tasks, members, github, canvas, settings
   const onlineUsers = useOnlineUsers();
+  const [showOnlinePopover, setShowOnlinePopover] = useState(false);
 
   const projectMemberUsernames = React.useMemo(() => {
     if (!project) return new Set();
@@ -182,6 +183,7 @@ const ProjectDetailPage = () => {
             project={project}
             allTeams={allTeams}
             allUsers={allUsers}
+            currentUser={user}
           />
         );
       case 'github':
@@ -256,34 +258,63 @@ const ProjectDetailPage = () => {
             </div>
 
             {/* Online Members Indicator */}
-            <div className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 self-start md:self-center shadow-sm">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-              </span>
-              <span className="text-xs font-semibold text-white mr-1.5">Online:</span>
-              <div className="flex -space-x-2 overflow-hidden">
-                {projectOnlineUsers.length === 0 ? (
-                  <span className="text-xs text-white/60 italic px-1">None online</span>
-                ) : (
-                  <>
-                    {projectOnlineUsers.slice(0, 4).map((u) => (
-                      <div key={u.username} title={`${u.username} (Online)`}>
-                        <AvatarWithStatus
-                          username={u.username}
-                          online={true}
-                          className="h-7 w-7 text-xs ring-2 ring-blue-500/50"
-                        />
-                      </div>
-                    ))}
-                    {projectOnlineUsers.length > 4 && (
-                      <div className="h-7 w-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/20 flex items-center justify-center text-xs font-bold text-white z-10" title={`${projectOnlineUsers.length - 4} more online`}>
-                        +{projectOnlineUsers.length - 4}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
+            <div className="relative">
+              <button 
+                onClick={() => setShowOnlinePopover(!showOnlinePopover)}
+                className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 self-start md:self-center shadow-sm hover:bg-white/20 transition-all cursor-pointer outline-none"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                </span>
+                <span className="text-xs font-semibold text-white mr-1.5">Online:</span>
+                <div className="flex -space-x-2 overflow-hidden">
+                  {projectOnlineUsers.length === 0 ? (
+                    <span className="text-xs text-white/60 italic px-1">None online</span>
+                  ) : (
+                    <>
+                      {projectOnlineUsers.slice(0, 4).map((u) => (
+                        <div key={u.username} title={`${u.username} (Online)`}>
+                          <AvatarWithStatus
+                            username={u.username}
+                            online={true}
+                            className="h-7 w-7 text-xs ring-2 ring-blue-500/50"
+                          />
+                        </div>
+                      ))}
+                      {projectOnlineUsers.length > 4 && (
+                        <div className="h-7 w-7 rounded-full bg-white/20 backdrop-blur-sm border border-white/20 flex items-center justify-center text-xs font-bold text-white z-10" title={`${projectOnlineUsers.length - 4} more online`}>
+                          +{projectOnlineUsers.length - 4}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </button>
+
+              {showOnlinePopover && projectOnlineUsers.length > 0 && (
+                <>
+                  {/* Backdrop click listener to close popover */}
+                  <div className="fixed inset-0 z-30" onClick={() => setShowOnlinePopover(false)} />
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-150 z-40 py-2.5 px-3.5 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 border-b pb-1.5">
+                      Online Teammates ({projectOnlineUsers.length})
+                    </h4>
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {projectOnlineUsers.map((u) => (
+                        <div key={u.username} className="flex items-center space-x-2.5">
+                          <AvatarWithStatus
+                            username={u.username}
+                            online={true}
+                            className="h-6 w-6 text-[10px]"
+                          />
+                          <span className="text-xs font-semibold text-gray-800">@{u.username}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare, Trophy, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
@@ -358,6 +358,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   const [currentTask, setCurrentTask] = useState(null);
   const [detailsTask, setDetailsTask] = useState(null);
   const [isShareLinksModalOpen, setIsShareLinksModalOpen] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   // Filter state (must be before any early returns)
   const [filterPriority, setFilterPriority] = useState('All');
@@ -481,6 +482,28 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     };
   }, [filteredTasks, currentSprintId]);
 
+  const fetchLeaderboard = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/leaderboard`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        credentials: 'include'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLeaderboard(data.leaderboard || []);
+      }
+    } catch (e) {
+      console.error('Error fetching leaderboard in TasksTab:', e);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
+
   // Fetch sprints
   useEffect(() => {
     if (!projectId) return;
@@ -577,6 +600,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
       }
     }
     handleCloseModal();
+    fetchLeaderboard();
   };
 
   // Open add sprint modal
@@ -689,6 +713,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
       });
       if (!res.ok) throw new Error(`Failed to delete task: ${res.status}`);
       setTasks(prevTasks => prevTasks.filter(t => t._id !== taskId));
+      fetchLeaderboard();
     } catch (e) {
       console.error('Error deleting task:', e);
       alert(`Error deleting task: ${e.message}`);
@@ -810,6 +835,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
             const errorData = await response.json().catch(() => ({}));
             throw new Error(errorData.error || `Failed to reorder task: ${response.status}`);
           }
+          fetchLeaderboard();
         } catch (error) {
           console.error('Failed to reorder task:', error);
           // Revert on error
@@ -843,6 +869,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Failed to update task: ${response.status}`);
       }
+      fetchLeaderboard();
     } catch (error) {
       console.error('Failed to update task:', error);
       // Revert to original state on error
@@ -890,6 +917,26 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="p-4 sm:p-6 bg-gray-50 min-h-full">
+          {project?.settings?.enableLeaderboardShoutout !== false && leaderboard.length > 0 && leaderboard[0].points > 0 && (
+            <div className="mb-6 bg-gradient-to-r from-amber-500/10 via-yellow-500/15 to-orange-500/10 border border-amber-200/50 shadow-sm rounded-xl p-4 flex items-center justify-between overflow-hidden relative backdrop-blur-md animate-fade-in animate-duration-300">
+              <div className="flex items-center space-x-3.5 z-10">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 flex items-center justify-center shadow-md flex-shrink-0 animate-pulse">
+                  <Trophy className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-amber-900 flex items-center gap-1.5">
+                    Top Performer Shoutout
+                    <Sparkles className="h-3.5 w-3.5 text-amber-600 animate-bounce" />
+                  </h4>
+                  <p className="text-sm text-amber-800/95 mt-0.5">
+                    🏆 Shoutout to <span className="font-bold text-amber-950">@{leaderboard[0].username}</span> for leading the project leaderboard with <span className="font-bold text-amber-950">{leaderboard[0].points}</span> points! Keep it up! 🎉
+                  </p>
+                </div>
+              </div>
+              <div className="absolute right-0 top-0 bottom-0 w-32 bg-gradient-to-l from-yellow-400/10 to-transparent pointer-events-none transform skew-x-12 translate-x-10" />
+            </div>
+          )}
+
           <div className="flex flex-col mb-6">
             {/* Sprint Tabs */}
             <div className="flex items-center mb-3 space-x-2 overflow-x-auto sticky top-0 bg-gray-50 z-10 py-2">

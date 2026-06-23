@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
-import { User, Shield, Star, Users, UserCheck, ChevronDown, ChevronUp, Mail, Info } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { User, Shield, Star, Users, UserCheck, ChevronDown, ChevronUp, Mail, Info, Award, X } from 'lucide-react';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
 import AvatarWithStatus from '../../../components/AvatarWithStatus';
 
@@ -110,7 +110,7 @@ const AccessControlInfo = ({ project, allTeams }) => {
   }
 };
 
-const TeamCard = ({ team, onlineUsernames, userBadgesMap }) => {
+const TeamCard = ({ team, onlineUsernames, userBadgesMap, isManager, onManageBadges }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -156,16 +156,27 @@ const TeamCard = ({ team, onlineUsernames, userBadgesMap }) => {
                        {team.lead.firstName ? `${team.lead.firstName} ${team.lead.lastName || ''}` : team.lead.username}
                      </p>
                      {/* Lead Badges */}
-                     <div className="flex flex-wrap gap-1">
-                       {userBadgesMap?.get(team.lead.username)?.map((badge, idx) => (
-                         <span 
-                           key={idx} 
-                           className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn" 
-                           title={`${badge.name}: ${badge.description}`}
+                     <div className="flex items-center gap-1 flex-wrap">
+                       <div className="flex flex-wrap gap-1">
+                         {userBadgesMap?.get(team.lead.username)?.map((badge, idx) => (
+                           <span 
+                             key={idx} 
+                             className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn animate-duration-300" 
+                             title={`${badge.name}: ${badge.description}`}
+                           >
+                             {badge.icon}
+                           </span>
+                         ))}
+                       </div>
+                       {isManager && (
+                         <button
+                           onClick={(e) => { e.stopPropagation(); onManageBadges(team.lead.username); }}
+                           className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                           title="Manage Badges"
                          >
-                           {badge.icon}
-                         </span>
-                       ))}
+                           <Award className="h-3.5 w-3.5 text-gray-500 hover:text-blue-600" />
+                         </button>
+                       )}
                      </div>
                    </div>
                   <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -201,16 +212,27 @@ const TeamCard = ({ team, onlineUsernames, userBadgesMap }) => {
                        {member.firstName ? `${member.firstName} ${member.lastName || ''}` : member.username}
                      </p>
                      {/* Member Badges */}
-                     <div className="flex flex-wrap gap-1">
-                       {userBadgesMap?.get(member.username)?.map((badge, idx) => (
-                         <span 
-                           key={idx} 
-                           className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn" 
-                           title={`${badge.name}: ${badge.description}`}
+                     <div className="flex items-center gap-1 flex-wrap">
+                       <div className="flex flex-wrap gap-1">
+                         {userBadgesMap?.get(member.username)?.map((badge, idx) => (
+                           <span 
+                             key={idx} 
+                             className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn animate-duration-300" 
+                             title={`${badge.name}: ${badge.description}`}
+                           >
+                             {badge.icon}
+                           </span>
+                         ))}
+                       </div>
+                       {isManager && (
+                         <button
+                           onClick={(e) => { e.stopPropagation(); onManageBadges(member.username); }}
+                           className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                           title="Manage Badges"
                          >
-                           {badge.icon}
-                         </span>
-                       ))}
+                           <Award className="h-3.5 w-3.5 text-gray-500 hover:text-blue-600" />
+                         </button>
+                       )}
                      </div>
                    </div>
                     <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
@@ -230,7 +252,7 @@ const TeamCard = ({ team, onlineUsernames, userBadgesMap }) => {
   );
 };
 
-const MembersTab = ({ members = [], superManager, project, allTeams }) => {
+const MembersTab = ({ members = [], superManager, project, allTeams, currentUser }) => {
   const permSettings = project?.permissionSettings;
   const accessMode = permSettings?.accessMode || 'members_only';
   const hasTeams = permSettings?.allowedTeamsDetails && permSettings.allowedTeamsDetails.length > 0;
@@ -239,23 +261,26 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
   const onlineUsernames = useMemo(() => new Set(onlineUsers.map(u => u.username)), [onlineUsers]);
 
   const [leaderboardData, setLeaderboardData] = useState([]);
+  const [customBadges, setCustomBadges] = useState([]);
+  const [selectedUserForBadges, setSelectedUserForBadges] = useState(null);
 
-  useEffect(() => {
-    const fetchBadges = async () => {
-      try {
-        const res = await fetch(`/api/projects/${project._id || project.id}/leaderboard`);
-        if (res.ok) {
-          const data = await res.json();
-          setLeaderboardData(data.leaderboard || []);
-        }
-      } catch (err) {
-        console.error('Failed to load badges for MembersTab', err);
+  const fetchBadges = useCallback(async () => {
+    if (!project?._id && !project?.id) return;
+    try {
+      const res = await fetch(`/api/projects/${project._id || project.id}/leaderboard`);
+      if (res.ok) {
+        const data = await res.json();
+        setLeaderboardData(data.leaderboard || []);
+        setCustomBadges(data.customBadges || []);
       }
-    };
-    if (project?._id || project?.id) {
-      fetchBadges();
+    } catch (err) {
+      console.error('Failed to load badges for MembersTab', err);
     }
   }, [project]);
+
+  useEffect(() => {
+    fetchBadges();
+  }, [fetchBadges]);
 
   const userBadgesMap = useMemo(() => {
     const m = new Map();
@@ -264,6 +289,55 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
     });
     return m;
   }, [leaderboardData]);
+
+  const isManager = useMemo(() => {
+    if (!currentUser || !project) return false;
+    if (currentUser.role === 'Super Manager') return true;
+    if (project.superManager === currentUser.username) return true;
+    return project.members?.some(m => m.user === currentUser.username && m.role === 'Project Manager') || false;
+  }, [currentUser, project]);
+
+  const handleGrantBadge = async (username, badgeId) => {
+    try {
+      const res = await fetch(`/api/projects/${project._id || project.id}/leaderboard/grant`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ username, badgeId })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to grant badge');
+      }
+      await fetchBadges();
+    } catch (err) {
+      alert(err.message);
+      throw err;
+    }
+  };
+
+  const handleRevokeBadge = async (username, badgeId) => {
+    try {
+      const res = await fetch(`/api/projects/${project._id || project.id}/leaderboard/grant`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ username, badgeId })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Failed to revoke badge');
+      }
+      await fetchBadges();
+    } catch (err) {
+      alert(err.message);
+      throw err;
+    }
+  };
 
   const [subTab, setSubTab] = useState(accessMode === 'teams_based' && hasTeams ? 'teams' : 'direct');
 
@@ -324,18 +398,29 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
                          <p className={`font-semibold truncate ${member.user === superManager ? 'text-blue-600' : 'text-gray-955'}`}>
                            {member.user}
                          </p>
-                         {/* Member Badges */}
-                         <div className="flex flex-wrap gap-1">
-                           {userBadgesMap.get(member.user)?.map((badge, idx) => (
-                             <span 
-                               key={idx} 
-                               className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn" 
-                               title={`${badge.name}: ${badge.description}`}
-                             >
-                               {badge.icon}
-                             </span>
-                           ))}
-                         </div>
+                          {/* Member Badges */}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <div className="flex flex-wrap gap-1">
+                              {userBadgesMap.get(member.user)?.map((badge, idx) => (
+                                <span 
+                                  key={idx} 
+                                  className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-white shadow-sm border text-[10px] cursor-help hover:scale-110 transition-transform animate-fadeIn animate-duration-300" 
+                                  title={`${badge.name}: ${badge.description}`}
+                                >
+                                  {badge.icon}
+                                </span>
+                              ))}
+                            </div>
+                            {isManager && (
+                              <button
+                                onClick={() => setSelectedUserForBadges(member.user)}
+                                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                                title="Manage Badges"
+                              >
+                                <Award className="h-3.5 w-3.5 text-gray-500 hover:text-blue-600" />
+                              </button>
+                            )}
+                          </div>
                        </div>
                       <p className="text-sm text-gray-500 truncate flex items-center gap-1 mt-0.5">
                         <Mail className="h-3.5 w-3.5 flex-shrink-0 text-gray-400" /> {member.email}
@@ -361,11 +446,167 @@ const MembersTab = ({ members = [], superManager, project, allTeams }) => {
 
           <div className="space-y-4">
             {permSettings.allowedTeamsDetails.map((team) => (
-              <TeamCard key={team.id} team={team} onlineUsernames={onlineUsernames} userBadgesMap={userBadgesMap} />
+              <TeamCard 
+                key={team.id} 
+                team={team} 
+                onlineUsernames={onlineUsernames} 
+                userBadgesMap={userBadgesMap} 
+                isManager={isManager}
+                onManageBadges={setSelectedUserForBadges}
+              />
             ))}
           </div>
         </div>
       )}
+
+      {selectedUserForBadges && (
+        <ManageBadgesModal
+          username={selectedUserForBadges}
+          customBadges={customBadges}
+          userBadges={userBadgesMap.get(selectedUserForBadges) || []}
+          onGrant={handleGrantBadge}
+          onRevoke={handleRevokeBadge}
+          onClose={() => setSelectedUserForBadges(null)}
+        />
+      )}
+    </div>
+  );
+};
+
+const ManageBadgesModal = ({ username, customBadges, userBadges, onGrant, onRevoke, onClose }) => {
+  const [selectedBadgeId, setSelectedBadgeId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+
+  const grantedCustom = userBadges.filter(b => b.type === 'custom');
+  const availableToGrant = customBadges.filter(cb => !grantedCustom.some(gc => gc.id === cb.id));
+
+  const handleGrant = async () => {
+    if (!selectedBadgeId) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onGrant(username, selectedBadgeId);
+      setSelectedBadgeId('');
+    } catch (err) {
+      setError(err.message || 'Failed to grant badge');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRevoke = async (badgeId) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onRevoke(username, badgeId);
+    } catch (err) {
+      setError(err.message || 'Failed to revoke badge');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-150 animate-in fade-in zoom-in duration-200">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <div>
+            <h3 className="font-bold text-gray-950 text-lg flex items-center gap-2">
+              <Award className="h-5 w-5 text-blue-600" />
+              Manage Badges
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">Configure custom achievements for @{username}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 rounded-lg p-1.5 hover:bg-gray-100 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-150 rounded-lg text-xs text-red-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          {/* Current Badges */}
+          <div>
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Currently Awarded Custom Badges</h4>
+            {grantedCustom.length === 0 ? (
+              <p className="text-sm text-gray-400 italic bg-gray-50 p-4 rounded-xl text-center border border-dashed border-gray-200">
+                No custom badges granted yet.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {grantedCustom.map((badge, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-lg border border-gray-150 hover:bg-gray-100/70 transition-colors">
+                    <div className="flex items-center space-x-2.5 min-w-0">
+                      <span className="text-lg flex-shrink-0" style={{ textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>{badge.icon || '🎖️'}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate" style={{ color: badge.color }}>{badge.name}</p>
+                        <p className="text-[11px] text-gray-500 truncate">{badge.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRevoke(badge.id)}
+                      disabled={submitting}
+                      className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1.5 rounded-md font-semibold transition-colors flex-shrink-0"
+                    >
+                      Revoke
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Grant New Badge */}
+          <div className="pt-5 border-t border-gray-100">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Grant a Custom Badge</h4>
+            {availableToGrant.length === 0 ? (
+              <p className="text-sm text-gray-400 italic text-center p-2">
+                All custom badges have been granted to this member.
+              </p>
+            ) : (
+              <div className="flex gap-2">
+                <select
+                  value={selectedBadgeId}
+                  onChange={(e) => setSelectedBadgeId(e.target.value)}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  disabled={submitting}
+                >
+                  <option value="">Select a badge...</option>
+                  {availableToGrant.map((badge) => (
+                    <option key={badge.id} value={badge.id}>
+                      {badge.icon} {badge.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleGrant}
+                  disabled={submitting || !selectedBadgeId}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                >
+                  Award
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

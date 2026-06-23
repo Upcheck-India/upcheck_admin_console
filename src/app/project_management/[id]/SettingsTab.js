@@ -26,6 +26,7 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
   const [enableIdeaCanvas, setEnableIdeaCanvas] = useState(project.settings?.enableIdeaCanvas !== false);
   const [githubIntegrationEnabled, setGithubIntegrationEnabled] = useState(project.settings?.githubIntegrationEnabled !== false);
   const [trackTaskActivity, setTrackTaskActivity] = useState(project.settings?.trackTaskActivity !== false);
+  const [enableLeaderboardShoutout, setEnableLeaderboardShoutout] = useState(project.settings?.enableLeaderboardShoutout !== false);
 
   // Labels state
   const [labels, setLabels] = useState(project?.settings?.labels || []);
@@ -82,6 +83,7 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
       enableIdeaCanvas !== (currentSettings.enableIdeaCanvas !== false) ||
       githubIntegrationEnabled !== (currentSettings.githubIntegrationEnabled !== false) ||
       trackTaskActivity !== (currentSettings.trackTaskActivity !== false) ||
+      enableLeaderboardShoutout !== (currentSettings.enableLeaderboardShoutout !== false) ||
       githubPAT !== (project.settings?.github?.personalAccessToken || '') ||
       showFileBrowser !== (project.settings?.github?.showFileBrowser !== false) ||
       showCommits !== (project.settings?.github?.showCommits !== false) ||
@@ -92,7 +94,7 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
   }, [name, description, logoUrl, repoUrl, members, logoFile, project,
       allowContributorsUpdateTasks, allowContributorsDeleteTasks, sendNotifications,
       sendTaskAssignmentEmails, sendSprintCreationEmails, sendProjectInviteEmails,
-      enableIdeaCanvas, githubIntegrationEnabled, trackTaskActivity,
+      enableIdeaCanvas, githubIntegrationEnabled, trackTaskActivity, enableLeaderboardShoutout,
       githubPAT, showFileBrowser, showCommits, showBranches, showContributors]);
 
   // Validate GitHub URL
@@ -184,6 +186,7 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
           enableIdeaCanvas,
           githubIntegrationEnabled,
           trackTaskActivity,
+          enableLeaderboardShoutout,
           githubPAT,
           showFileBrowser,
           showCommits,
@@ -233,6 +236,7 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
     setEnableIdeaCanvas(currentSettings.enableIdeaCanvas !== false);
     setGithubIntegrationEnabled(currentSettings.githubIntegrationEnabled !== false);
     setTrackTaskActivity(currentSettings.trackTaskActivity !== false);
+    setEnableLeaderboardShoutout(currentSettings.enableLeaderboardShoutout !== false);
     setGithubPAT(project.settings?.github?.personalAccessToken || '');
     setShowFileBrowser(project.settings?.github?.showFileBrowser !== false);
     setShowCommits(project.settings?.github?.showCommits !== false);
@@ -658,6 +662,27 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
                     </p>
                   </div>
                 </div>
+
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="enableLeaderboardShoutout"
+                      name="enableLeaderboardShoutout"
+                      type="checkbox"
+                      checked={enableLeaderboardShoutout}
+                      onChange={(e) => setEnableLeaderboardShoutout(e.target.checked)}
+                      className="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="enableLeaderboardShoutout" className="font-medium text-gray-700 cursor-pointer">
+                      Enable Top Performer Shoutout
+                    </label>
+                    <p className="text-gray-500 text-xs">
+                      Show a celebratory announcement banner for the #1 leaderboard contributor at the top of the Tasks tab.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {githubIntegrationEnabled && (
@@ -666,7 +691,7 @@ const SettingsTab = ({ project, user, allUsers, userTeams, onProjectUpdate }) =>
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Personal Access Token (PAT)</label>
-                    <p className="text-xs text-gray-500 mb-2">Required for private repositories. Generate a token at github.com/settings/tokens with 'repo' scope.</p>
+                    <p className="text-xs text-gray-500 mb-2">Required for private repositories. Generate a token at github.com/settings/tokens with &apos;repo&apos; scope.</p>
                     <input 
                       type="password"
                       value={githubPAT}

@@ -68,12 +68,10 @@ export async function GET(req, { params }) {
 
     // Also include anyone who was assigned to tasks or did something
     tasks.forEach(t => {
-      // Assignees (need to resolve names)
-      // Comments
       t.comments?.forEach(c => {
-        if (c.userName) membersSet.add(c.userName);
+        const commenter = c.userName || c.authorName;
+        if (commenter) membersSet.add(commenter);
       });
-      // Activity
       t.activity?.forEach(act => {
         if (act.userName) membersSet.add(act.userName);
       });
@@ -109,7 +107,11 @@ export async function GET(req, { params }) {
         activityCount: 0,
         bugTasksCompleted: 0,
         points: 0,
-        badges: []
+        badges: [],
+        reopenedTasksCount: 0,
+        overdueTasksCount: 0,
+        completedTasksList: [],
+        commentsList: []
       };
     });
 
@@ -118,21 +120,49 @@ export async function GET(req, { params }) {
       const isDone = task.status === 'Done';
       const assigneesUsernames = task.assignees?.map(uid => userMap.get(uid.toString())).filter(Boolean) || [];
 
-      // Comment count
+      // Collect comments
       task.comments?.forEach(comment => {
-        const commenter = comment.userName;
+        const commenter = comment.userName || comment.authorName;
         if (commenter && stats[commenter]) {
-          stats[commenter].commentsCount += 1;
+          stats[commenter].commentsList.push({
+            createdAt: new Date(comment.createdAt),
+            text: comment.text || '',
+            taskAssignees: assigneesUsernames,
+            taskId: task._id.toString()
+          });
         }
       });
 
-      // Activity count
+      // Track reopened task activities
+      let reopenedCount = 0;
       task.activity?.forEach(act => {
-        const actor = act.userName;
-        if (actor && stats[actor]) {
-          stats[actor].activityCount += 1;
+        if (act.type === 'status_change') {
+          const statusChange = act.changes?.find(c => c.field === 'status');
+          if (statusChange && statusChange.from === 'Done' && statusChange.to !== 'Done') {
+            reopenedCount += 1;
+          }
         }
       });
+
+      if (reopenedCount > 0) {
+        assigneesUsernames.forEach(username => {
+          if (stats[username]) {
+            stats[username].reopenedTasksCount += reopenedCount;
+          }
+        });
+      }
+
+      // Track overdue task counts
+      if (task.status !== 'Done' && task.dueDate) {
+        const dueDate = new Date(task.dueDate);
+        if (dueDate < new Date()) {
+          assigneesUsernames.forEach(username => {
+            if (stats[username]) {
+              stats[username].overdueTasksCount += 1;
+            }
+          });
+        }
+      }
 
       if (isDone) {
         // Find completion date from activity log
@@ -146,29 +176,16 @@ export async function GET(req, { params }) {
         }
 
         assigneesUsernames.forEach(username => {
-          if (!stats[username]) return;
-
-          stats[username].tasksCompleted += 1;
-          stats[username].storyPointsCompleted += (task.storyPoints || 0);
-
-          if (task.type === 'Bug') {
-            stats[username].bugTasksCompleted += 1;
-          }
-
-          if (task.dueDate) {
-            stats[username].totalTasksWithDueDate += 1;
-            const dueDate = new Date(task.dueDate);
-            
-            // On Time (completed <= due date)
-            if (completionDate <= dueDate) {
-              stats[username].tasksCompletedOnTime += 1;
-              
-              // Early (at least 24 hours before due date)
-              const diffMs = dueDate - completionDate;
-              if (diffMs >= 24 * 60 * 60 * 1000) {
-                stats[username].tasksCompletedEarly += 1;
-              }
-            }
+          if (stats[username]) {
+            stats[username].completedTasksList.push({
+              taskId: task._id.toString(),
+              priority: task.priority || 'Medium',
+              storyPoints: task.storyPoints || 0,
+              type: task.type || 'Feature',
+              dueDate: task.dueDate ? new Date(task.dueDate) : null,
+              completionDate,
+              reporter: task.reporter ? userMap.get(task.reporter.toString()) : null
+            });
           }
         });
       }
@@ -178,20 +195,124 @@ export async function GET(req, { params }) {
     const leaderboardList = [];
     let maxPoints = 0;
     let starPerformerCandidate = null;
+    const isManagerUser = isProjectManager(user, project);
 
     Object.values(stats).forEach(userStats => {
-      // Gamification Point Logic
-      let pts = 0;
-      pts += userStats.tasksCompleted * 10;
-      pts += userStats.storyPointsCompleted * 1;
-      pts += userStats.tasksCompletedOnTime * 5;
-      pts += userStats.tasksCompletedEarly * 10;
-      pts += userStats.commentsCount * 2;
-      pts += userStats.activityCount * 1;
+      // 4.1 Comment Points with Cooldown (5 mins) and max 3 comments (+6 points) per task
+      userStats.commentsList.sort((a, b) => a.createdAt - b.createdAt);
+      let lastCommentTime = null;
+      const taskCommentCounts = {};
 
-      userStats.points = pts;
+      userStats.commentsList.forEach(comment => {
+        if (comment.text.length < 10) return; // Must be >= 10 chars
+        
+        // Enforce 5-minute global cooldown between points-earning comments
+        if (lastCommentTime && (comment.createdAt - lastCommentTime) < 5 * 60 * 1000) {
+          return;
+        }
 
-      // Unlocking automatic badges
+        // Enforce max 3 comments per task
+        const tId = comment.taskId;
+        taskCommentCounts[tId] = (taskCommentCounts[tId] || 0) + 1;
+        if (taskCommentCounts[tId] > 3) {
+          return;
+        }
+
+        // Collaboration incentive: +2 if someone else's task, +1 if self-assigned
+        const isSelfAssigned = comment.taskAssignees.includes(userStats.username);
+        const pts = isSelfAssigned ? 1 : 2;
+
+        userStats.points += pts;
+        userStats.commentsCount += 1;
+        lastCommentTime = comment.createdAt;
+      });
+
+      // 4.2 Completed Tasks Points & Combo Calculation
+      userStats.completedTasksList.sort((a, b) => a.completionDate - b.completionDate);
+      
+      let comboCount = 0;
+      let prevCompletionTime = null;
+
+      userStats.completedTasksList.forEach(ct => {
+        // Base completion points by priority
+        let basePoints = 10; // Medium
+        if (ct.priority === 'Urgent') basePoints = 20;
+        else if (ct.priority === 'High') basePoints = 15;
+        else if (ct.priority === 'Low') basePoints = 5;
+
+        // Complexity: storyPoints * 2
+        const complexityPoints = (ct.storyPoints || 0) * 2;
+
+        // Bug Fix bonus
+        const bugBonus = ct.type === 'Bug' ? 2 : 0;
+
+        // Early completion bonus
+        let earlyBonus = 0;
+        if (ct.dueDate) {
+          userStats.totalTasksWithDueDate += 1;
+          if (ct.completionDate <= ct.dueDate) {
+            userStats.tasksCompletedOnTime += 1;
+            const diffMs = ct.dueDate - ct.completionDate;
+            if (diffMs >= 24 * 60 * 60 * 1000) {
+              earlyBonus = 10;
+              userStats.tasksCompletedEarly += 1;
+            }
+          }
+        }
+
+        let taskPoints = basePoints + complexityPoints + bugBonus + earlyBonus;
+
+        // Self-assignment halving: non-managers get halved
+        const isSelf = ct.reporter === userStats.username;
+        if (isSelf && !isManagerUser) {
+          taskPoints = Math.round(taskPoints / 2);
+        }
+
+        userStats.points += taskPoints;
+        userStats.tasksCompleted += 1;
+        userStats.storyPointsCompleted += (ct.storyPoints || 0);
+
+        if (ct.type === 'Bug') {
+          userStats.bugTasksCompleted += 1;
+        }
+
+        // Combo calculations (completions within 24 hours of each other)
+        if (prevCompletionTime) {
+          const diffMs = ct.completionDate - prevCompletionTime;
+          if (diffMs <= 24 * 60 * 60 * 1000) {
+            comboCount += 1;
+            let comboBonus = 0;
+            if (comboCount === 1) comboBonus = 1;
+            else if (comboCount === 2) comboBonus = 3;
+            else if (comboCount === 3) comboBonus = 4;
+            else if (comboCount >= 4) comboBonus = 5;
+
+            userStats.points += comboBonus;
+          } else {
+            comboCount = 0;
+          }
+        }
+        prevCompletionTime = ct.completionDate;
+      });
+
+      // 4.3 High On-Time Rate Bonus
+      const onTimeRate = userStats.totalTasksWithDueDate > 0 
+        ? (userStats.tasksCompletedOnTime / userStats.totalTasksWithDueDate)
+        : 1.0;
+      if (userStats.totalTasksWithDueDate >= 5 && onTimeRate >= 0.90) {
+        userStats.points += 15;
+      }
+
+      // 4.4 Overdue and Reopened penalties
+      userStats.points -= (userStats.reopenedTasksCount * 4);
+      userStats.points -= (userStats.overdueTasksCount * 5);
+
+      // Floor points at 0 (contributions shouldn't be negative)
+      if (userStats.points < 0) {
+        userStats.points = 0;
+      }
+
+      // 4.5 Unlocking automatic badges
       // 🚀 Early Bird (Completed 3+ tasks early)
       if (userStats.tasksCompletedEarly >= 3) {
         userStats.badges.push({
@@ -259,8 +380,8 @@ export async function GET(req, { params }) {
       }
 
       // Track Star Performer candidate
-      if (pts > maxPoints) {
-        maxPoints = pts;
+      if (userStats.points > maxPoints) {
+        maxPoints = userStats.points;
         starPerformerCandidate = userStats.username;
       }
 
@@ -308,7 +429,12 @@ export async function GET(req, { params }) {
     });
 
     return NextResponse.json({
-      leaderboard: leaderboardList,
+      leaderboard: leaderboardList.map(item => ({
+        ...item,
+        // Cleanup lists to reduce response size
+        completedTasksList: undefined,
+        commentsList: undefined
+      })),
       customBadges: customBadges.map(cb => ({
         id: cb._id.toString(),
         name: cb.name,
@@ -386,6 +512,115 @@ export async function POST(req, { params }) {
 
   } catch (error) {
     console.error('Failed to create custom badge:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+// PUT - Edit a custom badge definition
+export async function PUT(req, { params }) {
+  try {
+    const token = req.cookies.get('admin_token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db("resources");
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
+
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(id) });
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Check manager status
+    if (!isProjectManager(user, project)) {
+      return NextResponse.json({ error: 'Forbidden: Only managers can edit custom badges' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { badgeId, name, description, icon, color } = body;
+
+    if (!badgeId || !name || !description) {
+      return NextResponse.json({ error: 'Badge ID, name, and description are required' }, { status: 400 });
+    }
+
+    await db.collection('project_custom_badges').updateOne(
+      { _id: new ObjectId(badgeId), projectId: new ObjectId(id) },
+      { $set: { name, description, icon: icon || '🎖️', color: color || '#6b7280', updatedAt: new Date() } }
+    );
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('Failed to update custom badge:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+// DELETE - Delete a custom badge definition completely (and revoke from all users)
+export async function DELETE(req, { params }) {
+  try {
+    const token = req.cookies.get('admin_token')?.value;
+    if (!token) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db("resources");
+    const user = await db.collection('admin_users').findOne({ sessionToken: token });
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    if (!ObjectId.isValid(id)) {
+      return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+    }
+
+    const project = await db.collection('projects').findOne({ _id: new ObjectId(id) });
+    if (!project) {
+      return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+    }
+
+    // Check manager status
+    if (!isProjectManager(user, project)) {
+      return NextResponse.json({ error: 'Forbidden: Only managers can delete custom badges' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { badgeId } = body;
+
+    if (!badgeId) {
+      return NextResponse.json({ error: 'Badge ID is required' }, { status: 400 });
+    }
+
+    // Delete badge definition
+    await db.collection('project_custom_badges').deleteOne({
+      _id: new ObjectId(badgeId),
+      projectId: new ObjectId(id)
+    });
+
+    // Revoke from all members
+    await db.collection('project_member_badges').deleteMany({
+      badgeId: new ObjectId(badgeId),
+      projectId: new ObjectId(id)
+    });
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('Failed to delete custom badge:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
