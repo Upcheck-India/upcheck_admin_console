@@ -56,7 +56,12 @@ export async function GET(req, { params }) {
 
     // 1. Fetch all tasks, custom badge definitions, and badge grants
     const tasks = await db.collection('project_tasks').find({ projectId: new ObjectId(id) }).toArray();
-    const customBadges = await db.collection('project_custom_badges').find({ projectId: new ObjectId(id) }).toArray();
+    const customBadges = await db.collection('project_custom_badges').find({
+      $or: [
+        { projectId: new ObjectId(id) },
+        { projectExclusive: { $ne: true } }
+      ]
+    }).toArray();
     const grantedBadges = await db.collection('project_member_badges').find({ projectId: new ObjectId(id) }).toArray();
 
     // 2. Build list of potential members
@@ -440,7 +445,9 @@ export async function GET(req, { params }) {
         name: cb.name,
         description: cb.description,
         icon: cb.icon,
-        color: cb.color
+        color: cb.color,
+        projectExclusive: cb.projectExclusive === true,
+        projectId: cb.projectId?.toString()
       })),
       isManager: isProjectManager(user, project)
     });
@@ -483,7 +490,7 @@ export async function POST(req, { params }) {
     }
 
     const body = await req.json();
-    const { name, description, icon, color } = body;
+    const { name, description, icon, color, projectExclusive } = body;
 
     if (!name || !description) {
       return NextResponse.json({ error: 'Badge name and description are required' }, { status: 400 });
@@ -495,6 +502,7 @@ export async function POST(req, { params }) {
       description,
       icon: icon || '🎖️',
       color: color || '#6b7280',
+      projectExclusive: projectExclusive === true,
       createdAt: new Date(),
       createdBy: user.username
     };
@@ -548,7 +556,7 @@ export async function PUT(req, { params }) {
     }
 
     const body = await req.json();
-    const { badgeId, name, description, icon, color } = body;
+    const { badgeId, name, description, icon, color, projectExclusive } = body;
 
     if (!badgeId || !name || !description) {
       return NextResponse.json({ error: 'Badge ID, name, and description are required' }, { status: 400 });
@@ -556,7 +564,16 @@ export async function PUT(req, { params }) {
 
     await db.collection('project_custom_badges').updateOne(
       { _id: new ObjectId(badgeId), projectId: new ObjectId(id) },
-      { $set: { name, description, icon: icon || '🎖️', color: color || '#6b7280', updatedAt: new Date() } }
+      { 
+        $set: { 
+          name, 
+          description, 
+          icon: icon || '🎖️', 
+          color: color || '#6b7280', 
+          projectExclusive: projectExclusive === true, 
+          updatedAt: new Date() 
+        } 
+      }
     );
 
     return NextResponse.json({ success: true });
@@ -611,10 +628,9 @@ export async function DELETE(req, { params }) {
       projectId: new ObjectId(id)
     });
 
-    // Revoke from all members
+    // Revoke from all members across all projects since the definition is deleted
     await db.collection('project_member_badges').deleteMany({
-      badgeId: new ObjectId(badgeId),
-      projectId: new ObjectId(id)
+      badgeId: new ObjectId(badgeId)
     });
 
     return NextResponse.json({ success: true });

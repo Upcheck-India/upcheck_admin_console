@@ -24,6 +24,7 @@ export default function LeaderboardTab({ project, projectId }) {
   const [newBadgeDesc, setNewBadgeDesc] = useState('');
   const [newBadgeIcon, setNewBadgeIcon] = useState('🎖️');
   const [newBadgeColor, setNewBadgeColor] = useState('#3b82f6');
+  const [newBadgeExclusive, setNewBadgeExclusive] = useState(false);
   
   const [grantUsername, setGrantUsername] = useState('');
   const [grantBadgeId, setGrantBadgeId] = useState('');
@@ -90,7 +91,8 @@ export default function LeaderboardTab({ project, projectId }) {
           name: newBadgeName,
           description: newBadgeDesc,
           icon: newBadgeIcon,
-          color: newBadgeColor
+          color: newBadgeColor,
+          projectExclusive: newBadgeExclusive
         })
       });
 
@@ -102,6 +104,7 @@ export default function LeaderboardTab({ project, projectId }) {
       setNewBadgeName('');
       setNewBadgeDesc('');
       setNewBadgeIcon('🎖️');
+      setNewBadgeExclusive(false);
       
       await fetchLeaderboard();
     } catch (err) {
@@ -199,7 +202,8 @@ export default function LeaderboardTab({ project, projectId }) {
           name: editingCustomBadge.name,
           description: editingCustomBadge.description,
           icon: editingCustomBadge.icon,
-          color: editingCustomBadge.color
+          color: editingCustomBadge.color,
+          projectExclusive: editingCustomBadge.projectExclusive === true
         })
       });
       if (!res.ok) {
@@ -416,6 +420,18 @@ export default function LeaderboardTab({ project, projectId }) {
                     ))}
                   </div>
                 </div>
+              </div>
+
+              <div className="pt-1">
+                <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newBadgeExclusive}
+                    onChange={e => setNewBadgeExclusive(e.target.checked)}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  />
+                  <span>Project Exclusive Badge (only available in this project)</span>
+                </label>
               </div>
 
               <button
@@ -861,35 +877,49 @@ export default function LeaderboardTab({ project, projectId }) {
                 }}
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-full">
                     <span className="text-2xl">{cb.icon}</span>
                     <h4 className="font-bold text-sm" style={{ color: cb.color }}>
                       {cb.name}
                     </h4>
-                    {isManager ? (
-                      <div className="flex items-center space-x-1 ml-auto">
-                        <button
-                          type="button"
-                          onClick={() => setEditingCustomBadge(cb)}
-                          className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-white border border-transparent hover:border-gray-200 transition-colors"
-                          title="Edit Badge"
-                        >
-                          <Edit className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCustomBadge(cb.id)}
-                          className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-white border border-transparent hover:border-gray-200 transition-colors"
-                          title="Delete Badge"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded border bg-white ml-auto" style={{ color: cb.color, borderColor: `${cb.color}30` }}>
-                        Custom
-                      </span>
-                    )}
+                    
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      {cb.projectExclusive && (
+                        <span className="text-[9px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded animate-pulse" title="Only available in this project">
+                          Exclusive
+                        </span>
+                      )}
+                      {cb.projectId && cb.projectId !== projectId && (
+                        <span className="text-[9px] font-semibold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded" title="Shared from another project">
+                          Shared
+                        </span>
+                      )}
+                      
+                      {isManager && (!cb.projectId || cb.projectId === projectId) ? (
+                        <div className="flex items-center space-x-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingCustomBadge(cb)}
+                            className="p-1 text-gray-400 hover:text-blue-600 rounded hover:bg-white border border-transparent hover:border-gray-200 transition-colors"
+                            title="Edit Badge"
+                          >
+                            <Edit className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCustomBadge(cb.id)}
+                            className="p-1 text-gray-400 hover:text-red-600 rounded hover:bg-white border border-transparent hover:border-gray-200 transition-colors"
+                            title="Delete Badge"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded border bg-white" style={{ color: cb.color, borderColor: `${cb.color}30` }}>
+                          Custom
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-1.5">
                     {cb.description}
@@ -1244,6 +1274,18 @@ const EditBadgeModal = ({ badge, colors, onSave, onChange, onClose }) => {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="pt-2 border-t border-gray-100">
+            <label className="flex items-center gap-2 text-xs font-semibold text-gray-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={badge.projectExclusive === true}
+                onChange={e => onChange({ projectExclusive: e.target.checked })}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+              />
+              <span>Project Exclusive Badge (only available in this project)</span>
+            </label>
           </div>
         </div>
 

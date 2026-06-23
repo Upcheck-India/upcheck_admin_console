@@ -48,10 +48,13 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Username and badgeId are required' }, { status: 400 });
     }
 
-    // Verify badge exists
+    // Verify badge exists and is accessible in this project (either owned by this project or is not project exclusive)
     const badge = await db.collection('project_custom_badges').findOne({ 
       _id: new ObjectId(badgeId),
-      projectId: new ObjectId(id)
+      $or: [
+        { projectId: new ObjectId(id) },
+        { projectExclusive: { $ne: true } }
+      ]
     });
 
     if (!badge) {
