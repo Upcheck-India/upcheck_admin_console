@@ -1,26 +1,33 @@
 import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
-import { getAdminSession } from '@/lib/adminSession';
+import { cookies } from 'next/headers';
+import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 export async function POST(req) {
   try {
-    const session = await getAdminSession();
-    if (!session || !session.userId) {
+    const cookieStore = cookies();
+    const token = cookieStore.get('admin_token')?.value;
+    if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { token } = await req.json();
+    const { token: pushToken } = await req.json();
 
-    if (!token) {
+    if (!pushToken) {
       return NextResponse.json({ success: false, error: 'Token is required' }, { status: 400 });
     }
 
-    const { db } = await connectToDatabase();
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    const currentUser = await db.collection('admin_users').findOne({ sessionToken: token });
+    if (!currentUser) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
 
     await db.collection('admin_users').updateOne(
-      { _id: new ObjectId(session.userId) },
-      { $set: { expoPushToken: token, updatedAt: new Date() } }
+      { _id: currentUser._id },
+      { $set: { expoPushToken: pushToken, updatedAt: new Date() } }
     );
 
     return NextResponse.json({ success: true, message: 'Push token registered successfully' });
@@ -29,3 +36,4 @@ export async function POST(req) {
     return NextResponse.json({ success: false, error: 'Internal Server Error' }, { status: 500 });
   }
 }
+
