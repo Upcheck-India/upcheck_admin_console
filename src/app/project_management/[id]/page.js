@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy, X } from 'lucide-react';
 import IdeaCanvas from './IdeaCanvas';
 import { useAuth } from '../../../hooks/useAuth';
 import SettingsTab from './SettingsTab';
@@ -258,9 +258,9 @@ const ProjectDetailPage = () => {
             </div>
 
             {/* Online Members Indicator */}
-            <div className="relative">
+            <div>
               <button 
-                onClick={() => setShowOnlinePopover(!showOnlinePopover)}
+                onClick={() => setShowOnlinePopover(true)}
                 className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 self-start md:self-center shadow-sm hover:bg-white/20 transition-all cursor-pointer outline-none"
               >
                 <span className="relative flex h-2 w-2">
@@ -293,27 +293,55 @@ const ProjectDetailPage = () => {
               </button>
 
               {showOnlinePopover && projectOnlineUsers.length > 0 && (
-                <>
-                  {/* Backdrop click listener to close popover */}
-                  <div className="fixed inset-0 z-30" onClick={() => setShowOnlinePopover(false)} />
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-150 z-40 py-2.5 px-3.5 animate-in fade-in slide-in-from-top-2 duration-150 text-left">
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 border-b pb-1.5">
-                      Online Teammates ({projectOnlineUsers.length})
-                    </h4>
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                  <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden border border-gray-150 animate-in fade-in zoom-in duration-200">
+                    {/* Header */}
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                      <div>
+                        <h3 className="font-bold text-gray-955 text-sm md:text-base flex items-center gap-2">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
+                          Online Teammates ({projectOnlineUsers.length})
+                        </h3>
+                      </div>
+                      <button 
+                        onClick={() => setShowOnlinePopover(false)} 
+                        className="text-gray-400 hover:text-gray-600 rounded-lg p-1 hover:bg-gray-100 transition-colors"
+                      >
+                        <X className="h-4.5 w-4.5" />
+                      </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-5 space-y-3.5 max-h-60 overflow-y-auto">
                       {projectOnlineUsers.map((u) => (
-                        <div key={u.username} className="flex items-center space-x-2.5">
+                        <div key={u.username} className="flex items-center space-x-3">
                           <AvatarWithStatus
                             username={u.username}
                             online={true}
-                            className="h-6 w-6 text-[10px]"
+                            className="h-8 w-8 text-xs"
                           />
-                          <span className="text-xs font-semibold text-gray-800">@{u.username}</span>
+                          <div className="text-left">
+                            <p className="text-sm font-semibold text-gray-800">@{u.username}</p>
+                            <p className="text-[10px] text-gray-400 font-medium">Active in project</p>
+                          </div>
                         </div>
                       ))}
                     </div>
+
+                    {/* Footer */}
+                    <div className="px-5 py-3 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+                      <button
+                        onClick={() => setShowOnlinePopover(false)}
+                        className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-semibold transition-colors"
+                      >
+                        Close
+                      </button>
+                    </div>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
