@@ -80,6 +80,7 @@ const AdminLandingPage = () => {
   }, []);
 
   const [schedulingUnreadCount, setSchedulingUnreadCount] = useState(0);
+  const [projectUnreadCount, setProjectUnreadCount] = useState(0);
 
   useEffect(() => {
     const fetchSchedulingUnread = async () => {
@@ -93,7 +94,19 @@ const AdminLandingPage = () => {
         console.error('Error fetching scheduling unread stats:', e);
       }
     };
+    const fetchProjectUnread = async () => {
+      try {
+        const res = await fetch('/api/projects/chat/unread-counts');
+        if (res.ok) {
+          const data = await res.json();
+          setProjectUnreadCount(data.totalUnreadCount || 0);
+        }
+      } catch (e) {
+        console.error('Error fetching project chat unread stats:', e);
+      }
+    };
     fetchSchedulingUnread();
+    fetchProjectUnread();
   }, []);
 
   const modules = [
@@ -375,6 +388,14 @@ const AdminLandingPage = () => {
                             </span>
                           </span>
                         )}
+                        {module.title === "Project Management" && projectUnreadCount > 0 && (
+                          <span className="relative flex h-5 w-5 shrink-0">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-450 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-white text-[10px] font-bold items-center justify-center">
+                              {projectUnreadCount}
+                            </span>
+                          </span>
+                        )}
                       </h3>
                       <p className="mt-2 text-sm text-gray-600 group-hover:text-white/90 transition-colors duration-300">
                         {module.description}
@@ -461,7 +482,7 @@ const AdminLandingPage = () => {
             </div>
             
             <p className="text-gray-600 mb-4 text-sm md:text-base">
-              Jovan AI is Upcheck's upcoming artificial intelligence assistant designed to enhance your workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
+              Jovan AI is Upcheck&apos;s upcoming artificial intelligence assistant designed to enhance your workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
             </p>
             
             <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-purple-100">
@@ -493,7 +514,7 @@ const AdminLandingPage = () => {
             </div>
             
             <p className="text-xs md:text-sm text-gray-500 mb-4">
-              We're working hard to bring Jovan to life. Stay tuned for updates!
+              We&apos;re working hard to bring Jovan to life. Stay tuned for updates!
             </p>
 
             <div className="flex justify-end">

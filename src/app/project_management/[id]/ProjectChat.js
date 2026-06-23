@@ -72,6 +72,18 @@ function parseFormatting(text) {
   // 5. Tasks #[Task]
   html = html.replace(/#\[([^\]]+)\]/g, '<span class="inline-flex items-center bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-semibold text-xs border border-amber-200 shadow-xs">#$1</span>');
 
+  // 6. GitHub branches [branch:name]
+  html = html.replace(/\[branch:([^\]]+)\]/g, '<span class="inline-flex items-center bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-sky-250 shadow-xs">🌿 $1</span>');
+
+  // 7. GitHub commits [commit:sha]
+  html = html.replace(/\[commit:([^\]]+)\]/g, '<span class="inline-flex items-center bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-violet-250 shadow-xs">💾 commit:$1</span>');
+
+  // 8. GitHub PRs [pr:number]
+  html = html.replace(/\[pr:([^\]]+)\]/g, '<span class="inline-flex items-center bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-purple-250 shadow-xs">🔀 PR #$1</span>');
+
+  // 9. GitHub Contributors [github-contributor:username]
+  html = html.replace(/\[github-contributor:([^\]]+)\]/g, '<span class="inline-flex items-center bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-semibold text-xs border border-slate-350 shadow-xs">🐱 @$1</span>');
+
   return html;
 }
 
@@ -90,6 +102,12 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [pinnedFilter, setPinnedFilter] = useState(false); // Filter messages to show pinned only (wide view)
   const [apiWarnings, setApiWarnings] = useState([]);
+
+  // GitHub mentions states
+  const [gitBranches, setGitBranches] = useState([]);
+  const [gitCommits, setGitCommits] = useState([]);
+  const [gitPulls, setGitPulls] = useState([]);
+  const [gitContributors, setGitContributors] = useState([]);
 
   // Modals & Action States
   const [editingMessageId, setEditingMessageId] = useState(null);
@@ -133,6 +151,40 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
     if (projectId) fetchTasks();
   }, [projectId]);
 
+  // Fetch GitHub info for mentions
+  useEffect(() => {
+    if (!projectId) return;
+    
+    const fetchGithubData = async () => {
+      try {
+        const endpoints = ['branches', 'commits', 'pulls', 'contributors'];
+        const results = await Promise.allSettled(
+          endpoints.map(ep => 
+            fetch(`/api/projects/${projectId}/github?endpoint=${ep}`, { credentials: 'include' })
+              .then(res => res.ok ? res.json() : null)
+          )
+        );
+
+        if (results[0].status === 'fulfilled' && results[0].value) {
+          setGitBranches(results[0].value.data || []);
+        }
+        if (results[1].status === 'fulfilled' && results[1].value) {
+          setGitCommits(results[1].value.data || []);
+        }
+        if (results[2].status === 'fulfilled' && results[2].value) {
+          setGitPulls(results[2].value.data || []);
+        }
+        if (results[3].status === 'fulfilled' && results[3].value) {
+          setGitContributors(results[3].value.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch github mentions data:', err);
+      }
+    };
+
+    fetchGithubData();
+  }, [projectId]);
+
   // Poll Chat Messages
   const fetchChatMessages = async (isInitial = false) => {
     try {
@@ -156,6 +208,7 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
 
     const msgInterval = setInterval(() => fetchChatMessages(false), 3000);
     return () => clearInterval(msgInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   // Typing indicators polling
@@ -176,6 +229,7 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
     fetchTypingUsers();
     const typingInterval = setInterval(fetchTypingUsers, 3000);
     return () => clearInterval(typingInterval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   // Handle typing indicator post
@@ -451,23 +505,81 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
         }
       });
 
+      // 4. GitHub Contributors
+      gitContributors.forEach(c => {
+        if (c.login && c.login.toLowerCase().includes(query)) {
+          suggestions.push({
+            type: 'github-contributor',
+            value: c.login,
+            display: `🐱 Git Contributor: @${c.login}`,
+            insert: `[github-contributor:${c.login}] `
+          });
+        }
+      });
+
       return suggestions.slice(0, 8);
     }
 
     if (mentionType === '#') {
-      return tasks
-        .filter(t => t.title && t.title.toLowerCase().includes(query))
-        .map(t => ({
-          type: 'task',
-          value: t._id,
-          display: `# ${t.title}`,
-          insert: `[${t.title}] `
-        }))
-        .slice(0, 8);
+      const suggestions = [];
+
+      // 1. Tasks
+      tasks.forEach(t => {
+        if (t.title && t.title.toLowerCase().includes(query)) {
+          suggestions.push({
+            type: 'task',
+            value: t._id,
+            display: `# ${t.title}`,
+            insert: `[${t.title}] `
+          });
+        }
+      });
+
+      // 2. GitHub Branches
+      gitBranches.forEach(b => {
+        if (b.name && b.name.toLowerCase().includes(query)) {
+          suggestions.push({
+            type: 'github-branch',
+            value: b.name,
+            display: `🌿 Git Branch: ${b.name}`,
+            insert: `[branch:${b.name}] `
+          });
+        }
+      });
+
+      // 3. GitHub Commits
+      gitCommits.forEach(c => {
+        const shortSha = c.sha?.substring(0, 7) || '';
+        const msg = c.commit?.message?.split('\n')[0] || '';
+        if (shortSha.toLowerCase().includes(query) || msg.toLowerCase().includes(query)) {
+          suggestions.push({
+            type: 'github-commit',
+            value: c.sha,
+            display: `💾 Git Commit: ${shortSha} - ${msg.substring(0, 25)}...`,
+            insert: `[commit:${shortSha}] `
+          });
+        }
+      });
+
+      // 4. GitHub PRs
+      gitPulls.forEach(p => {
+        const title = p.title || '';
+        const number = p.number?.toString() || '';
+        if (title.toLowerCase().includes(query) || number.includes(query)) {
+          suggestions.push({
+            type: 'github-pr',
+            value: number,
+            display: `🔀 Git PR #${number}: ${title.substring(0, 25)}...`,
+            insert: `[pr:${number}] `
+          });
+        }
+      });
+
+      return suggestions.slice(0, 8);
     }
 
     return [];
-  }, [showMentionSuggestions, mentionType, mentionQuery, project, allUsers, allTeams, tasks]);
+  }, [showMentionSuggestions, mentionType, mentionQuery, project, allUsers, allTeams, tasks, gitContributors, gitBranches, gitCommits, gitPulls]);
 
   const selectSuggestion = (suggestion) => {
     const text = inputText;

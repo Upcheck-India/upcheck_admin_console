@@ -182,6 +182,7 @@ const ProjectManagementPage = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [projectUnreadCounts, setProjectUnreadCounts] = useState({});
 
   // Filter/Sort states
   const [activeTab, setActiveTab] = useState('all');
@@ -220,15 +221,17 @@ const ProjectManagementPage = () => {
 
   useEffect(() => {
     fetchInitialData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   const fetchInitialData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [projectsResponse, userResponse] = await Promise.all([
+      const [projectsResponse, userResponse, unreadCountsResponse] = await Promise.all([
         fetch(`/api/projects?tab=${activeTab}`),
-        fetch('/api/auth/me')
+        fetch('/api/auth/me'),
+        fetch('/api/projects/chat/unread-counts')
       ]);
 
       if (!projectsResponse.ok) {
@@ -242,9 +245,16 @@ const ProjectManagementPage = () => {
 
       const projectsData = await projectsResponse.json();
       const userData = await userResponse.json();
+      
+      let unreadCounts = {};
+      if (unreadCountsResponse.ok) {
+        const unreadData = await unreadCountsResponse.json();
+        unreadCounts = unreadData.unreadCounts || {};
+      }
 
       setProjects(projectsData);
       setCurrentUser(userData.user);
+      setProjectUnreadCounts(unreadCounts);
     } catch (e) {
       setError(e.message);
       toast(e.message, 'error');
@@ -417,7 +427,17 @@ const ProjectManagementPage = () => {
                 </div>
               )}
               <div className="min-w-0 mt-1">
-                <h3 className="text-lg font-bold text-gray-900 truncate group-hover:text-blue-700 transition-colors duration-300">{project.name}</h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-gray-900 truncate group-hover:text-blue-700 transition-colors duration-300">{project.name}</h3>
+                  {projectUnreadCounts[project._id] > 0 && (
+                    <span className="relative flex h-5 w-5 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-white text-[10px] font-bold items-center justify-center">
+                        {projectUnreadCounts[project._id]}
+                      </span>
+                    </span>
+                  )}
+                </div>
                 <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{project.description || 'No description'}</p>
               </div>
             </div>

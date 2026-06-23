@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy, X, MessageSquare } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy, X, MessageSquare, Pin } from 'lucide-react';
 import IdeaCanvas from './IdeaCanvas';
 import { useAuth } from '../../../hooks/useAuth';
 import SettingsTab from './SettingsTab';

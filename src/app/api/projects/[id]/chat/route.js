@@ -44,6 +44,13 @@ export async function GET(req, { params }) {
     const perms = getUserPermissionLevel(user, project, userTeams);
     if (!perms) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
+    // Update user's last read status for this project
+    await db.collection('project_chat_read_status').updateOne(
+      { userId: userIdStr, projectId: new ObjectId(id) },
+      { $set: { lastReadAt: new Date() } },
+      { upsert: true }
+    );
+
     // Fetch messages (excluding messages deleted for this user)
     const messages = await db.collection('project_messages')
       .find({
