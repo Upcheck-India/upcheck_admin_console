@@ -3,6 +3,7 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject, canManagePermissions } from '../../../../lib/projectPermissions';
 import { sendEmail } from '../../../../lib/emailService';
+import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
 function sanitizeTag(tag) {
@@ -198,6 +199,16 @@ export async function PUT(req, { params }) {
             } catch (emailError) {
               console.error(`Failed to send project invite email to ${member.email}:`, emailError);
             }
+          }
+
+          // Push Notification
+          if (member.user) {
+            await sendPushNotification(
+              member.user,
+              `Added to Project: ${project.name}`,
+              `You have been added as a ${member.role || 'Contributor'} to project ${project.name}.`,
+              { type: 'project_invite', projectId: id }
+            );
           }
         }
       }

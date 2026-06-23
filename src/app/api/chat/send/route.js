@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 export async function POST(request) {
   try {
@@ -76,6 +77,14 @@ export async function POST(request) {
     await db.collection('conversations').updateOne(
       { _id: new ObjectId(conversationId) },
       { $set: { lastMessageAt: now } }
+    );
+
+    // Send push notification to recipient
+    await sendPushNotification(
+      recipientId,
+      `New message from ${currentUser.username || 'Someone'}`,
+      body.trim(),
+      { type: 'chat_message', conversationId }
     );
 
     return NextResponse.json({

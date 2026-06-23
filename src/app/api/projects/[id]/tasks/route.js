@@ -3,6 +3,7 @@ import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject, canCreateInProject } from '../../../../../lib/projectPermissions';
 import { sendEmail } from '../../../../../lib/emailService';
+import { sendPushNotification } from '../../../../../lib/pushNotifications';
 
 // GET all tasks for a project
 export async function GET(request, { params }) {
@@ -192,6 +193,14 @@ export async function POST(request, { params }) {
             console.error(`Failed to send task assignment email to ${targetUser.email}:`, emailError);
           }
         }
+        
+        // Push Notification
+        await sendPushNotification(
+          targetUser._id,
+          `New Task Assigned: ${title}`,
+          `You have been assigned a new task in project ${project.name}.`,
+          { type: 'task_assigned', projectId: id, taskId: result.insertedId.toString() }
+        );
       }
     }
 
