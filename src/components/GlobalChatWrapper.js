@@ -10,6 +10,7 @@ export default function GlobalChatWrapper() {
   const pathname = usePathname();
   
   const [lastCheck, setLastCheck] = useState(null);
+  const [lastProjectCheck, setLastProjectCheck] = useState(null);
   const [pinnedDm, setPinnedDm] = useState(null);
   const [isFabExpanded, setIsFabExpanded] = useState(false);
   const [fabMessages, setFabMessages] = useState([]);
@@ -133,15 +134,91 @@ export default function GlobalChatWrapper() {
       }
     };
 
-    const interval = setInterval(pollUnread, 5000);
+    const pollProjectUnread = async () => {
+      try {
+        const url = `/api/projects/chat/unread${lastProjectCheck ? `?since=${encodeURIComponent(lastProjectCheck)}` : ''}`;
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        if (!active) return;
+        
+        if (data.serverTime) setLastProjectCheck(data.serverTime);
+        
+        if (data.messages && data.messages.length > 0) {
+          // Filter out messages if we are currently looking at that project's chat (tab or sidebar)
+          const activeProjId = typeof window !== 'undefined' ? window.__activeProjectChatId : null;
+          const validMessages = data.messages.filter(m => m.projectId !== activeProjId);
+          
+          if (validMessages.length > 0 && lastProjectCheck && currentUser.messageNotificationsEnabled !== false) {
+            validMessages.forEach(msg => {
+              toast.custom((t) => (
+                <div
+                  className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-sm w-full bg-white shadow-lg rounded-xl pointer-events-auto flex ring-1 ring-black ring-opacity-5 overflow-hidden border-l-4 border-teal-500 cursor-pointer`}
+                  onClick={() => {
+                    toast.dismiss(t.id);
+                    localStorage.setItem('active_tab_' + msg.projectId, 'messages');
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(new CustomEvent('tab-change-messages', { detail: { projectId: msg.projectId } }));
+                    }
+                    router.push(`/project_management/${msg.projectId}`);
+                  }}
+                >
+                  <div className="flex-1 w-0 p-4 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0 pt-0.5">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-teal-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">
+                          {msg.senderName ? msg.senderName.charAt(0).toUpperCase() : 'T'}
+                        </div>
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <p className="text-xs font-semibold text-teal-600 uppercase tracking-wider">
+                          Project: {msg.projectName}
+                        </p>
+                        <p className="text-sm font-medium text-gray-900">
+                          {msg.senderName}
+                        </p>
+                        <p className="mt-1 text-sm text-gray-500 truncate max-w-[200px]">
+                          {msg.body}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex border-l border-gray-200">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.dismiss(t.id);
+                      }}
+                      className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-teal-600 hover:text-teal-500 focus:outline-none hover:bg-gray-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              ), { duration: 6000, position: 'top-right' });
+            });
+          }
+        }
+      } catch (err) {
+        // ignore network errors for background polling
+      }
+    };
+
+    const interval = setInterval(() => {
+      pollUnread();
+      pollProjectUnread();
+    }, 5000);
+
     // Initial fetch
     if (!lastCheck) pollUnread();
+    if (!lastProjectCheck) pollProjectUnread();
 
     return () => {
       active = false;
       clearInterval(interval);
     };
-  }, [lastCheck, pathname, pinnedDm, isFabExpanded, router, currentUser]);
+  }, [lastCheck, lastProjectCheck, pathname, pinnedDm, isFabExpanded, router, currentUser]);
 
   // ── Pinned DM Listener ──
   useEffect(() => {

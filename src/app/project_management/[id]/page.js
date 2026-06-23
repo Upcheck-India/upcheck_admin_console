@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy, X } from 'lucide-react';
+import { Briefcase, ArrowLeft, Loader2, AlertTriangle, ListChecks, Users, Settings, StickyNote, Github, BarChart3, Trophy, X, MessageSquare } from 'lucide-react';
 import IdeaCanvas from './IdeaCanvas';
 import { useAuth } from '../../../hooks/useAuth';
 import SettingsTab from './SettingsTab';
@@ -12,6 +12,7 @@ import OverviewTab from './OverviewTab';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
 import AvatarWithStatus from '../../../components/AvatarWithStatus';
 import LeaderboardTab from './LeaderboardTab';
+import ProjectChat from './ProjectChat';
 
 const ProjectDetailPage = () => {
   const router = useRouter();
@@ -27,9 +28,36 @@ const ProjectDetailPage = () => {
   const [allTeams, setAllTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('tasks'); // overview, tasks, members, github, canvas, settings
+  const [activeTab, setActiveTab] = useState('tasks'); // overview, tasks, members, github, canvas, settings, messages
   const onlineUsers = useOnlineUsers();
   const [showOnlinePopover, setShowOnlinePopover] = useState(false);
+
+  // Sync active tab with localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('active_tab_' + id);
+      if (stored) {
+        setActiveTab(stored);
+      }
+    }
+  }, [id]);
+
+  useEffect(() => {
+    const handleTabChangeMessage = (e) => {
+      if (e.detail?.projectId === id) {
+        setActiveTab('messages');
+      }
+    };
+    window.addEventListener('tab-change-messages', handleTabChangeMessage);
+    return () => window.removeEventListener('tab-change-messages', handleTabChangeMessage);
+  }, [id]);
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('active_tab_' + id, tab);
+    }
+  };
 
   const projectMemberUsernames = React.useMemo(() => {
     if (!project) return new Set();
@@ -175,6 +203,63 @@ const ProjectDetailPage = () => {
         return <OverviewTab project={project} projectId={id} onProjectUpdate={setProject} />;
       case 'tasks':
         return <TasksTab projectId={project._id} project={project} allUsers={allUsers} allTeams={allTeams} userTeams={userTeams} />;
+      case 'messages':
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="lg:col-span-3">
+              <ProjectChat
+                projectId={id}
+                project={project}
+                allUsers={allUsers}
+                allTeams={allTeams}
+                isSidebar={false}
+              />
+            </div>
+            <div className="hidden lg:flex flex-col gap-6">
+              <div className="bg-white rounded-2xl border border-gray-150 p-5 shadow-xs">
+                <h4 className="font-bold text-gray-800 text-sm mb-3 flex items-center gap-1.5 border-b pb-2">
+                  <Pin className="h-4 w-4 text-amber-500 fill-amber-500" />
+                  <span>Project Pins</span>
+                </h4>
+                <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    Pinned messages can be found by clicking the <strong>Pinned Only</strong> filter button in the chat header.
+                  </p>
+                  <div className="bg-amber-50 border border-amber-155 rounded-xl p-3 text-[11px] text-amber-900 leading-relaxed">
+                    📌 Pin important milestones, specifications, or rules here for everyone to see.
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border border-gray-155 p-5 shadow-xs flex flex-col gap-4">
+                <h4 className="font-bold text-gray-800 text-sm flex items-center gap-1.5 border-b pb-2">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  <span>Chat Audience</span>
+                </h4>
+                <div className="space-y-3 max-h-[260px] overflow-y-auto">
+                  {project.members?.map(m => (
+                    <div key={m.user} className="flex items-center gap-2.5">
+                      <AvatarWithStatus username={m.user} online={false} className="h-7 w-7 text-xs" />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-gray-700">@{m.user}</span>
+                        <span className="text-[10px] text-gray-400">{m.role || 'Member'}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {project.superManager && (
+                    <div className="flex items-center gap-2.5">
+                      <AvatarWithStatus username={project.superManager} online={false} className="h-7 w-7 text-xs" />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-gray-700">@{project.superManager}</span>
+                        <span className="text-[10px] text-gray-400">Super Manager</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
       case 'members':
         return (
           <MembersTab
@@ -341,7 +426,7 @@ const ProjectDetailPage = () => {
           <div className="p-4 border-b border-gray-100 bg-gray-50/50">
             <div className="flex flex-wrap gap-1 bg-gray-100/80 p-1 rounded-lg w-max border border-gray-200 shadow-inner">
               <button 
-                onClick={() => setActiveTab('overview')} 
+                onClick={() => handleTabChange('overview')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   activeTab === 'overview' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -349,7 +434,7 @@ const ProjectDetailPage = () => {
                 <BarChart3 className="h-4 w-4 mr-2" /> Overview
               </button>
               <button 
-                onClick={() => setActiveTab('tasks')} 
+                onClick={() => handleTabChange('tasks')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   activeTab === 'tasks' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -357,7 +442,7 @@ const ProjectDetailPage = () => {
                 <ListChecks className="h-4 w-4 mr-2" /> Tasks
               </button>
               <button 
-                onClick={() => setActiveTab('members')} 
+                onClick={() => handleTabChange('members')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   activeTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -365,9 +450,18 @@ const ProjectDetailPage = () => {
                 <Users className="h-4 w-4 mr-2" /> Members
               </button>
               
+              <button 
+                onClick={() => handleTabChange('messages')} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                  activeTab === 'messages' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                <MessageSquare className="h-4 w-4 mr-2" /> Messages
+              </button>
+              
               {showGithubTab && (
                 <button 
-                  onClick={() => setActiveTab('github')} 
+                  onClick={() => handleTabChange('github')} 
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                     activeTab === 'github' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
@@ -378,7 +472,7 @@ const ProjectDetailPage = () => {
 
               {project.settings?.enableIdeaCanvas !== false && (
                 <button 
-                  onClick={() => setActiveTab('canvas')} 
+                  onClick={() => handleTabChange('canvas')} 
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                     activeTab === 'canvas' ? 'bg-white text-yellow-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
@@ -388,7 +482,7 @@ const ProjectDetailPage = () => {
               )}
               
               <button 
-                onClick={() => setActiveTab('leaderboard')} 
+                onClick={() => handleTabChange('leaderboard')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   activeTab === 'leaderboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
@@ -397,7 +491,7 @@ const ProjectDetailPage = () => {
               </button>
               
               <button 
-                onClick={() => setActiveTab('settings')} 
+                onClick={() => handleTabChange('settings')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
                   activeTab === 'settings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare, Trophy, Sparkles, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
+import ProjectChat from './ProjectChat';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
 import AvatarWithStatus from '../../../components/AvatarWithStatus';
 import BurndownChart from './BurndownChart';
@@ -392,6 +393,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   const [detailsTask, setDetailsTask] = useState(null);
   const [isShareLinksModalOpen, setIsShareLinksModalOpen] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
 
   // Filter state (must be before any early returns)
   const [filterPriority, setFilterPriority] = useState('All');
@@ -946,8 +948,9 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   }
 
   return (
-    <>
-      {isModalOpen && (
+    <div className="flex w-full gap-4 relative">
+      <div className="flex-1 min-w-0">
+        {isModalOpen && (
         <TaskModal
           task={currentTask}
           assignableUsers={assignableUsers}
@@ -1185,6 +1188,19 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
                   Share Links
                 </button>
               )}
+              <button
+                onClick={() => setIsChatSidebarOpen(prev => !prev)}
+                className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md shadow-sm transition-all duration-200 ${
+                  isChatSidebarOpen
+                    ? 'bg-blue-50 text-blue-600 border-blue-300 font-semibold'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+                type="button"
+                title="Toggle Team Chat Sidebar"
+              >
+                <MessageSquare className="h-4 w-4 mr-2 text-blue-500" />
+                Team Chat
+              </button>
             </div>
             {canCreate && (
               <button
@@ -1288,7 +1304,35 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
           onClose={() => setIsShareLinksModalOpen(false)}
         />
       )}
-    </>
+      </div>
+
+      {isChatSidebarOpen && (
+        <div className="w-80 md:w-96 flex-shrink-0 border-l border-gray-250 bg-white z-40 relative flex flex-col h-[calc(100vh-280px)] min-h-[500px] rounded-xl overflow-hidden shadow-md">
+          <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-gray-50">
+            <span className="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+              <MessageSquare className="h-4 w-4 text-blue-600" />
+              <span>Project Chat Sidebar</span>
+            </span>
+            <button 
+              onClick={() => setIsChatSidebarOpen(false)}
+              className="p-1 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 transition-colors"
+              title="Close chat"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <ProjectChat 
+              projectId={projectId} 
+              project={project} 
+              allUsers={allUsers} 
+              allTeams={allTeams} 
+              isSidebar={true} 
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 
