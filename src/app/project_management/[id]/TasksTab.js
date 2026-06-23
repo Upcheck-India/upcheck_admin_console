@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare, Trophy, Sparkles } from 'lucide-react';
+import { PlusCircle, Loader2, AlertTriangle, Trash2, Edit, Eye, FileText, MoreVertical, X, Share2, ChevronUp, ChevronDown, MessageSquare, CheckSquare, Trophy, Sparkles, User } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import TaskModal from './TaskModal';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
@@ -54,7 +54,7 @@ const typeColors = {
   Epic: 'bg-purple-100 text-purple-800',
 };
 
-const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, isFirst, isLast, onMoveUp, onMoveDown, onlineUsernames }) => {
+const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, isFirst, isLast, onMoveUp, onMoveDown, onlineUsernames, currentUser }) => {
   const { 
     attributes, 
     listeners, 
@@ -126,13 +126,45 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
     }
   }, [task.priority]);
 
+  const isMyTask = useMemo(() => {
+    if (!currentUser || !Array.isArray(task.assignees)) return false;
+    const myIdStr = (currentUser._id || currentUser.id)?.toString();
+    return task.assignees.some(assigneeId => {
+      const aIdStr = (assigneeId?._id || assigneeId)?.toString();
+      return aIdStr === myIdStr;
+    });
+  }, [task.assignees, currentUser]);
+
+  const cardClassName = useMemo(() => {
+    let classes = 'bg-white p-3 rounded-lg shadow-sm border relative group touch-none transition-all duration-200';
+    
+    if (dateStatus) {
+      if (dateStatus.label === 'Overdue') {
+        classes += ' bg-red-50/45 hover:bg-red-100/40';
+      } else if (dateStatus.label === 'Due Soon') {
+        classes += ' bg-amber-50/45 hover:bg-amber-100/40';
+      }
+    } else {
+      classes += ' hover:bg-gray-50/40';
+    }
+    
+    let borderClass = 'border-gray-200';
+    if (isMyTask) {
+      borderClass = 'border-blue-400 ring-[1px] ring-blue-400/20';
+    } else if (dateStatus) {
+      borderClass = dateStatus.label === 'Overdue' ? 'border-red-200' : 'border-amber-200';
+    }
+    
+    return `${classes} ${borderClass}`;
+  }, [isMyTask, dateStatus]);
+
   return (
     <div 
       ref={setNodeRef} 
       style={style} 
       {...attributes} 
       {...listeners} 
-      className={`bg-white p-3 rounded-lg shadow-sm border relative group touch-none ${dateStatus?.cardClass || 'border-gray-200'}`}
+      className={cardClassName}
     >
       {/* Priority dot */}
       {priorityDotColor && (
@@ -279,7 +311,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
   );
 };
 
-const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, canCreate, onAddTask, onMoveUp, onMoveDown, onlineUsernames }) => {
+const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit, onDelete, onView, canCreate, onAddTask, onMoveUp, onMoveDown, onlineUsernames, currentUser }) => {
   const { setNodeRef } = useDroppable({ 
     id,
     disabled: !canDrag
@@ -329,6 +361,7 @@ const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit
               onMoveUp={() => onMoveUp(task._id)}
               onMoveDown={() => onMoveDown(task._id)}
               onlineUsernames={onlineUsernames}
+              currentUser={currentUser}
             />
           ))}
           {tasks.length === 0 && (
@@ -364,6 +397,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
   const [filterPriority, setFilterPriority] = useState('All');
   const [filterAssignee, setFilterAssignee] = useState('All');
   const [filterSearch, setFilterSearch] = useState('');
+  const [filterMyTasksOnly, setFilterMyTasksOnly] = useState(false);
 
   // Sprint management state
   const [editingSprint, setEditingSprint] = useState(null);
@@ -461,9 +495,20 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
       if (filterPriority && filterPriority !== 'All' && task.priority !== filterPriority) return false;
       if (filterAssignee && filterAssignee !== 'All' && !task.assignees?.includes(filterAssignee)) return false;
       if (filterSearch && !task.title?.toLowerCase().includes(filterSearch.toLowerCase())) return false;
+      
+      if (filterMyTasksOnly) {
+        if (!currentUser) return false;
+        const myIdStr = (currentUser._id || currentUser.id)?.toString();
+        const hasMyAssignee = task.assignees?.some(assigneeId => {
+          const aIdStr = (assigneeId?._id || assigneeId)?.toString();
+          return aIdStr === myIdStr;
+        });
+        if (!hasMyAssignee) return false;
+      }
+      
       return true;
     });
-  }, [tasks, filterPriority, filterAssignee, filterSearch]);
+  }, [tasks, filterPriority, filterAssignee, filterSearch, filterMyTasksOnly, currentUser]);
 
   // Columns grouped by status (uses filteredTasks)
   const columns = useMemo(() => {
@@ -1090,10 +1135,23 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 min-w-[160px]"
             />
 
-            {(filterPriority !== 'All' || filterAssignee !== 'All' || filterSearch) && (
+            <button
+              type="button"
+              onClick={() => setFilterMyTasksOnly(prev => !prev)}
+              className={`text-sm border rounded-md px-3 py-1.5 font-medium transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
+                filterMyTasksOnly
+                  ? "border-blue-500 text-blue-600 bg-blue-50 hover:bg-blue-100/50"
+                  : "border-gray-200 text-gray-600 hover:bg-gray-50 bg-white"
+              }`}
+            >
+              <User className="h-4 w-4" />
+              <span>My Tasks</span>
+            </button>
+
+            {(filterPriority !== 'All' || filterAssignee !== 'All' || filterSearch || filterMyTasksOnly) && (
               <button
                 type="button"
-                onClick={() => { setFilterPriority('All'); setFilterAssignee('All'); setFilterSearch(''); }}
+                onClick={() => { setFilterPriority('All'); setFilterAssignee('All'); setFilterSearch(''); setFilterMyTasksOnly(false); }}
                 className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
               >
                 <X className="h-3 w-3" /> Clear filters
@@ -1160,6 +1218,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
                 onMoveUp={(taskId) => handleMoveTask(taskId, 'up')}
                 onMoveDown={(taskId) => handleMoveTask(taskId, 'down')}
                 onlineUsernames={onlineUsernames}
+                currentUser={currentUser}
               />
             ))}
           </div>
