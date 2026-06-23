@@ -26,6 +26,18 @@ const isAdminRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, req) => {
+  // Extract token from Authorization header if present (for mobile app)
+  const authHeader = req.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim();
+    req.cookies.set('admin_token', token);
+    
+    // Also inject it into the raw Cookie header for compatibility with Next.js cookies() API
+    const existingCookie = req.headers.get('cookie') || '';
+    const newCookie = `admin_token=${token}${existingCookie ? `; ${existingCookie}` : ''}`;
+    req.headers.set('cookie', newCookie);
+  }
+
   const { userId: clerkUserId } = await auth()
   const hasAdminToken = req.cookies.has('admin_token')
 

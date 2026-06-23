@@ -86,6 +86,7 @@ export async function POST(req) {
       console.log('Login successful, session established');
       return NextResponse.json({
         success: true,
+        sessionToken,
         user: {
           username: user.username,
           role: user.role,
