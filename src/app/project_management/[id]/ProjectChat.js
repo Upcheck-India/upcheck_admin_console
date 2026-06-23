@@ -25,72 +25,146 @@ function parseFormatting(text) {
   let html = escapeHtml(text);
 
   // Parse code blocks (```code```)
-  html = html.replace(/```([\s\S]*?)```/g, (match, code) => {
-    return `<pre class="bg-gray-800 text-teal-400 font-mono p-3 rounded-lg text-xs overflow-x-auto my-2 border border-gray-700 shadow-md">${code.trim()}</pre>`;
+  // Must run before inline code to avoid conflicts
+  html = html.replace(/```([\s\S]*?)```/g, (_match, code) => {
+    return `<pre style="background:#1e293b;color:#2dd4bf;font-family:monospace;padding:10px 12px;border-radius:8px;font-size:11px;overflow-x:auto;margin:6px 0;border:1px solid #334155">${code.trim()}</pre>`;
   });
 
   // Parse inline code (`code`)
-  html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-800 text-red-500 font-mono px-1.5 py-0.5 rounded text-xs border border-gray-200 dark:border-gray-700">$1</code>');
+  html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.12);color:#f87171;font-family:monospace;padding:1px 5px;border-radius:4px;font-size:11px;border:1px solid rgba(0,0,0,0.1)">$1</code>');
 
-  // Parse bold (**text**)
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-gray-900 dark:text-white">$1</strong>');
+  // Parse bold (**text**) - inherit color so it works on both white and blue bubbles
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong style="font-weight:700">$1</strong>');
 
   // Parse italic (*text*)
-  html = html.replace(/\*([^*]+)\*/g, '<em class="italic text-gray-800 dark:text-gray-200">$1</em>');
+  html = html.replace(/\*([^*]+)\*/g, '<em style="font-style:italic">$1</em>');
 
   // Parse underline (__text__)
-  html = html.replace(/__([^_]+)__/g, '<u class="underline decoration-indigo-400">$1</u>');
+  html = html.replace(/__([^_]+)__/g, '<u style="text-decoration:underline;text-decoration-color:rgba(99,102,241,0.7)">$1</u>');
 
   // Parse strikethrough (~~text~~)
-  html = html.replace(/~~([^~]+)~~/g, '<del class="line-through text-gray-400">$1</del>');
+  html = html.replace(/~~([^~]+)~~/g, '<s style="opacity:0.6">$1</s>');
 
-  // Parse highlight (==text==)
-  html = html.replace(/==([^=]+)==/g, '<mark class="bg-yellow-100 text-yellow-900 px-1 py-0.5 rounded shadow-xs font-semibold">$1</mark>');
+  // Parse highlight (==text==) - explicit dark text so it\'s always readable
+  html = html.replace(/==([^=]+)==/g, '<mark style="background:#fef08a;color:#713f12;padding:1px 4px;border-radius:3px;font-weight:600">$1</mark>');
 
   // Parse color ([color=hex]text[/color])
-  html = html.replace(/\[color=([^\]]+)\]([\s\S]*?)\[\/color\]/g, '<span style="color: $1">$2</span>');
+  html = html.replace(/\[color=([^\]]+)\]([\s\S]*?)\[\/color\]/g, '<span style="color:$1">$2</span>');
 
-  // Parse blockquotes (> text)
-  html = html.replace(/(?:^|\n)&gt;\s*([^\n]+)/g, '<div class="border-l-4 border-teal-500 bg-teal-50/50 pl-3 py-1 my-1.5 rounded-r-md text-gray-700 italic">$1</div>');
+  // Parse blockquotes (> text) — after escaping, > becomes &gt;
+  html = html.replace(/(?:^|\n)&gt;\s*([^\n]+)/g, '<div style="border-left:3px solid #14b8a6;background:rgba(20,184,166,0.08);padding:4px 10px;margin:4px 0;border-radius:0 6px 6px 0;font-style:italic;opacity:0.9">$1</div>');
 
-  // Parse mentions
-  // 1. @notify
-  html = html.replace(/@notify\s+([a-zA-Z0-9_.-]+)/g, '<span class="inline-flex items-center gap-1 bg-red-50 text-red-700 px-2 py-0.5 rounded-full font-bold text-xs border border-red-200 shadow-sm">🔔 @notify $1</span>');
-  
-  // 2. Teammates (excluding notify)
-  html = html.replace(/@([a-zA-Z0-9_.-]+)/g, (match, username) => {
-    if (username === 'notify') return match; // Handled above
-    return `<span class="inline-flex items-center bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-blue-200 shadow-xs">@${username}</span>`;
+  // ── Mention & reference badges ──────────────────────────────────────────────
+  // All badges use inline styles so they are atomic color blocks regardless of
+  // the parent bubble background (white or blue).
+
+  // 1. @notify — must be matched before generic @username
+  html = html.replace(/@notify/g,
+    '<span style="display:inline-flex;align-items:center;gap:3px;background:#fef2f2;color:#b91c1c;padding:1px 8px;border-radius:9999px;font-weight:700;font-size:11px;border:1px solid #fca5a5;vertical-align:middle">🔔 @notify</span>'
+  );
+
+  // 2. Generic @username (after @notify is already replaced)
+  html = html.replace(/@([a-zA-Z0-9_.:-]+)/g, (_m, username) => {
+    return `<span style="display:inline-flex;align-items:center;background:#eff6ff;color:#1d4ed8;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #bfdbfe;vertical-align:middle">@${username}</span>`;
   });
 
-  // 3. Roles @[Role]
-  html = html.replace(/@\[([^\]]+)\]/g, '<span class="inline-flex items-center bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-indigo-200 shadow-xs">💼 @$1</span>');
+  // 3. Role @[Role Name]
+  html = html.replace(/@\[([^\]]+)\]/g,
+    '<span style="display:inline-flex;align-items:center;background:#eef2ff;color:#4338ca;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #c7d2fe;vertical-align:middle">💼\u00a0$1</span>'
+  );
 
-  // 4. Teams @{Team}
-  html = html.replace(/@\{([^\}]+)\}/g, '<span class="inline-flex items-center bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-emerald-200 shadow-xs">👥 @$1</span>');
+  // 4. Team @{Team Name}
+  html = html.replace(/@\{([^}]+)\}/g,
+    '<span style="display:inline-flex;align-items:center;background:#ecfdf5;color:#065f46;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #6ee7b7;vertical-align:middle">👥\u00a0$1</span>'
+  );
 
-  // 5. Tasks #[Task]
-  html = html.replace(/#\[([^\]]+)\]/g, '<span class="inline-flex items-center bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded font-semibold text-xs border border-amber-200 shadow-xs">#$1</span>');
+  // 5. Task #[Task Title]
+  html = html.replace(/#\[([^\]]+)\]/g,
+    '<span style="display:inline-flex;align-items:center;background:#fffbeb;color:#92400e;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #fcd34d;vertical-align:middle">#\u00a0$1</span>'
+  );
 
-  // 6. GitHub branches [branch:name]
-  html = html.replace(/\[branch:([^\]]+)\]/g, '<span class="inline-flex items-center bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-sky-250 shadow-xs">🌿 $1</span>');
+  // 6. GitHub branch [branch:name]
+  html = html.replace(/\[branch:([^\]]+)\]/g,
+    '<span style="display:inline-flex;align-items:center;background:#f0f9ff;color:#0c4a6e;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #7dd3fc;vertical-align:middle">🌿\u00a0$1</span>'
+  );
 
-  // 7. GitHub commits [commit:sha]
-  html = html.replace(/\[commit:([^\]]+)\]/g, '<span class="inline-flex items-center bg-violet-50 text-violet-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-violet-250 shadow-xs">💾 commit:$1</span>');
+  // 7. GitHub commit [commit:sha]
+  html = html.replace(/\[commit:([^\]]+)\]/g,
+    '<span style="display:inline-flex;align-items:center;background:#f5f3ff;color:#5b21b6;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #c4b5fd;vertical-align:middle">💾\u00a0$1</span>'
+  );
 
-  // 8. GitHub PRs [pr:number]
-  html = html.replace(/\[pr:([^\]]+)\]/g, '<span class="inline-flex items-center bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded font-semibold text-xs border border-purple-250 shadow-xs">🔀 PR #$1</span>');
+  // 8. GitHub PR [pr:number]
+  html = html.replace(/\[pr:([^\]]+)\]/g,
+    '<span style="display:inline-flex;align-items:center;background:#faf5ff;color:#6d28d9;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #d8b4fe;vertical-align:middle">🔀\u00a0PR #$1</span>'
+  );
 
-  // 9. GitHub Contributors [github-contributor:username]
-  html = html.replace(/\[github-contributor:([^\]]+)\]/g, '<span class="inline-flex items-center bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-semibold text-xs border border-slate-350 shadow-xs">🐱 @$1</span>');
+  // 9. GitHub contributor [github-contributor:username]
+  html = html.replace(/\[github-contributor:([^\]]+)\]/g,
+    '<span style="display:inline-flex;align-items:center;background:#f8fafc;color:#334155;padding:1px 7px;border-radius:5px;font-weight:600;font-size:11px;border:1px solid #cbd5e1;vertical-align:middle">🐱\u00a0@$1</span>'
+  );
 
   return html;
+}
+
+// ── Input Preview: converts raw tokens to colored badge HTML for the mirror overlay ──
+function parseInputPreview(text) {
+  if (!text) return '';
+  let html = escapeHtml(text);
+
+  // @notify — must come before generic @username
+  html = html.replace(
+    /@notify/g,
+    '<mark style="display:inline;background:#fef2f2;color:#b91c1c;padding:1px 8px;border-radius:9999px;font-weight:700;border:1px solid #fca5a5;white-space:nowrap">\uD83D\uDD14\u00a0@notify</mark>'
+  );
+  // @[Role]
+  html = html.replace(
+    /@\[([^\]]+)\]/g,
+    '<mark style="display:inline;background:#eef2ff;color:#4338ca;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #c7d2fe;white-space:nowrap">\uD83D\uDCBC\u00a0$1</mark>'
+  );
+  // @{Team}
+  html = html.replace(
+    /@\{([^}]+)\}/g,
+    '<mark style="display:inline;background:#ecfdf5;color:#065f46;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #6ee7b7;white-space:nowrap">\uD83D\uDC65\u00a0$1</mark>'
+  );
+  // Generic @username
+  html = html.replace(/@([a-zA-Z0-9_.:-]+)/g, (_m, u) =>
+    `<mark style="display:inline;background:#eff6ff;color:#1d4ed8;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #bfdbfe;white-space:nowrap">@${u}</mark>`
+  );
+  // #[Task Title]
+  html = html.replace(
+    /#\[([^\]]+)\]/g,
+    '<mark style="display:inline;background:#fffbeb;color:#92400e;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #fcd34d;white-space:nowrap">#\u00a0$1</mark>'
+  );
+  // [branch:name]
+  html = html.replace(
+    /\[branch:([^\]]+)\]/g,
+    '<mark style="display:inline;background:#f0f9ff;color:#0c4a6e;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #7dd3fc;white-space:nowrap">\uD83C\uDF3F\u00a0$1</mark>'
+  );
+  // [commit:sha]
+  html = html.replace(
+    /\[commit:([^\]]+)\]/g,
+    '<mark style="display:inline;background:#f5f3ff;color:#5b21b6;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #c4b5fd;white-space:nowrap">\uD83D\uDCBE\u00a0$1</mark>'
+  );
+  // [pr:number]
+  html = html.replace(
+    /\[pr:([^\]]+)\]/g,
+    '<mark style="display:inline;background:#faf5ff;color:#6d28d9;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #d8b4fe;white-space:nowrap">\uD83D\uDD00\u00a0PR\u00a0#$1</mark>'
+  );
+  // [github-contributor:username]
+  html = html.replace(
+    /\[github-contributor:([^\]]+)\]/g,
+    '<mark style="display:inline;background:#f8fafc;color:#334155;padding:1px 7px;border-radius:5px;font-weight:600;border:1px solid #cbd5e1;white-space:nowrap">\uD83D\uDC31\u00a0@$1</mark>'
+  );
+  // Preserve newlines
+  html = html.replace(/\n/g, '<br>');
+  return html + '<br>'; // trailing br prevents container collapse
 }
 
 export default function ProjectChat({ projectId, project, allUsers = [], allTeams = [], isSidebar = false }) {
   const { user } = useAuth();
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const mirrorRef = useRef(null); // mirror div for rich-input preview
 
   // States
   const [messages, setMessages] = useState([]);
@@ -113,6 +187,12 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText, setEditText] = useState('');
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, body, senderName }
+
+  // @notify modal: ask whom to notify before sending
+  const [notifyModal, setNotifyModal] = useState(false);
+  const [notifyTarget, setNotifyTarget] = useState('everyone'); // 'everyone' | 'team' | 'members'
+  const [notifySelectedTeam, setNotifySelectedTeam] = useState('');
+  const [notifySelectedMembers, setNotifySelectedMembers] = useState([]);
 
   // Mentions Autocomplete state
   const [mentionType, setMentionType] = useState(null); // '@' | '#'
@@ -622,6 +702,17 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
 
   const isNotifyMentionActive = inputText.includes('@notify');
 
+  // Collect project members for notify modal
+  const projectMembers = useMemo(() => {
+    const memberIds = new Set();
+    if (project?.superManager) memberIds.add(project.superManager);
+    project?.members?.forEach(m => {
+      if (m.user) memberIds.add(m.user);
+      if (m.username) memberIds.add(m.username);
+    });
+    return allUsers.filter(u => memberIds.has(u.username) || memberIds.has(u._id?.toString()));
+  }, [project, allUsers]);
+
   const filteredMessages = useMemo(() => {
     if (pinnedFilter) {
       return messages.filter(m => m.pinned === true);
@@ -822,9 +913,12 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
                           </div>
                         )}
 
-                        <div 
+                        {/* Message body — dangerouslySetInnerHTML is safe here because
+                            content is HTML-escaped first in parseFormatting via escapeHtml()
+                            and only controlled HTML tags are re-injected by parseFormatting. */}
+                        <div
                           dangerouslySetInnerHTML={{ __html: parseFormatting(msg.body) }}
-                          className="break-words max-w-full overflow-hidden"
+                          className="break-words max-w-full overflow-hidden [&_strong]:font-bold [&_em]:italic [&_u]:underline"
                         />
                       </div>
                     )}
@@ -1057,15 +1151,44 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
           </div>
 
           <div className="flex items-center gap-2">
-            <textarea
-              ref={inputRef}
-              rows={isSidebar ? 1 : 2}
-              value={inputText}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Type message... Use @ for mentions, # for tasks, or toolbar to format."
-              className="flex-1 text-sm bg-gray-50 border border-gray-150 focus:border-blue-500 rounded-xl px-3.5 py-2.5 outline-none resize-none transition-all"
-            />
+            {/* Rich input: mirror overlay + transparent textarea */}
+            <div className="relative flex-1 bg-gray-50 border border-gray-200 focus-within:border-blue-500 rounded-xl transition-all overflow-hidden">
+              {/* Mirror layer: renders colored badge chips behind the textarea */}
+              <div
+                ref={mirrorRef}
+                aria-hidden="true"
+                className="absolute inset-0 pointer-events-none select-none overflow-hidden text-sm px-3.5 py-2.5"
+                style={{
+                  fontFamily: 'inherit',
+                  lineHeight: '1.625',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  zIndex: 1,
+                }}
+                dangerouslySetInnerHTML={{ __html: parseInputPreview(inputText) }}
+              />
+              {/* Actual textarea on top with transparent text so mirror shows through */}
+              <textarea
+                ref={inputRef}
+                rows={isSidebar ? 1 : 2}
+                value={inputText}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                onScroll={(e) => {
+                  if (mirrorRef.current) {
+                    mirrorRef.current.scrollTop = e.target.scrollTop;
+                  }
+                }}
+                placeholder={inputText ? '' : 'Type message... Use @ for mentions, # for tasks, or toolbar to format.'}
+                className="relative w-full text-sm bg-transparent px-3.5 py-2.5 outline-none resize-none"
+                style={{
+                  color: inputText ? 'transparent' : undefined,
+                  caretColor: '#374151',
+                  zIndex: 2,
+                  lineHeight: '1.625',
+                }}
+              />
+            </div>
             <button
               type="submit"
               disabled={!inputText.trim()}
@@ -1076,9 +1199,23 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
           </div>
 
           {isNotifyMentionActive && (
-            <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-250 p-2 rounded-lg text-[10px] text-amber-800 animate-pulse mt-1 select-none">
-              <Bell className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-              <span>⚠️ <strong>@notify</strong> is active. This message will trigger direct email notifications to target members. Rate limits of 15 minutes are strictly enforced.</span>
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-[10px] text-amber-800 mt-1">
+              <Bell className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p><strong>@notify</strong> will send email alerts to recipients. Rate limited to once per 15 min per user.</p>
+                <button
+                  type="button"
+                  onClick={() => setNotifyModal(true)}
+                  className="mt-1 px-2.5 py-1 bg-amber-600 text-white rounded-lg text-[10px] font-bold hover:bg-amber-700 transition-colors"
+                >
+                  Select who to notify →
+                </button>
+                {(notifyTarget !== 'everyone' || notifySelectedMembers.length > 0 || notifySelectedTeam) && (
+                  <span className="ml-2 text-amber-700 font-semibold">
+                    {notifyTarget === 'everyone' ? '📣 Everyone' : notifyTarget === 'team' && notifySelectedTeam ? `👥 ${notifySelectedTeam}` : notifySelectedMembers.length > 0 ? `👤 ${notifySelectedMembers.length} member(s)` : ''}
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </form>
@@ -1130,6 +1267,139 @@ export default function ProjectChat({ projectId, project, allUsers = [], allTeam
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* @notify Recipient Selection Modal */}
+      {notifyModal && (
+        <div className="fixed inset-0 bg-black/60 flex justify-center items-center z-[9999] p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-4 flex items-center gap-3">
+              <Bell className="h-5 w-5 text-white" />
+              <div>
+                <h3 className="text-base font-bold text-white">Select Notification Recipients</h3>
+                <p className="text-[11px] text-amber-100">Who should receive an email alert for this message?</p>
+              </div>
+            </div>
+
+            <div className="p-5 flex flex-col gap-4">
+              {/* Warning */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>Email notifications are rate-limited to <strong>once per 15 minutes per recipient</strong>. Abuse will result in suspension of notify privileges.</span>
+              </div>
+
+              {/* Recipient Type */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold text-gray-700 uppercase tracking-wider">Notify</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: 'everyone', label: '📣 Everyone', desc: 'All project members' },
+                    { value: 'team', label: '👥 A Team', desc: 'Specific team' },
+                    { value: 'members', label: '👤 Members', desc: 'Pick members' },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        setNotifyTarget(opt.value);
+                        setNotifySelectedTeam('');
+                        setNotifySelectedMembers([]);
+                      }}
+                      className={`p-2.5 rounded-xl border-2 text-left transition-all ${
+                        notifyTarget === opt.value
+                          ? 'border-amber-500 bg-amber-50'
+                          : 'border-gray-200 hover:border-amber-300 hover:bg-amber-50/40'
+                      }`}
+                    >
+                      <div className="text-sm font-semibold text-gray-800">{opt.label}</div>
+                      <div className="text-[10px] text-gray-500 mt-0.5">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Team selector */}
+              {notifyTarget === 'team' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-gray-700">Select Team</label>
+                  <select
+                    value={notifySelectedTeam}
+                    onChange={e => setNotifySelectedTeam(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="">-- Choose a team --</option>
+                    {allTeams.map(t => (
+                      <option key={t._id || t.name} value={t.name}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Member picker */}
+              {notifyTarget === 'members' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-bold text-gray-700">Select Members</label>
+                  <div className="max-h-44 overflow-y-auto border border-gray-200 rounded-xl divide-y divide-gray-100">
+                    {projectMembers.length === 0 && (
+                      <p className="px-3 py-2 text-xs text-gray-400 italic">No members found.</p>
+                    )}
+                    {projectMembers.map(m => (
+                      <label key={m._id || m.username} className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="rounded accent-amber-500"
+                          checked={notifySelectedMembers.includes(m.username)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setNotifySelectedMembers(prev => [...prev, m.username]);
+                            } else {
+                              setNotifySelectedMembers(prev => prev.filter(u => u !== m.username));
+                            }
+                          }}
+                        />
+                        <div>
+                          <div className="text-xs font-semibold text-gray-800">{m.name || m.username}</div>
+                          <div className="text-[10px] text-gray-400">@{m.username}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setNotifyModal(false)}
+                  className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50 font-medium transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (notifyTarget === 'team' && !notifySelectedTeam) {
+                      return; // require team selection
+                    }
+                    if (notifyTarget === 'members' && notifySelectedMembers.length === 0) {
+                      return; // require at least one member
+                    }
+                    setNotifyModal(false);
+                  }}
+                  disabled={
+                    (notifyTarget === 'team' && !notifySelectedTeam) ||
+                    (notifyTarget === 'members' && notifySelectedMembers.length === 0)
+                  }
+                  className="flex-1 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-sm"
+                >
+                  Confirm Recipients
+                </button>
+              </div>
             </div>
           </div>
         </div>
