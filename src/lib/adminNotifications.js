@@ -407,8 +407,8 @@ export async function emailNotificationHandler(notification) {
  */
 export async function databaseNotificationHandler(notification) {
   try {
-    await connectToDatabase();
-    const db = global.mongoose.connection.db;
+    const connection = await connectToDatabase();
+    const db = connection.db || global.mongoose?.connection?.db || connection.useDb('resources').db;
     
     const dbNotification = {
       ...notification,

@@ -30,8 +30,8 @@ export async function GET(request) {
 
     if (source === 'database' || source === 'all') {
       // Get notifications from database
-      await connectToDatabase();
-      const db = global.mongoose.connection.db;
+      const connection = await connectToDatabase();
+      const db = connection.db || global.mongoose?.connection?.db || connection.useDb('resources').db;
       
       const query = {
         createdAt: { $gte: new Date(Date.now() - hours * 60 * 60 * 1000) }
@@ -86,8 +86,8 @@ export async function POST(request) {
   try {
     const { action, notificationId, notificationIds, data } = await request.json();
 
-    await connectToDatabase();
-    const db = global.mongoose.connection.db;
+    const connection = await connectToDatabase();
+    const db = connection.db || global.mongoose?.connection?.db || connection.useDb('resources').db;
 
     switch (action) {
       case 'acknowledge':

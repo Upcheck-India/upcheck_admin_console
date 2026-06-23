@@ -33,19 +33,28 @@ export async function connectToDatabase() {
   // Check if already connected
   // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
   if (mongoose.connection.readyState === 1) {
+    if (!mongoose.connection.db) {
+      mongoose.connection.db = mongoose.connection.useDb('resources').db;
+    }
     return mongoose.connection;
   }
 
   // If currently connecting, wait for it to complete
   if (mongoose.connection.readyState === 2) {
     return new Promise((resolve, reject) => {
-      mongoose.connection.once('connected', () => resolve(mongoose.connection));
+      mongoose.connection.once('connected', () => {
+        if (!mongoose.connection.db) {
+          mongoose.connection.db = mongoose.connection.useDb('resources').db;
+        }
+        resolve(mongoose.connection);
+      });
       mongoose.connection.once('error', reject);
     });
   }
 
   try {
     await mongoose.connect(uri, {
+      dbName: 'resources',
       bufferCommands: false,
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
@@ -53,7 +62,10 @@ export async function connectToDatabase() {
       connectTimeoutMS: 10000,
     });
     
-    console.log('Connected to MongoDB with Mongoose');
+    if (!mongoose.connection.db) {
+      mongoose.connection.db = mongoose.connection.useDb('resources').db;
+    }
+    console.log('Connected to MongoDB with Mongoose (dbName: resources)');
     return mongoose.connection;
   } catch (error) {
     console.error('MongoDB connection error:', error);
