@@ -918,10 +918,10 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="p-4 sm:p-6 bg-gray-50 min-h-full">
           {project?.settings?.enableLeaderboardShoutout !== false && leaderboard.length > 0 && leaderboard[0].points > 0 && (
-            <div className="mb-4 bg-amber-50 border border-amber-200/60 rounded-xl py-2.5 px-4 flex items-center gap-2.5 text-sm text-amber-900 shadow-sm animate-fade-in">
-              <Trophy className="h-4.5 w-4.5 text-amber-500 flex-shrink-0 animate-bounce" />
+            <div className="mb-3 bg-amber-50/60 border border-amber-200/35 rounded-lg py-1 px-3 inline-flex items-center gap-1.5 text-xs text-amber-900 shadow-xs">
+              <Trophy className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
               <span>
-                🏆 Shoutout to <span className="font-bold text-amber-950">@{leaderboard[0].username}</span> for leading the project leaderboard with <span className="font-bold text-amber-950">{leaderboard[0].points}</span> points! Keep it up! 🎉
+                Top Performer: <span className="font-semibold text-amber-950">@{leaderboard[0].username}</span> with <span className="font-semibold text-amber-950">{leaderboard[0].points} points</span>
               </span>
             </div>
           )}
