@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import clientPromise from '../../../../../../lib/mongodb';
+import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
 export async function GET(request) {
