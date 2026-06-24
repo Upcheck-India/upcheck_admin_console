@@ -308,11 +308,11 @@ export class MetricsCollector {
     let dbStats = null;
     
     try {
-      await connectToDatabase();
-      dbStatus = global.mongoose.connection.readyState === 1 ? 'connected' : 'connecting';
+      const connection = await connectToDatabase();
+      dbStatus = connection.readyState === 1 ? 'connected' : 'connecting';
       
       // Get database stats
-      const db = global.mongoose.connection.db;
+      const db = connection.db || connection.useDb('resources').db;
       dbStats = await db.stats();
     } catch (error) {
       dbStatus = 'error';
@@ -682,10 +682,10 @@ export const alertSystem = new AlertSystem();
 export function initializeDefaultHealthChecks() {
   // Database connectivity check
   healthCheckSystem.registerCheck('database', async () => {
-    await connectToDatabase();
-    const db = global.mongoose.connection.db;
+    const connection = await connectToDatabase();
+    const db = connection.db || connection.useDb('resources').db;
     await db.admin().ping();
-    return { status: 'connected', readyState: global.mongoose.connection.readyState };
+    return { status: 'connected', readyState: connection.readyState };
   }, { critical: true, timeout: 5000 });
 
   // Job scheduler health check

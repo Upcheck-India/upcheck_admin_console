@@ -270,8 +270,8 @@ export class DeadLetterQueue {
 
   async moveToDeadLetterQueue(job, error, context = {}) {
     try {
-      await connectToDatabase();
-      const db = global.mongoose.connection.db;
+      const connection = await connectToDatabase();
+      const db = connection.db || connection.useDb('resources').db;
       
       const dlqEntry = {
         originalJobId: job._id,
@@ -333,8 +333,8 @@ export class DeadLetterQueue {
 
   async getDeadLetterEntries(filters = {}) {
     try {
-      await connectToDatabase();
-      const db = global.mongoose.connection.db;
+      const connection = await connectToDatabase();
+      const db = connection.db || connection.useDb('resources').db;
       
       const query = { status: 'dead_letter', ...filters };
       const entries = await db.collection(this.collectionName)
@@ -352,8 +352,8 @@ export class DeadLetterQueue {
 
   async retryDeadLetterEntry(entryId) {
     try {
-      await connectToDatabase();
-      const db = global.mongoose.connection.db;
+      const connection = await connectToDatabase();
+      const db = connection.db || connection.useDb('resources').db;
       
       const entry = await db.collection(this.collectionName).findOne({ _id: entryId });
       if (!entry) {
@@ -384,8 +384,8 @@ export class DeadLetterQueue {
 
   async resolveDeadLetterEntry(entryId, resolution = '') {
     try {
-      await connectToDatabase();
-      const db = global.mongoose.connection.db;
+      const connection = await connectToDatabase();
+      const db = connection.db || connection.useDb('resources').db;
       
       await db.collection(this.collectionName).updateOne(
         { _id: entryId },

@@ -3,12 +3,11 @@ import { MongoClient } from 'mongodb';
 import mongoose from 'mongoose';
 
 if (!global.mongoose) {
-  global.mongoose = mongoose;
+  global.mongoose = { conn: null, promise: null };
 }
 
 if (!process.env.MONGODB_URI) {
-
-  throw new Error('Please define the MONGODB_URI environment variable inside .env.local')
+  throw new Error('Please define the MONGODB_URI environment variable inside .env.local');
 }
 
 const uri = process.env.MONGODB_URI;
@@ -30,47 +29,32 @@ if (process.env.NODE_ENV === 'development') {
 
 // Mongoose connection management
 export async function connectToDatabase() {
-  // Check if already connected
-  // readyState: 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-  if (mongoose.connection.readyState === 1) {
-    if (!mongoose.connection.db) {
-      mongoose.connection.db = mongoose.connection.useDb('resources').db;
-    }
-    return mongoose.connection;
+  if (global.mongoose.conn) {
+    return global.mongoose.conn.connection;
   }
 
-  // If currently connecting, wait for it to complete
-  if (mongoose.connection.readyState === 2) {
-    return new Promise((resolve, reject) => {
-      mongoose.connection.once('connected', () => {
-        if (!mongoose.connection.db) {
-          mongoose.connection.db = mongoose.connection.useDb('resources').db;
-        }
-        resolve(mongoose.connection);
-      });
-      mongoose.connection.once('error', reject);
-    });
-  }
-
-  try {
-    await mongoose.connect(uri, {
+  if (!global.mongoose.promise) {
+    const opts = {
       dbName: 'resources',
       bufferCommands: false,
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
       connectTimeoutMS: 10000,
+    };
+
+    global.mongoose.promise = mongoose.connect(uri, opts).then((mongoose) => {
+      console.log('Connected to MongoDB with Mongoose (dbName: resources)');
+      return mongoose;
+    }).catch(err => {
+      console.error('MongoDB connection error:', err);
+      global.mongoose.promise = null;
+      throw err;
     });
-    
-    if (!mongoose.connection.db) {
-      mongoose.connection.db = mongoose.connection.useDb('resources').db;
-    }
-    console.log('Connected to MongoDB with Mongoose (dbName: resources)');
-    return mongoose.connection;
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error;
   }
+
+  global.mongoose.conn = await global.mongoose.promise;
+  return global.mongoose.conn.connection;
 }
 
 // Handle connection events
@@ -80,10 +64,14 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
   console.error('Mongoose connection error:', err);
+  global.mongoose.promise = null;
+  global.mongoose.conn = null;
 });
 
 mongoose.connection.on('disconnected', () => {
   console.log('Mongoose disconnected from MongoDB');
+  global.mongoose.promise = null;
+  global.mongoose.conn = null;
 });
 
 export default clientPromise;

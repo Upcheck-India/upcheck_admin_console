@@ -3,6 +3,22 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { sendTemplatedEmail, EMAIL_TYPES } from '../../../lib/emailService.js';
+import { cookies } from 'next/headers';
+
+async function getAuthUser(req) {
+  const authHeader = req.headers.get('authorization');
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else {
+    const cookieStore = cookies();
+    token = cookieStore.get('admin_token')?.value;
+  }
+  if (!token) return null;
+  const client = await clientPromise;
+  const db = client.db('resources');
+  return await db.collection('admin_users').findOne({ sessionToken: token });
+}
 
 // GET - List teams (filtered by user role and membership) with pagination
 export async function GET(req) {
@@ -10,9 +26,17 @@ export async function GET(req) {
     const client = await clientPromise;
     const db = client.db('resources');
 
-    // Get user info from headers
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    // Get user info from headers or token
+    let userRole = req.headers.get('x-user-role');
+    let userId = req.headers.get('x-user-id');
+
+    if (!userRole || !userId) {
+      const authUser = await getAuthUser(req);
+      if (authUser) {
+        userRole = authUser.role;
+        userId = authUser._id.toString();
+      }
+    }
 
     if (!userRole) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -154,8 +178,16 @@ export async function POST(req) {
     const client = await clientPromise;
     const db = client.db('resources');
 
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    let userRole = req.headers.get('x-user-role');
+    let userId = req.headers.get('x-user-id');
+
+    if (!userRole || !userId) {
+      const authUser = await getAuthUser(req);
+      if (authUser) {
+        userRole = authUser.role;
+        userId = authUser._id.toString();
+      }
+    }
 
     // Permission check - only Admin and Console admin can create teams
     if (userRole !== 'Admin' && userRole !== 'Console admin') {
