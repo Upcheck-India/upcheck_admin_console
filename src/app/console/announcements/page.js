@@ -87,6 +87,19 @@ export default function AnnouncementsPage() {
     }
   }, [isAuthenticated, user]);
 
+  useEffect(() => {
+    if (announcements.length > 0 && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const editId = params.get('edit');
+      if (editId) {
+        const found = announcements.find(a => a._id === editId || a._id?.toString() === editId);
+        if (found) {
+          openEditModal(found);
+        }
+      }
+    }
+  }, [announcements]);
+
   const handleReact = async (id, emoji) => {
     try {
       const res = await fetch(`/api/announcements/${id}/react`, {

@@ -27,6 +27,7 @@ import {
   Shield,
   Loader2,
   PenSquareIcon,
+  Trash2,
   Navigation,
   Bot,
   X,
@@ -72,6 +73,7 @@ const AdminLandingPage = () => {
   const [announcements, setAnnouncements] = useState([]);
   const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
   const router = useRouter();
+  const isAdmin = user?.role === 'Admin' || user?.role === 'Console admin';
 
   const fetchAnnouncements = async () => {
     try {
@@ -452,9 +454,42 @@ const AdminLandingPage = () => {
                         </div>
                       )}
 
+                      {isAdmin && (
+                        <>
+                          <Link
+                            href={`/console/announcements?edit=${currentNotif._id}`}
+                            className="p-1.5 rounded-lg border hover:bg-gray-50 text-gray-550 hover:text-gray-700 transition-colors flex items-center justify-center"
+                            title="Edit Announcement"
+                          >
+                            <PenSquareIcon className="w-4 h-4" />
+                          </Link>
+                          <button
+                            onClick={async () => {
+                              if (window.confirm('Are you sure you want to delete this announcement?')) {
+                                try {
+                                  const res = await fetch(`/api/announcements/${currentNotif._id}`, { method: 'DELETE' });
+                                  if (res.ok) {
+                                    fetchAnnouncements();
+                                    setCurrentAnnouncementIndex(0);
+                                  } else {
+                                    alert('Failed to delete announcement');
+                                  }
+                                } catch (err) {
+                                  console.error('Error deleting announcement:', err);
+                                }
+                              }
+                            }}
+                            className="p-1.5 rounded-lg border hover:bg-gray-50 text-red-550 hover:text-red-700 transition-colors flex items-center justify-center"
+                            title="Delete Announcement"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
+
                       <button
                         onClick={() => handleDismiss(currentNotif._id)}
-                        className="p-1.5 rounded-lg border hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition-colors"
+                        className="p-1.5 rounded-lg border hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition-colors flex items-center justify-center"
                         title="Dismiss"
                       >
                         <X className="w-4 h-4" />
