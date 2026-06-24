@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../../hooks/useAuth';
 import SecureLoading from '../../components/SecureLoading';
-import FormattedText from '../../components/FormattedText';
+import FormattedText from '../../../components/FormattedText';
 import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft,
