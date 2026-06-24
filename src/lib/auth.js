@@ -9,7 +9,7 @@ export async function getAuthUser(req) {
     token = authHeader.substring(7).trim();
   } else {
     try {
-      const cookieStore = cookies();
+      const cookieStore = await cookies();
       token = cookieStore.get('admin_token')?.value;
     } catch (e) {
       console.error('Error reading cookies in getAuthUser:', e);
@@ -21,6 +21,7 @@ export async function getAuthUser(req) {
     const client = await clientPromise;
     const db = client.db('resources');
     const user = await db.collection('admin_users').findOne({ sessionToken: token });
+    if (!user) return null;
     return { user, db, client };
   } catch (error) {
     console.error('Error authenticating user from DB:', error);

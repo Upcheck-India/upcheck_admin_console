@@ -533,9 +533,6 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     if (!projectId) return;
     try {
       const res = await fetch(`/api/projects/${projectId}/leaderboard`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
         credentials: 'include'
       });
       if (res.ok) {
@@ -557,9 +554,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     const fetchSprints = async () => {
       try {
         const res = await fetch(`/api/projects/${projectId}/sprints`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
+          credentials: 'include',
         });
         if (!res.ok) throw new Error(`Failed to fetch sprints: ${res.status}`);
         const data = await res.json();
@@ -588,9 +583,6 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
           url += `?sprintId=null`;
         }
         const res = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
           credentials: 'include',
         });
         if (!res.ok) throw new Error(`Failed to fetch tasks: ${res.status}`);
@@ -676,10 +668,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     try {
       const res = await fetch(`/api/projects/${projectId}/sprints`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           sprintId: editingSprint._id,
           name: editSprintName.trim(),
@@ -716,10 +706,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     try {
       const res = await fetch(`/api/projects/${projectId}/sprints`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ sprintId: sprint._id }),
       });
 
@@ -754,9 +742,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     try {
       const res = await fetch(`/api/projects/${projectId}/tasks/${taskId}`, { 
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        credentials: 'include',
       });
       if (!res.ok) throw new Error(`Failed to delete task: ${res.status}`);
       setTasks(prevTasks => prevTasks.filter(t => t._id !== taskId));
@@ -806,10 +792,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     try {
       const response = await fetch(`/api/projects/${projectId}/tasks/${activeTask._id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           ...activeTask,
           order: newIndex,
@@ -867,10 +851,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
         try {
           const response = await fetch(`/api/projects/${projectId}/tasks/${active.id}`, {
             method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            },
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               ...activeTask,
               order: newIndex,
@@ -905,10 +887,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
     try {
       const response = await fetch(`/api/projects/${projectId}/tasks/${active.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify(updatedTask),
       });
 
