@@ -42,12 +42,21 @@ initializeJobSystemAsync();
 // Auth: requires valid admin_token cookie
 async function extractAdminToken(req) {
   try {
+    const authHeader = req.headers?.get?.('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.substring(7).trim();
+    }
+  } catch (_) { /* ignore */ }
+  try {
     const raw = req.cookies?.get?.('admin_token');
     if (raw) return typeof raw === 'string' ? raw : raw.value;
   } catch (_) { /* ignore */ }
   // Fallback to server-side cookies helper
-  const cookieStore = await cookies();
-  return cookieStore.get('admin_token')?.value;
+  try {
+    const cookieStore = await cookies();
+    return cookieStore.get('admin_token')?.value;
+  } catch (_) { /* ignore */ }
+  return null;
 }
 
 async function handleHeartbeat(req) {

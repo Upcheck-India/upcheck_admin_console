@@ -1,27 +1,13 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import clientPromise from '../../../../lib/mongodb';
+import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
-
-async function getAuthUser(req) {
-  const authHeader = req.headers.get('authorization');
-  let token = null;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  } else {
-    const cookieStore = cookies();
-    token = cookieStore.get('admin_token')?.value;
-  }
-  if (!token) return null;
-  const client = await clientPromise;
-  const db = client.db('resources');
-  return await db.collection('admin_users').findOne({ sessionToken: token });
-}
 
 export async function GET(request) {
   try {
-    const currentUser = await getAuthUser(request);
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authData = await getAuthUser(request);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
+    const db = authData.db;
 
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('teamId');
@@ -30,9 +16,6 @@ export async function GET(request) {
     if (!teamId || !ObjectId.isValid(teamId)) {
       return NextResponse.json({ error: 'teamId required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify membership
     const team = await db.collection('teams').findOne({

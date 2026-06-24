@@ -1,19 +1,12 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import clientPromise from '../../../../lib/mongodb';
+import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 
-export async function GET() {
+export async function GET(request) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const client = await clientPromise;
-    const db = client.db('resources');
-    
-    const currentUser = await db.collection('admin_users').findOne({ sessionToken: token });
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await getAuthUser(request);
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user: currentUser, db } = auth;
 
     // Get all connections for current user
     const connections = await db.collection('chat_connections')

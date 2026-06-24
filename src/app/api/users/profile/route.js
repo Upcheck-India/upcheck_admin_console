@@ -1,30 +1,19 @@
 // src/app/api/users/profile/route.js
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import clientPromise from '../../../../lib/mongodb';
+import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 
 // GET - Get current user's profile
 export async function GET(req) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
-
-    if (!token) {
+    const auth = await getAuthUser(req);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { user: currentUser, db } = auth;
 
-    const client = await clientPromise;
-    const db = client.db("resources");
-
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { password: 0 } }
-    );
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const user = { ...currentUser };
+    delete user.password;
 
     // Get manager info if assigned
     if (user.managerId) {
@@ -39,9 +28,9 @@ export async function GET(req) {
       .find({
         $or: [
           { members: userIdStr },
-        { lead: userIdStr },
-        { members: user._id },
-        { lead: user._id }
+          { lead: userIdStr },
+          { members: user._id },
+          { lead: user._id }
         ]
       })
       .project({ name: 1, description: 1 })
@@ -64,23 +53,11 @@ export async function GET(req) {
 // PUT - Update current user's profile (self-service)
 export async function PUT(req) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
-
-    if (!token) {
+    const auth = await getAuthUser(req);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-
-    const existingUser = await db.collection('admin_users').findOne(
-      { sessionToken: token }
-    );
-
-    if (!existingUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const { user: existingUser, db } = auth;
 
     const data = await req.json();
     const userId = existingUser._id;

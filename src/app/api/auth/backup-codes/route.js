@@ -4,7 +4,7 @@
 // POST   — (re)generates a full new set of codes — REQUIRES REAUTH
 // DELETE — disables all backup codes — REQUIRES REAUTH
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 import { generateBackupCodes, BACKUP_CODE_COUNT } from '../../../../lib/backupCodes';
 import { requireReauth, revokeReauth } from '../../../../lib/reauth';
@@ -16,8 +16,26 @@ const json = (body, status = 200) =>
   });
 
 async function getSessionUser(projection) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('admin_token')?.value;
+  let token = null;
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  if (!token) {
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get('admin_token')?.value;
+    } catch (e) {
+      // Ignore error
+    }
+  }
+
   if (!token) return { error: json({ error: 'Unauthorized' }, 401) };
   const client = await clientPromise;
   const db = client.db('resources');

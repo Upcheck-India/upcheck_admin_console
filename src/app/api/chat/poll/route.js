@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import clientPromise from '../../../../lib/mongodb';
+import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 
 export async function GET(request) {
@@ -9,15 +8,9 @@ export async function GET(request) {
     const since = searchParams.get('since'); // ISO timestamp
     const conversationId = searchParams.get('conversationId'); // Optional: poll specific conversation
 
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const client = await clientPromise;
-    const db = client.db('resources');
-    
-    const currentUser = await db.collection('admin_users').findOne({ sessionToken: token });
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await getAuthUser(request);
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { user: currentUser, db } = auth;
 
     const sinceDate = since ? new Date(since) : new Date(Date.now() - 60000); // Default: last 1 min
     const serverTimestamp = new Date().toISOString();

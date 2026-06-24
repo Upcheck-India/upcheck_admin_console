@@ -1,46 +1,17 @@
-// src/app/api/auth/check/route.js
-import { cookies } from 'next/headers';
+import { getAuthUser } from '../../../../lib/auth';
 import { NextResponse } from 'next/server';
-import clientPromise from "../../../../lib/mongodb";
 
-export async function GET() {
+export async function GET(req) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    
-    if (!token) {
+    const auth = await getAuthUser(req);
+    if (!auth) {
       return NextResponse.json(
         { authenticated: false, message: 'No token found' },
         { status: 401 }
       );
     }
 
-    // Verify token against database
-    const client = await clientPromise;
-    const db = client.db("resources");
-    
-    // Find user with active session
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token }, // Match the session token
-      { 
-        projection: { 
-          username: 1, 
-          role: 1,
-          email: 1,
-          name: 1,
-          messagingId: 1,
-          messagingPrivacy: 1,
-          messageNotificationsEnabled: 1,
-        } 
-      }
-    );
-    
-    if (!user) {
-      return NextResponse.json(
-        { authenticated: false, message: 'Invalid session' },
-        { status: 401 }
-      );
-    }
+    const { user } = auth;
 
     // Return user data along with authentication status
     return NextResponse.json(

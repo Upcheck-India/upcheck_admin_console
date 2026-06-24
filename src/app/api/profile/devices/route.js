@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
+import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
-import clientPromise from '../../../../lib/mongodb';
 
 // Constants for security
 const MAX_DEVICES_PER_USER = 10;
@@ -135,25 +134,11 @@ async function cleanupOldDevices(db, userId) {
 // Get all trusted devices for the current user
 export async function GET(request) {
   try {
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get('admin_token');
-    
-    if (!adminToken?.value) {
+    const auth = await getAuthUser(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    
-    // Find user and get devices
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: adminToken.value },
-      { projection: { trustedDevices: 1, _id: 1 } }
-    );
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const { user, db } = auth;
 
     // Clean up old devices in background
     cleanupOldDevices(db, user._id);
@@ -197,12 +182,11 @@ export async function GET(request) {
 // Add a new trusted device
 export async function POST(request) {
   try {
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get('admin_token');
-    
-    if (!adminToken?.value) {
+    const auth = await getAuthUser(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { user, db } = auth;
 
     // Parse request body
     const body = await request.json();
@@ -220,19 +204,6 @@ export async function POST(request) {
     const validDeviceTypes = ['mobile', 'desktop', 'tablet', 'laptop', 'unknown'];
     if (!validDeviceTypes.includes(deviceType)) {
       return NextResponse.json({ error: 'Invalid device type' }, { status: 400 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    
-    // Find user first
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: adminToken.value },
-      { projection: { trustedDevices: 1, _id: 1 } }
-    );
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Check rate limiting
@@ -289,7 +260,7 @@ export async function POST(request) {
 
     // Add the new device
     const result = await db.collection('admin_users').updateOne(
-      { sessionToken: adminToken.value },
+      { _id: user._id },
       { 
         $push: { trustedDevices: newDevice },
         $set: { 
@@ -325,31 +296,17 @@ export async function POST(request) {
 // Remove a trusted device
 export async function DELETE(request) {
   try {
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get('admin_token');
-    
-    if (!adminToken?.value) {
+    const auth = await getAuthUser(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { user, db } = auth;
 
     const body = await request.json();
     const { deviceId } = body;
 
     if (!validateDeviceId(deviceId)) {
       return NextResponse.json({ error: 'Invalid device ID format' }, { status: 400 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    
-    // Find user and check if device exists
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: adminToken.value },
-      { projection: { trustedDevices: 1, _id: 1 } }
-    );
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     // Check rate limiting
@@ -373,7 +330,7 @@ export async function DELETE(request) {
 
     // Remove the device
     const result = await db.collection('admin_users').updateOne(
-      { sessionToken: adminToken.value },
+      { _id: user._id },
       { 
         $pull: { trustedDevices: { id: deviceId } },
         $set: { lastDeviceRemoved: new Date() }
@@ -405,12 +362,11 @@ export async function DELETE(request) {
 // Update device information (for updating last used time)
 export async function PATCH(request) {
   try {
-    const cookieStore = await cookies();
-    const adminToken = cookieStore.get('admin_token');
-    
-    if (!adminToken?.value) {
+    const auth = await getAuthUser(request);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const { user, db } = auth;
 
     const body = await request.json();
     const { deviceId, action } = body;
@@ -423,13 +379,10 @@ export async function PATCH(request) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    const client = await clientPromise;
-    const db = client.db("resources");
-    
     // Update the device's last used time
     const result = await db.collection('admin_users').updateOne(
       { 
-        sessionToken: adminToken.value,
+        _id: user._id,
         'trustedDevices.id': deviceId
       },
       { 

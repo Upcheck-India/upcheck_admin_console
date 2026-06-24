@@ -14,7 +14,7 @@
 // Both fields are cleared the moment they expire or when the window is
 // explicitly consumed by a sensitive action.
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import clientPromise from './mongodb';
 
 /** How long a successful re-auth authorises sensitive actions (10 minutes). */
@@ -28,8 +28,26 @@ async function getDb() {
 }
 
 async function getSessionUser(db, projection = {}) {
-  const cookieStore = await cookies();
-  const token = cookieStore.get('admin_token')?.value;
+  let token = null;
+  try {
+    const headersList = await headers();
+    const authHeader = headersList.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  if (!token) {
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get('admin_token')?.value;
+    } catch (e) {
+      // Ignore error
+    }
+  }
+
   if (!token) return null;
   return db.collection('admin_users').findOne({ sessionToken: token }, { projection });
 }
