@@ -8,8 +8,8 @@ import { ObjectId } from 'mongodb';
 export async function POST(req) {
   try {
     const client = await clientPromise;
-    const { username, password } = await req.json();
-    console.log('Login attempt for:', username);
+    const { username, password, rememberMe } = await req.json();
+    console.log('Login attempt for:', username, 'rememberMe:', rememberMe);
 
     if (!username || !password) {
       console.log('Validation failed: Missing username or password');
@@ -75,11 +75,12 @@ export async function POST(req) {
       );
 
       // Set cookie with proper settings
+      const maxAge = rememberMe ? 7 * 24 * 60 * 60 : 7200; // 7 days or 2 hours
       cookies().set('admin_token', sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
-        maxAge: 7200,
+        maxAge: maxAge,
         path: '/',
       });
 

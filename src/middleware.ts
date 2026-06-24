@@ -49,7 +49,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (hasAdminToken) {
       return NextResponse.redirect(new URL('/console', req.url))
     }
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: req.headers } })
   }
 
   // Allow public routes without authentication
@@ -59,7 +59,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (clerkUserId && req.nextUrl.pathname.startsWith('/login')) {
       return NextResponse.redirect(new URL('/dataroom/external/dashboard', req.url))
     }
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: req.headers } })
   }
 
   // Handle Clerk routes (external users)
@@ -73,7 +73,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (!clerkUserId) {
       return NextResponse.redirect(new URL('/dataroom/external/login', req.url))
     }
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: req.headers } })
   }
 
   // Handle internal admin/staff routes
@@ -89,11 +89,11 @@ export default clerkMiddleware(async (auth, req) => {
       loginUrl.searchParams.set('redirect', req.nextUrl.pathname)
       return NextResponse.redirect(loginUrl)
     }
-    return NextResponse.next()
+    return NextResponse.next({ request: { headers: req.headers } })
   }
 
   // Other routes - allow with no special protection
-  return NextResponse.next()
+  return NextResponse.next({ request: { headers: req.headers } })
 })
 
 export const config = {

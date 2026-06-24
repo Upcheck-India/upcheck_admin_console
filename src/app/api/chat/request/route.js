@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 export async function POST(request) {
   try {
@@ -82,6 +83,14 @@ export async function POST(request) {
         { upsert: true }
       );
 
+      // Send push notification to peerUser
+      await sendPushNotification(
+        peerId,
+        'New Chat Request',
+        `${currentUser.name || currentUser.username} sent you a connection request.`,
+        { type: 'chat_request', conversationId: conversationId.toString() }
+      );
+
       return NextResponse.json({ success: true, conversationId, status: 'pending' });
     }
 
@@ -116,6 +125,14 @@ export async function POST(request) {
       createdAt: now,
       updatedAt: now
     });
+
+    // Send push notification to peerUser
+    await sendPushNotification(
+      peerId,
+      'New Chat Request',
+      `${currentUser.name || currentUser.username} sent you a connection request.`,
+      { type: 'chat_request', conversationId: conversationId.toString() }
+    );
 
     return NextResponse.json({
       success: true,

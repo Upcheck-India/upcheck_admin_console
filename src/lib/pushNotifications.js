@@ -1,4 +1,4 @@
-import { connectToDatabase } from './mongodb';
+import clientPromise from './mongodb.js';
 import { ObjectId } from 'mongodb';
 
 /**
@@ -11,7 +11,8 @@ import { ObjectId } from 'mongodb';
  */
 export async function sendPushNotification(userId, title, body, data = {}) {
   try {
-    const { db } = await connectToDatabase();
+    const client = await clientPromise;
+    const db = client.db('resources');
     const user = await db.collection('admin_users').findOne({ _id: new ObjectId(userId) });
 
     if (!user || !user.expoPushToken) {

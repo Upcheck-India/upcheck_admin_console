@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
+import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 export async function POST(request) {
   try {
@@ -52,6 +53,14 @@ export async function POST(request) {
     if (receiverUpdate.matchedCount === 0) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 });
     }
+
+    // Send push notification to peerId (the original requester)
+    await sendPushNotification(
+      peerId,
+      'Chat Request Accepted',
+      `${currentUser.name || currentUser.username} accepted your connection request.`,
+      { type: 'chat_accept', peerId: currentUser._id.toString() }
+    );
 
     return NextResponse.json({ success: true });
   } catch (err) {
