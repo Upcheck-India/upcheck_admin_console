@@ -47,12 +47,27 @@ export async function GET(request) {
 
     // Fetch new messages
     const newMessages = await db.collection('team_messages')
-      .find({
-        teamId,
-        createdAt: { $gt: sinceDate },
-        deletedForEveryone: { $ne: true }
-      })
-      .sort({ createdAt: 1 })
+      .aggregate([
+        {
+          $match: {
+            teamId,
+            createdAt: { $gt: sinceDate },
+            deletedForEveryone: { $ne: true }
+          }
+        },
+        { $sort: { createdAt: 1 } },
+        {
+          $lookup: {
+            from: 'admin_users',
+            let: { senderId: "$senderId" },
+            pipeline: [
+              { $match: { $expr: { $eq: [ { $toString: "$_id" }, "$$senderId" ] } } },
+              { $project: { firstName: 1, lastName: 1, name: 1, username: 1, avatar: 1 } }
+            ],
+            as: 'senderDetails'
+          }
+        }
+      ])
       .toArray();
 
     const userId = currentUser._id.toString();
@@ -71,7 +86,32 @@ export async function GET(request) {
 
     updates.newMessages = newMessages
       .filter(m => !m.deletedFor?.includes(userId))
-      .map(m => ({ ...m, _id: m._id.toString(), replyTo: m.replyTo ? m.replyTo.toString() : null }));
+      .map(m => {
+        const details = m.senderDetails?.[0];
+        let resolvedName = m.senderName;
+        if (details) {
+          if (details.firstName || details.lastName) {
+            resolvedName = `${details.firstName || ''} ${details.lastName || ''}`.trim();
+          } else if (details.name) {
+            resolvedName = details.name;
+          } else if (details.username) {
+            resolvedName = details.username;
+          }
+        }
+        if (!resolvedName) {
+          resolvedName = m.senderUsername || 'Unknown';
+        }
+        const resolvedAvatar = details?.avatar || m.senderAvatar || '';
+
+        return {
+          ...m,
+          _id: m._id.toString(),
+          senderName: resolvedName,
+          senderAvatar: resolvedAvatar,
+          replyTo: m.replyTo ? m.replyTo.toString() : null,
+          senderDetails: undefined,
+        };
+      });
 
     // Fetch typing status
     // Typing indicators are short-lived. Find anyone updated in the last 5 seconds.

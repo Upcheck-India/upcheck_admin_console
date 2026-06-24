@@ -3,16 +3,19 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { sendTemplatedEmail, EMAIL_TYPES } from '../../../../../lib/emailService.js';
+import { getAuthUser } from '../../../../../lib/auth';
 
 // POST - Add member to team
 export async function POST(req, { params }) {
   try {
-    const { id: teamId } = await params;
-    const client = await clientPromise;
-    const db = client.db('resources');
+    const authData = await getAuthUser(req);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
+    const userRole = currentUser.role;
+    const userId = currentUser._id.toString();
 
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    const { id: teamId } = await params;
+    const db = authData.db;
 
     if (!ObjectId.isValid(teamId)) {
       return NextResponse.json({ error: 'Invalid team ID' }, { status: 400 });
@@ -115,12 +118,14 @@ export async function POST(req, { params }) {
 // DELETE - Remove member from team
 export async function DELETE(req, { params }) {
   try {
-    const { id: teamId } = await params;
-    const client = await clientPromise;
-    const db = client.db('resources');
+    const authData = await getAuthUser(req);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
+    const userRole = currentUser.role;
+    const userId = currentUser._id.toString();
 
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    const { id: teamId } = await params;
+    const db = authData.db;
 
     if (!ObjectId.isValid(teamId)) {
       return NextResponse.json({ error: 'Invalid team ID' }, { status: 400 });

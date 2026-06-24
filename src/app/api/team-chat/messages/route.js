@@ -56,17 +56,11 @@ export async function GET(request) {
             let: { senderId: "$senderId" },
             pipeline: [
               { $match: { $expr: { $eq: [ { $toString: "$_id" }, "$$senderId" ] } } },
-              { $project: { avatar: 1 } }
+              { $project: { firstName: 1, lastName: 1, name: 1, username: 1, avatar: 1 } }
             ],
             as: 'senderDetails'
           }
-        },
-        {
-          $addFields: {
-            senderAvatar: { $arrayElemAt: ["$senderDetails.avatar", 0] }
-          }
-        },
-        { $project: { senderDetails: 0 } }
+        }
       ])
       .toArray();
 
@@ -85,14 +79,36 @@ export async function GET(request) {
       );
     }
 
-    // Filter out messages deleted for current user
+    // Filter out messages deleted for current user and resolve sender info
     const userId = currentUser._id.toString();
-    const filtered = messages.map(m => ({
-      ...m,
-      _id: m._id.toString(),
-      body: m.deletedFor?.includes(userId) ? '[Message deleted]' : m.body,
-      replyTo: m.replyTo ? m.replyTo.toString() : null,
-    }));
+    const filtered = messages.map(m => {
+      const details = m.senderDetails?.[0];
+      let resolvedName = m.senderName;
+      if (details) {
+        if (details.firstName || details.lastName) {
+          resolvedName = `${details.firstName || ''} ${details.lastName || ''}`.trim();
+        } else if (details.name) {
+          resolvedName = details.name;
+        } else if (details.username) {
+          resolvedName = details.username;
+        }
+      }
+      if (!resolvedName) {
+        resolvedName = m.senderUsername || 'Unknown';
+      }
+
+      const resolvedAvatar = details?.avatar || m.senderAvatar || '';
+
+      return {
+        ...m,
+        _id: m._id.toString(),
+        senderName: resolvedName,
+        senderAvatar: resolvedAvatar,
+        body: m.deletedFor?.includes(userId) ? '[Message deleted]' : m.body,
+        replyTo: m.replyTo ? m.replyTo.toString() : null,
+        senderDetails: undefined,
+      };
+    });
 
     return NextResponse.json({
       messages: filtered,

@@ -2,16 +2,19 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
+import { getAuthUser } from '../../../../lib/auth';
 
 // GET - Get single team details
 export async function GET(req, { params }) {
   try {
-    const { id: teamId } = await params;
-    const client = await clientPromise;
-    const db = client.db('resources');
+    const authData = await getAuthUser(req);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
+    const userRole = currentUser.role;
+    const userId = currentUser._id.toString();
 
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    const { id: teamId } = await params;
+    const db = authData.db;
 
     if (!ObjectId.isValid(teamId)) {
       return NextResponse.json({ error: 'Invalid team ID' }, { status: 400 });
@@ -68,12 +71,14 @@ export async function GET(req, { params }) {
 // PUT - Update team (Admin/Console admin or Team lead only)
 export async function PUT(req, { params }) {
   try {
-    const { id: teamId } = await params;
-    const client = await clientPromise;
-    const db = client.db('resources');
+    const authData = await getAuthUser(req);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
+    const userRole = currentUser.role;
+    const userId = currentUser._id.toString();
 
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    const { id: teamId } = await params;
+    const db = authData.db;
 
     if (!ObjectId.isValid(teamId)) {
       return NextResponse.json({ error: 'Invalid team ID' }, { status: 400 });
@@ -162,12 +167,14 @@ export async function PUT(req, { params }) {
 // DELETE - Delete team (Admin/Console admin or Team lead only)
 export async function DELETE(req, { params }) {
   try {
-    const { id: teamId } = await params;
-    const client = await clientPromise;
-    const db = client.db('resources');
+    const authData = await getAuthUser(req);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
+    const userRole = currentUser.role;
+    const userId = currentUser._id.toString();
 
-    const userRole = req.headers.get('x-user-role');
-    const userId = req.headers.get('x-user-id');
+    const { id: teamId } = await params;
+    const db = authData.db;
 
     if (!ObjectId.isValid(teamId)) {
       return NextResponse.json({ error: 'Invalid team ID' }, { status: 400 });
