@@ -18,6 +18,10 @@ import {
   HelpCircle,
   LogOut,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Megaphone,
+  AlertTriangle,
   User,
   Key,
   Shield,
@@ -42,6 +46,7 @@ import { useAuth } from '../../hooks/useAuth';
 import SecureLoading from "../components/SecureLoading";
 import { useRouter } from 'next/navigation';
 import ConsoleStats from '../components/ConsoleStats';
+import FormattedText from '../../components/FormattedText';
 
 // Components
 const LoadingState = () => (
@@ -60,17 +65,61 @@ const AdminLandingPage = () => {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showOnlineModal, setShowOnlineModal] = useState(false);
-  const { isLoading: authLoading, isAuthenticated } = useAuth(true);
+  const { isLoading: authLoading, isAuthenticated, user } = useAuth(true);
   const [isLoading, setIsLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [showJovanModal, setShowJovanModal] = useState(false);
+  const [announcements, setAnnouncements] = useState([]);
+  const [currentAnnouncementIndex, setCurrentAnnouncementIndex] = useState(0);
   const router = useRouter();
+
+  const fetchAnnouncements = async () => {
+    try {
+      const res = await fetch('/api/announcements');
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data.announcements || []);
+      }
+    } catch (e) {
+      console.error('Error fetching announcements:', e);
+    }
+  };
 
   useEffect(() => {
     if (isAuthenticated) {
       setIsLoading(false);
+      fetchAnnouncements();
     }
   }, [isAuthenticated]);
+
+  const handleReact = async (id, emoji) => {
+    try {
+      const res = await fetch(`/api/announcements/${id}/react`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      });
+      if (res.ok) {
+        fetchAnnouncements();
+      }
+    } catch (error) {
+      console.error('Error toggling reaction:', error);
+    }
+  };
+
+  const handleDismiss = async (id) => {
+    try {
+      const res = await fetch(`/api/announcements/${id}/dismiss`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        setAnnouncements(prev => prev.filter(a => a._id !== id));
+        setCurrentAnnouncementIndex(0);
+      }
+    } catch (error) {
+      console.error('Error dismissing announcement:', error);
+    }
+  };
 
   useEffect(() => {
     const storedUsername = localStorage.getItem('username');
@@ -338,6 +387,147 @@ const AdminLandingPage = () => {
 
         {/* Main Content */}
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Announcement Banner */}
+          {announcements.length > 0 && (() => {
+            const currentNotif = announcements[currentAnnouncementIndex];
+            if (!currentNotif) return null;
+
+            // Group reactions
+            const groups = {};
+            (currentNotif.reactions || []).forEach(r => {
+              if (!groups[r.emoji]) groups[r.emoji] = [];
+              groups[r.emoji].push(r);
+            });
+            const groupedReactions = Object.entries(groups).map(([emoji, list]) => {
+              const hasReacted = list.some(r => r.userId === user?._id?.toString() || r.userId === user?.id?.toString());
+              return { emoji, list, hasReacted };
+            });
+
+            return (
+              <div className="relative overflow-hidden bg-white border border-gray-200/80 rounded-2xl shadow-sm mb-8 transition-all duration-300 hover:shadow-md">
+                {/* Accent Bar */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b ${currentNotif.isImportant ? 'from-red-500 to-amber-500' : 'from-teal-500 to-blue-500'}`} />
+                
+                <div className="p-6 pl-8">
+                  {/* Top Bar */}
+                  <div className="flex items-center justify-between gap-4 mb-3">
+                    <div className="flex items-center gap-3">
+                      {currentNotif.isImportant ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-55 text-red-705 border border-red-150 shadow-sm animate-pulse">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          Urgent
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-teal-55 text-teal-705 border border-teal-150 shadow-sm">
+                          <Megaphone className="w-3.5 h-3.5" />
+                          Announcement
+                        </span>
+                      )}
+                      
+                      <span className="text-xs text-gray-500">
+                        Posted by <span className="font-medium text-gray-700">{currentNotif.createdBy?.name || currentNotif.createdBy?.username || 'Admin'}</span> • {new Date(currentNotif.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {announcements.length > 1 && (
+                        <div className="flex items-center bg-gray-50 border rounded-lg p-0.5">
+                          <button
+                            onClick={() => setCurrentAnnouncementIndex(prev => (prev - 1 + announcements.length) % announcements.length)}
+                            className="p-1 rounded-md hover:bg-white hover:shadow-sm text-gray-600 transition-all"
+                            title="Previous"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <span className="text-[11px] text-gray-500 font-medium px-2 select-none">
+                            {currentAnnouncementIndex + 1} of {announcements.length}
+                          </span>
+                          <button
+                            onClick={() => setCurrentAnnouncementIndex(prev => (prev + 1) % announcements.length)}
+                            className="p-1 rounded-md hover:bg-white hover:shadow-sm text-gray-600 transition-all"
+                            title="Next"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={() => handleDismiss(currentNotif._id)}
+                        className="p-1.5 rounded-lg border hover:bg-gray-50 text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Dismiss"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Title and Content */}
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">{currentNotif.title}</h2>
+                  <div className="text-gray-600 text-[15px] leading-relaxed max-w-4xl">
+                    <FormattedText text={currentNotif.content} />
+                  </div>
+
+                  {/* Custom Action Button */}
+                  {currentNotif.buttonText && currentNotif.buttonUrl && (
+                    <div className="mt-4">
+                      <a
+                        href={currentNotif.buttonUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ backgroundColor: currentNotif.buttonColor || '#0ea5e9' }}
+                        className="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white rounded-xl shadow-sm hover:shadow transition-all hover:scale-[1.01] active:scale-[0.99]"
+                      >
+                        {currentNotif.buttonText}
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Footer: Reactions */}
+                  <div className="mt-5 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 font-medium mr-1">React:</span>
+                      {['👍', '❤️', '🎉', '🚀', '👀'].map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(currentNotif._id, emoji)}
+                          className="w-7 h-7 rounded-lg hover:bg-gray-100 flex items-center justify-center text-sm transition-all hover:scale-110 active:scale-95"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {groupedReactions.map(({ emoji, list, hasReacted }) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(currentNotif._id, emoji)}
+                          className={`group relative inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs border transition-all ${
+                            hasReacted
+                              ? 'bg-blue-50/50 border-blue-200 text-blue-700 font-semibold'
+                              : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                          }`}
+                        >
+                          <span>{emoji}</span>
+                          <span className={hasReacted ? 'text-blue-800' : 'text-gray-500'}>{list.length}</span>
+                          
+                          {/* Tooltip */}
+                          <div className="absolute bottom-full mb-2 hidden group-hover:flex flex-col items-center z-50 pointer-events-none left-1/2 transform -translate-x-1/2">
+                            <div className="bg-gray-900/95 text-white text-[10px] rounded-lg py-1.5 px-2.5 whitespace-nowrap shadow-xl leading-tight font-normal">
+                              {list.map(u => u.name || u.username).join(', ')}
+                            </div>
+                            <div className="w-1.5 h-1.5 bg-gray-900/95 rotate-45 -mt-0.75"></div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Welcome Section */}
           <div className="mb-8">
             <h1 className="text-2xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
@@ -424,6 +614,7 @@ const AdminLandingPage = () => {
               {[
                 { icon: <PenSquareIcon className="w-5 h-5" />, label: "New post", link: "/cms/new-post" },
                 { icon: <ClipboardList className="w-5 h-5" />, label: "Task Board", link: "/coming-soon" },
+                { icon: <Bell className="w-5 h-5" />, label: "Announcements", link: "/console/announcements" },
                 { icon: <HelpCircle className="w-5 h-5" />, label: "Support", link: "/coming-soon" }
               ].map((tool, index) => (
                 <Link 

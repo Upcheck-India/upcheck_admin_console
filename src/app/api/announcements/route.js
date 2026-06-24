@@ -14,10 +14,36 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const getAll = searchParams.get('all') === 'true';
 
+    // Visibility filter based on team targeting
+    const isAdmin = user.role === 'Admin' || user.role === 'Console admin';
     let query = {};
+
+    if (!isAdmin) {
+      // Find teams user belongs to
+      const userTeams = await db.collection('teams').find({
+        $or: [
+          { members: user._id.toString() },
+          { lead: user._id.toString() },
+          { members: user._id },
+          { lead: user._id }
+        ]
+      }, { projection: { _id: 1 } }).toArray();
+
+      const userTeamIds = userTeams.map(t => t._id.toString());
+
+      query = {
+        $or: [
+          { teams: { $exists: false } },
+          { teams: { $size: 0 } },
+          { teams: null },
+          { teams: { $in: userTeamIds } }
+        ]
+      };
+    }
+
     if (!getAll) {
       // Filter out announcements dismissed by the current user
-      query = { dismissedBy: { $ne: user._id.toString() } };
+      query.dismissedBy = { $ne: user._id.toString() };
     }
 
     const announcements = await db.collection('announcements')
@@ -47,7 +73,15 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { title, content, isImportant } = body;
+    const { 
+      title, 
+      content, 
+      isImportant, 
+      teams, 
+      buttonText, 
+      buttonUrl, 
+      buttonColor 
+    } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
@@ -60,6 +94,10 @@ export async function POST(request) {
       title: title.trim(),
       content: content.trim(),
       isImportant: !!isImportant,
+      teams: Array.isArray(teams) ? teams : [],
+      buttonText: buttonText ? buttonText.trim() : '',
+      buttonUrl: buttonUrl ? buttonUrl.trim() : '',
+      buttonColor: buttonColor ? buttonColor.trim() : '',
       createdBy: {
         id: user._id.toString(),
         username: user.username,
