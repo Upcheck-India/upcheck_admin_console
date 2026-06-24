@@ -136,6 +136,10 @@ export async function PUT(req, { params }) {
       updateData.description = data.description?.trim() || '';
     }
 
+    if (data.logo !== undefined) {
+      updateData.logo = data.logo?.trim() || '';
+    }
+
     // Allow changing team lead (Admin/Console admin or current lead)
     if (data.lead) {
       if (!ObjectId.isValid(data.lead)) {
