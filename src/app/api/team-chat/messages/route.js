@@ -1,0 +1,186 @@
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import clientPromise from '../../../../lib/mongodb';
+import { ObjectId } from 'mongodb';
+import { sendPushNotification } from '../../../../lib/pushNotifications';
+
+async function getAuthUser(req) {
+  // Support both cookie and Authorization Bearer header
+  const authHeader = req.headers.get('authorization');
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else {
+    const cookieStore = cookies();
+    token = cookieStore.get('admin_token')?.value;
+  }
+  if (!token) return null;
+  const client = await clientPromise;
+  const db = client.db('resources');
+  const user = await db.collection('admin_users').findOne({ sessionToken: token });
+  return user;
+}
+
+async function verifyTeamMember(db, teamId, userId) {
+  if (!ObjectId.isValid(teamId)) return null;
+  const team = await db.collection('teams').findOne({
+    _id: new ObjectId(teamId),
+    $or: [
+      { members: userId },
+      { lead: userId },
+      { members: new ObjectId(userId) },
+      { lead: new ObjectId(userId) },
+    ],
+  });
+  return team;
+}
+
+export async function GET(request) {
+  try {
+    const currentUser = await getAuthUser(request);
+    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const teamId = searchParams.get('teamId');
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const before = searchParams.get('before'); // ObjectId cursor
+
+    if (!teamId) return NextResponse.json({ error: 'teamId required' }, { status: 400 });
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    const team = await verifyTeamMember(db, teamId, currentUser._id.toString());
+    if (!team) return NextResponse.json({ error: 'Not a team member' }, { status: 403 });
+
+    // Build query
+    const query = { teamId, deletedForEveryone: { $ne: true } };
+    if (before && ObjectId.isValid(before)) {
+      query._id = { $lt: new ObjectId(before) };
+    }
+
+    const messages = await db.collection('team_messages')
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(limit)
+      .toArray();
+
+    // Mark messages as read for current user
+    const msgIds = messages.map(m => m._id);
+    if (msgIds.length > 0) {
+      await db.collection('team_messages').updateMany(
+        {
+          _id: { $in: msgIds },
+          'readBy.userId': { $ne: currentUser._id.toString() },
+          senderId: { $ne: currentUser._id.toString() },
+        },
+        {
+          $push: { readBy: { userId: currentUser._id.toString(), readAt: new Date() } }
+        }
+      );
+    }
+
+    // Filter out messages deleted for current user
+    const userId = currentUser._id.toString();
+    const filtered = messages.map(m => ({
+      ...m,
+      _id: m._id.toString(),
+      body: m.deletedFor?.includes(userId) ? '[Message deleted]' : m.body,
+      replyTo: m.replyTo ? m.replyTo.toString() : null,
+    }));
+
+    return NextResponse.json({
+      messages: filtered,
+      hasMore: messages.length === limit,
+      nextCursor: messages.length > 0 ? messages[messages.length - 1]._id.toString() : null,
+    });
+  } catch (err) {
+    console.error('Team chat messages GET error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function POST(request) {
+  try {
+    const currentUser = await getAuthUser(request);
+    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { teamId, body, replyToId, clientId } = await request.json();
+
+    if (!teamId || !body?.trim()) {
+      return NextResponse.json({ error: 'teamId and body required' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    const team = await verifyTeamMember(db, teamId, currentUser._id.toString());
+    if (!team) return NextResponse.json({ error: 'Not a team member' }, { status: 403 });
+
+    // Idempotency check
+    if (clientId) {
+      const existing = await db.collection('team_messages').findOne({ clientId });
+      if (existing) {
+        return NextResponse.json({ message: { ...existing, _id: existing._id.toString() } });
+      }
+    }
+
+    const senderName = currentUser.firstName && currentUser.lastName
+      ? `${currentUser.firstName} ${currentUser.lastName}`.trim()
+      : currentUser.username;
+
+    const now = new Date();
+    const msgDoc = {
+      teamId,
+      senderId: currentUser._id.toString(),
+      senderName,
+      senderUsername: currentUser.username,
+      body: body.trim(),
+      replyTo: replyToId && ObjectId.isValid(replyToId) ? new ObjectId(replyToId) : null,
+      reactions: [],
+      readBy: [{ userId: currentUser._id.toString(), readAt: now }],
+      deletedForEveryone: false,
+      deletedFor: [],
+      clientId: clientId || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const result = await db.collection('team_messages').insertOne(msgDoc);
+
+    // Update team's lastMessageAt for unread counting
+    await db.collection('teams').updateOne(
+      { _id: new ObjectId(teamId) },
+      { $set: { lastMessageAt: now, lastMessagePreview: body.trim().substring(0, 80) } }
+    );
+
+    // Send push notifications to all team members except sender
+    const allMemberIds = [
+      ...(team.members || []).map(m => m.toString()),
+    ];
+    if (team.lead) allMemberIds.push(team.lead.toString());
+    const uniqueRecipients = [...new Set(allMemberIds)].filter(
+      id => id !== currentUser._id.toString()
+    );
+
+    for (const recipientId of uniqueRecipients) {
+      sendPushNotification(
+        recipientId,
+        `${senderName} in ${team.name}`,
+        body.trim(),
+        { type: 'team_message', teamId, teamName: team.name }
+      ).catch(err => console.error('[TeamChat Push Error]', err));
+    }
+
+    return NextResponse.json({
+      message: {
+        ...msgDoc,
+        _id: result.insertedId.toString(),
+        replyTo: replyToId || null,
+      }
+    });
+  } catch (err) {
+    console.error('Team chat messages POST error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}

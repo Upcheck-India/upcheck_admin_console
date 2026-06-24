@@ -39,8 +39,20 @@ export async function sendPushNotification(userId, title, body, data = {}) {
     });
 
     const receipt = await response.json();
-    console.log('[Push Notification] Sent:', receipt);
+    if (receipt?.data?.status === 'error') {
+      console.error('[Push Notification Error from Expo]', receipt.data);
+    } else {
+      console.log('[Push Notification] Sent:', receipt);
+    }
   } catch (error) {
     console.error('[Push Notification Error]', error);
   }
 }
+
+/**
+ * Helper to send notifications to an entire team (except sender)
+ * (Actually, we handled team push logic inside the team-chat POST route,
+ * so we can just export this for future use or omit it. Since I already 
+ * implemented the team iteration in the route, I'll just leave this as is
+ * but ensure exports are clean.)
+ */

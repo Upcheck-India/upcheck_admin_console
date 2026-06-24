@@ -14,6 +14,7 @@ const MessagesHome = () => {
   const { user, isLoading: authLoading } = useAuth(false);
   const router = useRouter();
   const [connections, setConnections] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,6 +51,12 @@ const MessagesHome = () => {
       if (!res.ok) throw new Error('Failed to load connections');
       const data = await res.json();
       setConnections(data.connections || []);
+
+      const teamRes = await fetch('/api/teams', { credentials: 'include' });
+      if (teamRes.ok) {
+        const teamData = await teamRes.json();
+        setTeams(teamData.teams || []);
+      }
     } catch (e) {
       console.error('Fetch connections error:', e);
     } finally {
@@ -439,28 +446,31 @@ const MessagesHome = () => {
             )}
           </div>
 
-          {/* Channels & Teams (Coming Soon Section) */}
+          {/* Channels & Teams */}
           <div className="pt-2">
             <div className="px-4.5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
               <span>Channels & Teams</span>
-              <span className="text-[8px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide">Soon</span>
             </div>
             <div className="space-y-0.5 pb-4">
-              {[
-                { name: 'announcements', type: 'announce' },
-                { name: 'general', type: 'channel' },
-                { name: 'engineering-hub', type: 'team' },
-                { name: 'design-feedback', type: 'team' }
-              ].map((channel, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2.5 px-4.5 py-2 text-xs font-semibold text-slate-400/80 bg-slate-50/10 select-none cursor-not-allowed border-l-2 border-transparent group"
-                >
-                  <Hash className="w-3.5 h-3.5 text-slate-300 flex-shrink-0" />
-                  <span className="truncate flex-1">{channel.name}</span>
-                  <span className="opacity-0 group-hover:opacity-100 text-[8px] text-slate-300 font-medium transition-opacity duration-200">Disabled</span>
-                </div>
-              ))}
+              {teams.length === 0 ? (
+                 <div className="px-4.5 py-2 text-[10px] text-slate-400">No teams joined yet</div>
+              ) : (
+                teams.map((team) => (
+                  <div
+                    key={team._id}
+                    onClick={() => router.push(`/messages/team/${team._id}`)}
+                    className="flex items-center gap-2.5 px-4.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer border-l-2 border-transparent hover:border-blue-500 group transition-all"
+                  >
+                    <Hash className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-500 flex-shrink-0" />
+                    <span className="truncate flex-1 group-hover:text-blue-600">{team.name}</span>
+                    {team.unreadCount > 0 && (
+                      <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full flex-shrink-0 shadow-sm animate-pulse">
+                        {team.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -659,16 +669,10 @@ const MessagesHome = () => {
             <MessageCircle className="w-9 h-9 stroke-[1.8]" />
             <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white"></div>
           </div>
-          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Direct Messaging</h2>
+          <h2 className="text-xl font-bold text-slate-800 tracking-tight">Direct Messaging & Teams</h2>
           <p className="text-sm text-slate-500 mt-2 leading-relaxed">
-            Select a direct teammate from the sidebar to chat.
+            Select a direct teammate or a team from the sidebar to chat.
           </p>
-          <div className="mt-6 p-4 bg-white/60 border border-slate-200/55 rounded-2xl shadow-sm backdrop-blur-sm">
-            <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Roadmap</span>
-            <p className="text-xs text-slate-600 mt-2 font-medium">
-              Group Chats, Channels, and Team spaces will be available in a future update!
-            </p>
-          </div>
         </div>
       </div>
     </div>

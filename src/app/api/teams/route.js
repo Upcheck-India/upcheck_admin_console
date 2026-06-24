@@ -85,6 +85,34 @@ export async function GET(req) {
       userLookup.set(user._id.toString(), user);
     });
 
+    // Get unread counts
+    let unreadMap = {};
+    if (userId) {
+      const teamIds = teams.map(t => t._id.toString());
+      const unreadCounts = await db.collection('team_messages')
+        .aggregate([
+          {
+            $match: {
+              teamId: { $in: teamIds },
+              senderId: { $ne: userId },
+              'readBy.userId': { $ne: userId }
+            }
+          },
+          {
+            $group: {
+              _id: '$teamId',
+              count: { $sum: 1 }
+            }
+          }
+        ])
+        .toArray();
+
+      unreadMap = unreadCounts.reduce((acc, u) => {
+        acc[u._id] = u.count;
+        return acc;
+      }, {});
+    }
+
     // Populate lead and member info using lookup
     const populatedTeams = teams.map(team => {
       const lead = team.lead ? userLookup.get(team.lead.toString()) : null;
@@ -96,7 +124,8 @@ export async function GET(req) {
         ...team,
         lead,
         members,
-        memberCount: members.length
+        memberCount: members.length,
+        unreadCount: unreadMap[team._id.toString()] || 0
       };
     });
 

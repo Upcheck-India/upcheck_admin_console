@@ -5,8 +5,16 @@ import { ObjectId } from 'mongodb';
 
 export async function POST(req) {
   try {
-    const cookieStore = cookies();
-    const token = cookieStore.get('admin_token')?.value;
+    const authHeader = req.headers.get('authorization');
+    let token = null;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.substring(7).trim();
+    } else {
+      const cookieStore = cookies();
+      token = cookieStore.get('admin_token')?.value;
+    }
+    
     if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
