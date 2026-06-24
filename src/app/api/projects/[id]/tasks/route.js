@@ -5,21 +5,16 @@ import { canAccessProject, canCreateInProject } from '../../../../../lib/project
 import { sendEmail } from '../../../../../lib/emailService';
 import { sendPushNotification } from '../../../../../lib/pushNotifications';
 
+import { getAuthUser } from '../../../../../lib/auth';
+
 // GET all tasks for a project
 export async function GET(request, { params }) {
   try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) {
+    const authData = await getAuthUser(request);
+    if (!authData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db, client } = authData;
 
     const { id } = await params;
 
@@ -76,18 +71,11 @@ export async function GET(request, { params }) {
 // POST a new task to a project
 export async function POST(request, { params }) {
   try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) {
+    const authData = await getAuthUser(request);
+    if (!authData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db, client } = authData;
 
     const { id } = await params;
 

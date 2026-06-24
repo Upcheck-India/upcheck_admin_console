@@ -4,22 +4,7 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { sendPushNotification } from '../../../../lib/pushNotifications';
 
-async function getAuthUser(req) {
-  // Support both cookie and Authorization Bearer header
-  const authHeader = req.headers.get('authorization');
-  let token = null;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  } else {
-    const cookieStore = cookies();
-    token = cookieStore.get('admin_token')?.value;
-  }
-  if (!token) return null;
-  const client = await clientPromise;
-  const db = client.db('resources');
-  const user = await db.collection('admin_users').findOne({ sessionToken: token });
-  return user;
-}
+import { getAuthUser } from '../../../../lib/auth';
 
 async function verifyTeamMember(db, teamId, userId) {
   if (!ObjectId.isValid(teamId)) return null;
@@ -37,8 +22,9 @@ async function verifyTeamMember(db, teamId, userId) {
 
 export async function GET(request) {
   try {
-    const currentUser = await getAuthUser(request);
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authData = await getAuthUser(request);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
 
     const { searchParams } = new URL(request.url);
     const teamId = searchParams.get('teamId');
@@ -60,9 +46,28 @@ export async function GET(request) {
     }
 
     const messages = await db.collection('team_messages')
-      .find(query)
-      .sort({ _id: -1 })
-      .limit(limit)
+      .aggregate([
+        { $match: query },
+        { $sort: { _id: -1 } },
+        { $limit: limit },
+        {
+          $lookup: {
+            from: 'admin_users',
+            let: { senderId: "$senderId" },
+            pipeline: [
+              { $match: { $expr: { $eq: [ { $toString: "$_id" }, "$$senderId" ] } } },
+              { $project: { avatar: 1 } }
+            ],
+            as: 'senderDetails'
+          }
+        },
+        {
+          $addFields: {
+            senderAvatar: { $arrayElemAt: ["$senderDetails.avatar", 0] }
+          }
+        },
+        { $project: { senderDetails: 0 } }
+      ])
       .toArray();
 
     // Mark messages as read for current user
@@ -102,8 +107,9 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const currentUser = await getAuthUser(request);
-    if (!currentUser) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authData = await getAuthUser(request);
+    if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const currentUser = authData.user;
 
     const { teamId, body, replyToId, clientId } = await request.json();
 
@@ -145,6 +151,9 @@ export async function POST(request) {
       createdAt: now,
       updatedAt: now,
     };
+    
+    // Add senderAvatar for immediate response
+    const returnMsgDoc = { ...msgDoc, senderAvatar: currentUser.avatar };
 
     const result = await db.collection('team_messages').insertOne(msgDoc);
 
@@ -174,7 +183,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       message: {
-        ...msgDoc,
+        ...returnMsgDoc,
         _id: result.insertedId.toString(),
         replyTo: replyToId || null,
       }

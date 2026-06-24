@@ -15,20 +15,15 @@ import { sendEmail } from '../../../../../lib/emailService';
  *      Tasks in the sprint will be moved to backlog (sprintId set to null)
  */
 
-// Helper to authenticate user via admin_token cookie and return user & db instance
-async function authAndGetDb(request) {
-  const token = request.cookies.get('admin_token')?.value;
-  if (!token) {
-    return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  }
+// Helper to authenticate user and return user & db instance
+import { getAuthUser } from '../../../../../lib/auth';
 
-  const client = await clientPromise;
-  const db = client.db('resources');
-  const user = await db.collection('admin_users').findOne({ sessionToken: token });
-  if (!user) {
+async function authAndGetDb(request) {
+  const authData = await getAuthUser(request);
+  if (!authData) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
-  return { db, user };
+  return { db: authData.db, user: authData.user };
 }
 
 // Helper to check if user has manager/full permission on the project

@@ -3,6 +3,8 @@ import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject } from '../../../../../lib/projectPermissions';
 
+import { getAuthUser } from '../../../../../lib/auth';
+
 export const dynamic = 'force-dynamic';
 
 // Helper to check if user is a project manager or superManager
@@ -14,18 +16,11 @@ function isProjectManager(user, project) {
 
 export async function GET(req, { params }) {
   try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
+    const authData = await getAuthUser(req);
+    if (!authData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db, client } = authData;
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -461,18 +456,11 @@ export async function GET(req, { params }) {
 // POST - Create a new custom badge definition
 export async function POST(req, { params }) {
   try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
+    const authData = await getAuthUser(req);
+    if (!authData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db, client } = authData;
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -527,18 +515,11 @@ export async function POST(req, { params }) {
 // PUT - Edit a custom badge definition
 export async function PUT(req, { params }) {
   try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
+    const authData = await getAuthUser(req);
+    if (!authData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db, client } = authData;
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -587,18 +568,11 @@ export async function PUT(req, { params }) {
 // DELETE - Delete a custom badge definition completely (and revoke from all users)
 export async function DELETE(req, { params }) {
   try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
+    const authData = await getAuthUser(req);
+    if (!authData) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db, client } = authData;
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
