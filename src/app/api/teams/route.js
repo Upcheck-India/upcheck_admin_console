@@ -112,6 +112,12 @@ export async function GET(req) {
     // Get unread counts
     let unreadMap = {};
     if (userId) {
+      let currentUsername = '';
+      const userDoc = await db.collection('admin_users').findOne({ _id: new ObjectId(userId) });
+      if (userDoc) {
+        currentUsername = userDoc.username || '';
+      }
+
       const teamIds = teams.map(t => t._id.toString());
       const unreadCounts = await db.collection('team_messages')
         .aggregate([
@@ -125,14 +131,29 @@ export async function GET(req) {
           {
             $group: {
               _id: '$teamId',
-              count: { $sum: 1 }
+              count: { $sum: 1 },
+              hasMention: {
+                $max: {
+                  $cond: [
+                    {
+                      $regexMatch: {
+                        input: '$body',
+                        regex: `@${currentUsername}\\b`,
+                        options: 'i'
+                      }
+                    },
+                    true,
+                    false
+                  ]
+                }
+              }
             }
           }
         ])
         .toArray();
 
       unreadMap = unreadCounts.reduce((acc, u) => {
-        acc[u._id] = u.count;
+        acc[u._id] = { count: u.count, hasMention: !!u.hasMention };
         return acc;
       }, {});
     }
@@ -149,7 +170,8 @@ export async function GET(req) {
         lead,
         members,
         memberCount: members.length,
-        unreadCount: unreadMap[team._id.toString()] || 0
+        unreadCount: unreadMap[team._id.toString()]?.count || 0,
+        hasMention: unreadMap[team._id.toString()]?.hasMention || false
       };
     });
 

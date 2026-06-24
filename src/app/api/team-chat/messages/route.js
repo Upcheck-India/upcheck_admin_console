@@ -40,7 +40,11 @@ export async function GET(request) {
     if (!team) return NextResponse.json({ error: 'Not a team member' }, { status: 403 });
 
     // Build query
-    const query = { teamId, deletedForEveryone: { $ne: true } };
+    const query = { 
+      teamId, 
+      deletedForEveryone: { $ne: true },
+      deletedFor: { $ne: currentUser._id.toString() }
+    };
     if (before && ObjectId.isValid(before)) {
       query._id = { $lt: new ObjectId(before) };
     }
