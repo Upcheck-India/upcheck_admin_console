@@ -30,10 +30,17 @@ export async function GET(req, { params }) {
 
     // Permission check - Members/Interns can only see teams they belong to
     if (userRole !== 'Admin' && userRole !== 'Console admin') {
-      const isMember = team.members?.some(m => m.toString() === userId);
-      const isLead = team.lead?.toString() === userId;
+      const isTeammate = await db.collection('teams').findOne({
+        _id: team._id,
+        $or: [
+          { members: userId },
+          { lead: userId },
+          { members: new ObjectId(userId) },
+          { lead: new ObjectId(userId) },
+        ]
+      });
 
-      if (!isMember && !isLead) {
+      if (!isTeammate) {
         return NextResponse.json({ error: 'Access denied' }, { status: 403 });
       }
     }
