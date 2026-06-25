@@ -47,7 +47,10 @@ export async function GET(request) {
       }
     );
 
-    const query = { conversationId };
+    const query = { 
+      conversationId,
+      deletedFor: { $ne: currentUser._id.toString() }
+    };
     if (before) {
       try {
         query._id = { $lt: new ObjectId(before) };

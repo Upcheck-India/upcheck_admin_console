@@ -53,7 +53,8 @@ export async function GET(request) {
       const newMessages = await db.collection('chat_messages')
         .find({
           conversationId,
-          createdAt: { $gt: sinceDate }
+          createdAt: { $gt: sinceDate },
+          deletedFor: { $ne: currentUser._id.toString() }
         })
         .sort({ createdAt: 1 })
         .toArray();
@@ -75,7 +76,8 @@ export async function GET(request) {
           .find({
             conversationId: { $in: conversationIds },
             createdAt: { $gt: sinceDate },
-            senderId: { $ne: currentUser._id.toString() } // Exclude own messages
+            senderId: { $ne: currentUser._id.toString() }, // Exclude own messages
+            deletedFor: { $ne: currentUser._id.toString() }
           })
           .sort({ createdAt: 1 })
           .toArray();

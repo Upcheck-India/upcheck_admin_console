@@ -35,7 +35,10 @@ export async function GET(request) {
 
     const lastMessages = await db.collection('chat_messages')
       .aggregate([
-        { $match: { conversationId: { $in: conversationIds } } },
+        { $match: { 
+          conversationId: { $in: conversationIds },
+          deletedFor: { $ne: currentUser._id.toString() }
+        } },
         { $sort: { createdAt: -1 } },
         { $group: {
           _id: '$conversationId',

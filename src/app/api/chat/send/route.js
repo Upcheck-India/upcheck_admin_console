@@ -5,7 +5,7 @@ import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 export async function POST(request) {
   try {
-    const { conversationId, body, clientId } = await request.json();
+    const { conversationId, body, clientId, replyToId } = await request.json();
     
     if (!conversationId || !body?.trim()) {
       return NextResponse.json({ error: 'Conversation ID and message body required' }, { status: 400 });
@@ -61,7 +61,8 @@ export async function POST(request) {
       body: body.trim(),
       status: 'sent',
       createdAt: now,
-      clientId: clientId || null
+      clientId: clientId || null,
+      replyTo: replyToId || null
     };
 
     await db.collection('chat_messages').insertOne(message);
