@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
+import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
-import { sendPushNotification } from '../../../../../../lib/pushNotifications';
+import { sendPushNotification } from '../../../../../lib/pushNotifications';
 
 async function getAuthUser(req) {
   const authHeader = req.headers.get('authorization');
