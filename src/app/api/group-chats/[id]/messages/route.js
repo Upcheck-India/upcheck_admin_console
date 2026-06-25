@@ -1,0 +1,186 @@
+import { NextResponse } from 'next/server';
+import clientPromise from '../../../../../../lib/mongodb';
+import { ObjectId } from 'mongodb';
+import { cookies } from 'next/headers';
+import { sendPushNotification } from '../../../../../../lib/pushNotifications';
+
+async function getAuthUser(req) {
+  const authHeader = req.headers.get('authorization');
+  let token = null;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7).trim();
+  } else {
+    const cookieStore = cookies();
+    token = cookieStore.get('admin_token')?.value;
+  }
+  if (!token) return null;
+  const client = await clientPromise;
+  const db = client.db('resources');
+  return await db.collection('admin_users').findOne({ sessionToken: token });
+}
+
+export async function GET(req, { params }) {
+  try {
+    const groupId = params.id;
+    if (!ObjectId.isValid(groupId)) {
+      return NextResponse.json({ error: 'Invalid group ID' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    let userRole = req.headers.get('x-user-role');
+    let userId = req.headers.get('x-user-id');
+
+    if (!userRole || !userId) {
+      const authUser = await getAuthUser(req);
+      if (authUser) {
+        userRole = authUser.role;
+        userId = authUser._id.toString();
+      }
+    }
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(req.url);
+    const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100);
+    const before = searchParams.get('before');
+
+    // Mark messages as read
+    await db.collection('group_chat_messages').updateMany(
+      {
+        groupId,
+        senderId: { $ne: userId },
+        'readBy.userId': { $ne: userId }
+      },
+      {
+        $push: { readBy: { userId, readAt: new Date() } }
+      }
+    );
+
+    const query = {
+      groupId,
+      deletedForEveryone: { $ne: true },
+      deletedFor: { $ne: userId }
+    };
+
+    if (before && ObjectId.isValid(before)) {
+      query._id = { $lt: new ObjectId(before) };
+    }
+
+    const messages = await db.collection('group_chat_messages')
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    // Fetch user details for messages
+    const userIds = [...new Set(messages.map(m => m.senderId))];
+    const userIdsObj = userIds.map(id => {
+      try { return new ObjectId(id); } catch { return id; }
+    });
+    
+    const users = await db.collection('admin_users')
+      .find({ _id: { $in: userIdsObj } })
+      .project({ username: 1, firstName: 1, lastName: 1 })
+      .toArray();
+      
+    const userMap = users.reduce((acc, u) => {
+      acc[u._id.toString()] = u;
+      return acc;
+    }, {});
+
+    const serialized = messages.map(m => {
+      const sender = userMap[m.senderId];
+      return {
+        ...m,
+        _id: m._id.toString(),
+        senderName: sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown'
+      };
+    });
+
+    return NextResponse.json({
+      messages: serialized,
+      hasMore: messages.length === limit,
+      nextCursor: messages.length > 0 ? messages[messages.length - 1]._id.toString() : null
+    });
+  } catch (error) {
+    console.error('Error fetching group messages:', error);
+    return NextResponse.json({ error: 'Failed to fetch messages' }, { status: 500 });
+  }
+}
+
+export async function POST(req, { params }) {
+  try {
+    const groupId = params.id;
+    if (!ObjectId.isValid(groupId)) {
+      return NextResponse.json({ error: 'Invalid group ID' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    let userRole = req.headers.get('x-user-role');
+    let userId = req.headers.get('x-user-id');
+    let user = null;
+
+    if (!userRole || !userId) {
+      user = await getAuthUser(req);
+      if (user) {
+        userRole = user.role;
+        userId = user._id.toString();
+      }
+    } else {
+      user = await db.collection('admin_users').findOne({ _id: new ObjectId(userId) });
+    }
+
+    if (!userId || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { body, replyToId } = await req.json();
+
+    if (!body || !body.trim()) {
+      return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
+    }
+
+    const newMessage = {
+      groupId,
+      senderId: userId,
+      body: body.trim(),
+      createdAt: new Date(),
+      readBy: [{ userId, readAt: new Date() }],
+      deletedFor: [],
+      deletedForEveryone: false,
+      replyToId: replyToId || null
+    };
+
+    const result = await db.collection('group_chat_messages').insertOne(newMessage);
+
+    // Update group's last message preview
+    await db.collection('group_chats').updateOne(
+      { _id: new ObjectId(groupId) },
+      { 
+        $set: { 
+          lastMessagePreview: body.trim(),
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    // TODO: Send push notifications to group members
+
+    return NextResponse.json({
+      message: {
+        ...newMessage,
+        _id: result.insertedId.toString(),
+        senderName: user.firstName || user.lastName ? `${user.firstName} ${user.lastName}`.trim() : user.username
+      }
+    });
+  } catch (error) {
+    console.error('Error sending group message:', error);
+    return NextResponse.json({ error: 'Failed to send message' }, { status: 500 });
+  }
+}
