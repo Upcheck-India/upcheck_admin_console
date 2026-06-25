@@ -76,18 +76,37 @@ export async function GET(request) {
       return acc;
     }, {});
 
-    const enriched = connections.map(c => ({
-      ...c,
-      _id: c._id?.toString(),
-      peer: peerMap[c.peerId] ? {
-        id: peerMap[c.peerId]._id.toString(),
-        username: peerMap[c.peerId].username,
-        name: peerMap[c.peerId].name,
-        email: peerMap[c.peerId].email
-      } : null,
-      lastMessage: lastMessageMap[c.conversationId] || null,
-      unreadCount: unreadMap[c.conversationId] || 0
-    }));
+    // Fetch active mutes
+    const mutes = await db.collection('chat_mutes').find({
+      userId: currentUser._id.toString(),
+      chatType: 'dm'
+    }).toArray();
+
+    const muteMap = mutes.reduce((acc, m) => {
+      const isMuted = m.isForever || (m.mutedUntil && new Date(m.mutedUntil) > new Date());
+      if (isMuted) {
+        acc[m.chatId] = m;
+      }
+      return acc;
+    }, {});
+
+    const enriched = connections.map(c => {
+      const muteInfo = c.conversationId ? muteMap[c.conversationId] : null;
+      return {
+        ...c,
+        _id: c._id?.toString(),
+        peer: peerMap[c.peerId] ? {
+          id: peerMap[c.peerId]._id.toString(),
+          username: peerMap[c.peerId].username,
+          name: peerMap[c.peerId].name,
+          email: peerMap[c.peerId].email
+        } : null,
+        lastMessage: lastMessageMap[c.conversationId] || null,
+        unreadCount: unreadMap[c.conversationId] || 0,
+        isMuted: !!muteInfo,
+        mutedUntil: muteInfo?.mutedUntil || null
+      };
+    });
 
     return NextResponse.json({ connections: enriched });
   } catch (err) {

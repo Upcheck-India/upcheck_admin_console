@@ -170,7 +170,64 @@ export async function POST(req, { params }) {
       }
     );
 
-    // TODO: Send push notifications to group members
+    // Send push notifications to group members
+    try {
+      const group = await db.collection('group_chats').findOne({ _id: new ObjectId(groupId) });
+      if (group) {
+        // Find team documents to resolve members
+        const groupTeams = await db.collection('teams').find({
+          _id: { $in: (group.teams || []).map(id => new ObjectId(id)) }
+        }).toArray();
+
+        const allMemberIds = new Set();
+        if (group.members) {
+          group.members.forEach(m => allMemberIds.add(m.toString()));
+        }
+        groupTeams.forEach(t => {
+          if (t.lead) allMemberIds.add(t.lead.toString());
+          if (t.members) {
+            t.members.forEach(m => allMemberIds.add(m.toString()));
+          }
+        });
+
+        // Filter out sender and excluded members
+        const excludedSet = new Set((group.excludedMembers || []).map(m => m.toString()));
+        const uniqueRecipients = [...allMemberIds].filter(
+          id => id !== userId && !excludedSet.has(id)
+        );
+
+        // Filter out recipients who have muted this group chat
+        const activeGroupMutes = await db.collection('chat_mutes').find({
+          chatId: groupId,
+          chatType: 'group'
+        }).toArray();
+
+        const mutedUserIds = new Set(
+          activeGroupMutes
+            .filter(m => m.isForever || (m.mutedUntil && new Date(m.mutedUntil) > new Date()))
+            .map(m => m.userId)
+        );
+
+        const nonMutedRecipients = uniqueRecipients.filter(
+          id => !mutedUserIds.has(id)
+        );
+
+        const senderName = user.firstName || user.lastName
+          ? `${user.firstName} ${user.lastName}`.trim()
+          : user.username;
+
+        for (const recipientId of nonMutedRecipients) {
+          sendPushNotification(
+            recipientId,
+            `${senderName} in group ${group.name}`,
+            body.trim(),
+            { type: 'group_message', groupId, groupName: group.name }
+          ).catch(err => console.error('[GroupChat Push Error]', err));
+        }
+      }
+    } catch (pushErr) {
+      console.error('Failed to trigger group chat push notifications:', pushErr);
+    }
 
     return NextResponse.json({
       message: {

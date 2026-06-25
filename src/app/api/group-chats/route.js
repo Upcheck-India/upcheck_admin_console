@@ -53,11 +53,17 @@ export async function GET(req) {
 
     // Find group chats
     const groupQuery = {
-      $or: [
-        { members: new ObjectId(userId) },
-        { members: userId },
-        { teams: { $in: teamIds } },
-        { teams: { $in: teamIdsStr } }
+      $and: [
+        {
+          $or: [
+            { members: new ObjectId(userId) },
+            { members: userId },
+            { teams: { $in: teamIds } },
+            { teams: { $in: teamIdsStr } }
+          ]
+        },
+        { excludedMembers: { $ne: new ObjectId(userId) } },
+        { excludedMembers: { $ne: userId } }
       ]
     };
 
@@ -93,11 +99,30 @@ export async function GET(req) {
       return acc;
     }, {});
 
-    const populatedGroups = groupChats.map(group => ({
-      ...group,
-      unreadCount: unreadMap[group._id.toString()]?.count || 0,
-      memberCount: (group.members?.length || 0) + (group.teams?.length || 0) // rough count
-    }));
+    // Fetch active mutes for groups
+    const mutes = await db.collection('chat_mutes').find({
+      userId: userId,
+      chatType: 'group'
+    }).toArray();
+
+    const muteMap = mutes.reduce((acc, m) => {
+      const isMuted = m.isForever || (m.mutedUntil && new Date(m.mutedUntil) > new Date());
+      if (isMuted) {
+        acc[m.chatId] = m;
+      }
+      return acc;
+    }, {});
+
+    const populatedGroups = groupChats.map(group => {
+      const muteInfo = muteMap[group._id.toString()];
+      return {
+        ...group,
+        unreadCount: unreadMap[group._id.toString()]?.count || 0,
+        memberCount: (group.members?.length || 0) + (group.teams?.length || 0), // rough count
+        isMuted: !!muteInfo,
+        mutedUntil: muteInfo?.mutedUntil || null
+      };
+    });
 
     return NextResponse.json({
       groupChats: populatedGroups

@@ -158,6 +158,23 @@ export async function GET(req) {
       }, {});
     }
 
+    // Fetch active mutes for teams
+    let muteMap = {};
+    if (userId) {
+      const mutes = await db.collection('chat_mutes').find({
+        userId: userId,
+        chatType: 'team'
+      }).toArray();
+
+      muteMap = mutes.reduce((acc, m) => {
+        const isMuted = m.isForever || (m.mutedUntil && new Date(m.mutedUntil) > new Date());
+        if (isMuted) {
+          acc[m.chatId] = m;
+        }
+        return acc;
+      }, {});
+    }
+
     // Populate lead and member info using lookup
     const populatedTeams = teams.map(team => {
       const lead = team.lead ? userLookup.get(team.lead.toString()) : null;
@@ -165,13 +182,17 @@ export async function GET(req) {
         .map(mId => userLookup.get(mId?.toString() || mId))
         .filter(Boolean);
 
+      const muteInfo = muteMap[team._id.toString()];
+
       return {
         ...team,
         lead,
         members,
         memberCount: members.length,
         unreadCount: unreadMap[team._id.toString()]?.count || 0,
-        hasMention: unreadMap[team._id.toString()]?.hasMention || false
+        hasMention: unreadMap[team._id.toString()]?.hasMention || false,
+        isMuted: !!muteInfo,
+        mutedUntil: muteInfo?.mutedUntil || null
       };
     });
 

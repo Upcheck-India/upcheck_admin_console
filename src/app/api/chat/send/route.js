@@ -73,13 +73,26 @@ export async function POST(request) {
       { $set: { lastMessageAt: now } }
     );
 
-    // Send push notification to recipient
-    await sendPushNotification(
-      recipientId,
-      `New message from ${currentUser.username || 'Someone'}`,
-      body.trim(),
-      { type: 'chat_message', conversationId }
+    // Check if recipient has muted this DM chat
+    const recipientMute = await db.collection('chat_mutes').findOne({
+      userId: recipientId,
+      chatId: conversationId,
+      chatType: 'dm'
+    });
+
+    const isRecipientMuted = recipientMute && (
+      recipientMute.isForever || (recipientMute.mutedUntil && new Date(recipientMute.mutedUntil) > new Date())
     );
+
+    if (!isRecipientMuted) {
+      // Send push notification to recipient
+      await sendPushNotification(
+        recipientId,
+        `New message from ${currentUser.username || 'Someone'}`,
+        body.trim(),
+        { type: 'chat_message', conversationId }
+      );
+    }
 
     return NextResponse.json({
       message: {

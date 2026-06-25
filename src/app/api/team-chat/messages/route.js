@@ -192,7 +192,23 @@ export async function POST(request) {
       id => id !== currentUser._id.toString()
     );
 
-    for (const recipientId of uniqueRecipients) {
+    // Fetch active mutes for this team chat
+    const activeTeamMutes = await db.collection('chat_mutes').find({
+      chatId: teamId,
+      chatType: 'team'
+    }).toArray();
+
+    const mutedUserIds = new Set(
+      activeTeamMutes
+        .filter(m => m.isForever || (m.mutedUntil && new Date(m.mutedUntil) > new Date()))
+        .map(m => m.userId)
+    );
+
+    const nonMutedRecipients = uniqueRecipients.filter(
+      id => !mutedUserIds.has(id)
+    );
+
+    for (const recipientId of nonMutedRecipients) {
       sendPushNotification(
         recipientId,
         `${senderName} in ${team.name}`,
