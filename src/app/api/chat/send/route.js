@@ -5,10 +5,10 @@ import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 export async function POST(request) {
   try {
-    const { conversationId, body, clientId, replyToId } = await request.json();
+    const { conversationId, body, clientId, replyToId, mediaUrl } = await request.json();
     
-    if (!conversationId || !body?.trim()) {
-      return NextResponse.json({ error: 'Conversation ID and message body required' }, { status: 400 });
+    if (!conversationId || (!body?.trim() && !mediaUrl)) {
+      return NextResponse.json({ error: 'Conversation ID and message body (or mediaUrl) required' }, { status: 400 });
     }
 
     if (!ObjectId.isValid(conversationId)) {
@@ -53,12 +53,16 @@ export async function POST(request) {
     const now = new Date();
     const messageId = new ObjectId();
 
+    const messageType = body?.trim() ? 'text' : 'image';
+
     const message = {
       _id: messageId,
       conversationId,
       senderId: currentUser._id.toString(),
       recipientId,
-      body: body.trim(),
+      body: body?.trim() || '',
+      type: messageType,
+      ...(mediaUrl ? { mediaUrl } : {}),
       status: 'sent',
       createdAt: now,
       clientId: clientId || null,
@@ -89,7 +93,7 @@ export async function POST(request) {
       await sendPushNotification(
         recipientId,
         `New message from ${currentUser.username || 'Someone'}`,
-        body.trim(),
+        body?.trim() || '📷 Image',
         { type: 'chat_message', conversationId }
       );
     }

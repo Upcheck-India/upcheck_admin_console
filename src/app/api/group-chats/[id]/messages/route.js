@@ -140,16 +140,20 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { body, replyToId } = await req.json();
+    const { body, replyToId, mediaUrl } = await req.json();
 
-    if (!body || !body.trim()) {
-      return NextResponse.json({ error: 'Message body is required' }, { status: 400 });
+    if (!body?.trim() && !mediaUrl) {
+      return NextResponse.json({ error: 'Message body or mediaUrl is required' }, { status: 400 });
     }
+
+    const messageType = body?.trim() ? 'text' : 'image';
 
     const newMessage = {
       groupId,
       senderId: userId,
-      body: body.trim(),
+      body: body?.trim() || '',
+      type: messageType,
+      ...(mediaUrl ? { mediaUrl } : {}),
       createdAt: new Date(),
       readBy: [{ userId, readAt: new Date() }],
       deletedFor: [],
@@ -164,7 +168,7 @@ export async function POST(req, { params }) {
       { _id: new ObjectId(groupId) },
       { 
         $set: { 
-          lastMessagePreview: body.trim(),
+          lastMessagePreview: body?.trim() || '📷 Image',
           updatedAt: new Date()
         } 
       }
@@ -220,7 +224,7 @@ export async function POST(req, { params }) {
           sendPushNotification(
             recipientId,
             `${senderName} in group ${group.name}`,
-            body.trim(),
+            body?.trim() || '📷 Image',
             { type: 'group_message', groupId, groupName: group.name }
           ).catch(err => console.error('[GroupChat Push Error]', err));
         }

@@ -5,6 +5,7 @@ import { sendEmail } from '../../../lib/email';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
 import { getUserFromToken } from '../../../lib/eventAuthHelper';
+import { sendPushNotification } from '../../../lib/pushNotifications';
 
 // GET /api/events
 export async function GET(request) {
@@ -223,6 +224,48 @@ export async function POST(request) {
       console.error('Failed to schedule bot join:', e);
       // Non-fatal
     }
+
+    // Fire-and-forget: send push notifications to all participants on meeting creation
+    ;(async () => {
+      try {
+        const allParticipants = eventData.participants || [];
+        if (allParticipants.length === 0) return;
+
+        const pushClient = await clientPromise;
+        const pushDb = pushClient.db('resources');
+
+        const meetingDate = new Date(eventData.startTime);
+        const dateStr = meetingDate.toLocaleString('en-IN', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'Asia/Kolkata',
+        });
+
+        for (const participantEmail of allParticipants) {
+          try {
+            const participantUser = await pushDb.collection('admin_users').findOne(
+              { email: { $regex: `^${participantEmail}$`, $options: 'i' } },
+              { projection: { _id: 1 } }
+            );
+            if (!participantUser) continue;
+
+            await sendPushNotification(
+              participantUser._id.toString(),
+              '📅 New Meeting Scheduled',
+              `${eventData.title} on ${dateStr}`,
+              { type: 'new_meeting', meetingId: result.insertedId.toString() }
+            );
+          } catch (perUserErr) {
+            console.error(`[events POST] Push notification failed for ${participantEmail}:`, perUserErr.message);
+          }
+        }
+      } catch (pushErr) {
+        console.error('[events POST] Push notification block failed:', pushErr.message);
+      }
+    })();
 
     return NextResponse.json({ ...eventData, _id: result.insertedId }, { status: 201 });
 

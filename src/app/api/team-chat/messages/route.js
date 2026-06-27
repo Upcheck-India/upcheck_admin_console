@@ -131,10 +131,10 @@ export async function POST(request) {
     if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const currentUser = authData.user;
 
-    const { teamId, body, replyToId, clientId } = await request.json();
+    const { teamId, body, replyToId, clientId, mediaUrl } = await request.json();
 
-    if (!teamId || !body?.trim()) {
-      return NextResponse.json({ error: 'teamId and body required' }, { status: 400 });
+    if (!teamId || (!body?.trim() && !mediaUrl)) {
+      return NextResponse.json({ error: 'teamId and body (or mediaUrl) required' }, { status: 400 });
     }
 
     const client = await clientPromise;
@@ -155,13 +155,17 @@ export async function POST(request) {
       ? `${currentUser.firstName} ${currentUser.lastName}`.trim()
       : currentUser.username;
 
+    const messageType = body?.trim() ? 'text' : 'image';
+
     const now = new Date();
     const msgDoc = {
       teamId,
       senderId: currentUser._id.toString(),
       senderName,
       senderUsername: currentUser.username,
-      body: body.trim(),
+      body: body?.trim() || '',
+      type: messageType,
+      ...(mediaUrl ? { mediaUrl } : {}),
       replyTo: replyToId && ObjectId.isValid(replyToId) ? new ObjectId(replyToId) : null,
       reactions: [],
       readBy: [{ userId: currentUser._id.toString(), readAt: now }],
@@ -180,7 +184,7 @@ export async function POST(request) {
     // Update team's lastMessageAt for unread counting
     await db.collection('teams').updateOne(
       { _id: new ObjectId(teamId) },
-      { $set: { lastMessageAt: now, lastMessagePreview: body.trim().substring(0, 80) } }
+      { $set: { lastMessageAt: now, lastMessagePreview: body?.trim()?.substring(0, 80) || '📷 Image' } }
     );
 
     // Send push notifications to all team members except sender
@@ -212,7 +216,7 @@ export async function POST(request) {
       sendPushNotification(
         recipientId,
         `${senderName} in ${team.name}`,
-        body.trim(),
+        body?.trim() || '📷 Image',
         { type: 'team_message', teamId, teamName: team.name }
       ).catch(err => console.error('[TeamChat Push Error]', err));
     }
