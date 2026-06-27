@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../../../lib/mongodb';
-import { ObjectId } from 'mongodb';
+import { ObjectId, GridFSBucket } from 'mongodb';
 import { cookies } from 'next/headers';
 
 async function getAuthUser(req) {
@@ -20,7 +20,7 @@ async function getAuthUser(req) {
 
 export async function POST(req, { params }) {
   try {
-    const { id: groupId, messageId } = params;
+    const { id: groupId, messageId } = await params;
     const { searchParams } = new URL(req.url);
     const forEveryone = searchParams.get('forEveryone') === 'true';
 
@@ -55,6 +55,25 @@ export async function POST(req, { params }) {
       // Only sender can delete for everyone
       if (message.senderId !== userId) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // Check if message is an image message and has mediaUrl
+      if (message.type === 'image' && message.mediaUrl) {
+        const urlParts = message.mediaUrl.split('/');
+        const fileIdStr = urlParts[urlParts.length - 1];
+        if (ObjectId.isValid(fileIdStr)) {
+          const fileId = new ObjectId(fileIdStr);
+          
+          // Verify if any other active message references the same media URL (for deduplication safety)
+          const dmCount = await db.collection('chat_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
+          const teamCount = await db.collection('team_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
+          const groupCount = await db.collection('group_chat_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
+          
+          if ((dmCount + teamCount + groupCount) <= 1) {
+            const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
+            await bucket.delete(fileId).catch(err => console.error('GridFS media deletion failed in Group delete:', err));
+          }
+        }
       }
 
       await db.collection('group_chat_messages').updateOne(

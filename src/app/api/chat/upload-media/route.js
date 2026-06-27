@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { Readable } from 'stream';
+import crypto from 'crypto';
 import clientPromise from '../../../../lib/mongodb';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -64,9 +65,21 @@ export async function POST(req) {
       );
     }
 
-    // --- Upload to GridFS ---
+    // --- De-duplication Check (MD5 Content Hash) ---
     const client = await clientPromise;
     const db = client.db('resources');
+    const md5 = crypto.createHash('md5').update(Buffer.from(bytes)).digest('hex');
+
+    const existingFile = await db.collection('chat_media.files').findOne({ 'metadata.md5': md5 });
+    if (existingFile) {
+      return NextResponse.json({
+        success: true,
+        mediaId: existingFile._id.toString(),
+        mediaUrl: '/api/chat/media/' + existingFile._id.toString(),
+      });
+    }
+
+    // --- Upload to GridFS ---
     const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
 
     const metadata = {
@@ -75,6 +88,7 @@ export async function POST(req) {
       chatId,
       originalName: file.name,
       uploadedAt: new Date(),
+      md5, // Save custom md5 hash for future de-duplication checks
     };
 
     const uploadStream = bucket.openUploadStream(file.name, {

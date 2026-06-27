@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../../lib/mongodb.js';
-import { ObjectId } from 'mongodb';
+import { ObjectId, GridFSBucket } from 'mongodb';
 import { getAuthUser } from '../../../../../../lib/auth.js';
 
 export async function POST(request, { params }) {
@@ -29,6 +29,26 @@ export async function POST(request, { params }) {
       if (!isSender) {
         return NextResponse.json({ error: 'Only the sender can delete for everyone' }, { status: 403 });
       }
+
+      // Check if message is an image message and has mediaUrl
+      if (message.type === 'image' && message.mediaUrl) {
+        const urlParts = message.mediaUrl.split('/');
+        const fileIdStr = urlParts[urlParts.length - 1];
+        if (ObjectId.isValid(fileIdStr)) {
+          const fileId = new ObjectId(fileIdStr);
+          
+          // Verify if any other active message references the same media URL (for deduplication safety)
+          const dmCount = await db.collection('chat_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
+          const teamCount = await db.collection('team_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
+          const groupCount = await db.collection('group_chat_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
+          
+          if ((dmCount + teamCount + groupCount) <= 1) {
+            const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
+            await bucket.delete(fileId).catch(err => console.error('GridFS media deletion failed in Team delete:', err));
+          }
+        }
+      }
+
       await db.collection('team_messages').updateOne(
         { _id: new ObjectId(id) },
         { $set: { deletedForEveryone: true, updatedAt: new Date() } }
