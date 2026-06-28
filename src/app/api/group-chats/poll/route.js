@@ -110,9 +110,24 @@ export async function GET(req) {
       }
     }
 
+    // Check who is typing
+    const typingThreshold = new Date(Date.now() - 5000);
+    const typingDocs = await db.collection('group_typing').find({
+      groupId,
+      userId: { $ne: userId },
+      updatedAt: { $gt: typingThreshold }
+    }).toArray();
+
+    const typingUsers = typingDocs.map(d => ({
+      userId: d.userId,
+      username: d.username,
+      name: d.name
+    }));
+
     return NextResponse.json({
       serverTimestamp,
-      newMessages
+      newMessages,
+      typingUsers
     });
   } catch (err) {
     console.error('Group poll error:', err);
