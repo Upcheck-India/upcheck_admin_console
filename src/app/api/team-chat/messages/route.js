@@ -131,7 +131,7 @@ export async function POST(request) {
     if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const currentUser = authData.user;
 
-    const { teamId, body, replyToId, clientId, mediaUrl } = await request.json();
+    const { teamId, body, clientId, replyToId, mediaUrl, isForwarded } = await request.json();
 
     if (!teamId || (!body?.trim() && !mediaUrl)) {
       return NextResponse.json({ error: 'teamId and body (or mediaUrl) required' }, { status: 400 });
@@ -174,6 +174,7 @@ export async function POST(request) {
       clientId: clientId || null,
       createdAt: now,
       updatedAt: now,
+      isForwarded: isForwarded || false
     };
     
     // Add senderAvatar for immediate response

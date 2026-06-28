@@ -5,7 +5,7 @@ import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 export async function POST(request) {
   try {
-    const { conversationId, body, clientId, replyToId, mediaUrl } = await request.json();
+    const { conversationId, body, clientId, replyToId, mediaUrl, isForwarded } = await request.json();
     
     if (!conversationId || (!body?.trim() && !mediaUrl)) {
       return NextResponse.json({ error: 'Conversation ID and message body (or mediaUrl) required' }, { status: 400 });
@@ -66,7 +66,8 @@ export async function POST(request) {
       status: 'sent',
       createdAt: now,
       clientId: clientId || null,
-      replyTo: replyToId || null
+      replyTo: replyToId || null,
+      isForwarded: isForwarded || false
     };
 
     await db.collection('chat_messages').insertOne(message);

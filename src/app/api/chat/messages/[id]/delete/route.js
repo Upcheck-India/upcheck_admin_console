@@ -56,7 +56,17 @@ export async function POST(request, { params }) {
 
       await db.collection('chat_messages').updateOne(
         { _id: new ObjectId(id) },
-        { $set: { deletedForEveryone: true, body: '[Message deleted]', updatedAt: new Date() } }
+        { 
+          $set: { 
+            deletedForEveryone: true, 
+            body: '[Message deleted]', 
+            type: 'text',
+            updatedAt: new Date() 
+          },
+          $unset: {
+            mediaUrl: ""
+          }
+        }
       );
     } else {
       await db.collection('chat_messages').updateOne(

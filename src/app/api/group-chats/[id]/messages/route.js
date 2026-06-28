@@ -140,7 +140,7 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { body, replyToId, mediaUrl } = await req.json();
+    const { body, replyToId, mediaUrl, isForwarded } = await req.json();
 
     if (!body?.trim() && !mediaUrl) {
       return NextResponse.json({ error: 'Message body or mediaUrl is required' }, { status: 400 });
@@ -158,7 +158,8 @@ export async function POST(req, { params }) {
       readBy: [{ userId, readAt: new Date() }],
       deletedFor: [],
       deletedForEveryone: false,
-      replyToId: replyToId || null
+      replyToId: replyToId || null,
+      isForwarded: isForwarded || false
     };
 
     const result = await db.collection('group_chat_messages').insertOne(newMessage);
