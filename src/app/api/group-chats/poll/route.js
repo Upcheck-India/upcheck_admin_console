@@ -101,7 +101,10 @@ export async function GET(req) {
           return {
             ...m,
             _id: m._id.toString(),
-            senderName: sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown'
+            senderName: sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown',
+            replyToId: m.replyToId ? m.replyToId.toString() : null,
+            replyToBody: m.replyToBody || null,
+            replyToName: m.replyToName || null,
           };
         });
       }

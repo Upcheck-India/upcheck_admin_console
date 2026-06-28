@@ -182,6 +182,16 @@ export async function POST(request) {
 
     const result = await db.collection('team_messages').insertOne(msgDoc);
 
+    if (mediaUrl) {
+      const mediaIdMatch = mediaUrl.match(/\/api\/chat\/media\/([0-9a-fA-F]{24})/);
+      if (mediaIdMatch && mediaIdMatch[1]) {
+        await db.collection('chat_media.files').updateOne(
+          { _id: new ObjectId(mediaIdMatch[1]) },
+          { $inc: { 'metadata.refs': 1 } }
+        );
+      }
+    }
+
     // Update team's lastMessageAt for unread counting
     await db.collection('teams').updateOne(
       { _id: new ObjectId(teamId) },

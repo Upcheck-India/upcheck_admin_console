@@ -97,7 +97,10 @@ export async function GET(req, { params }) {
       return {
         ...m,
         _id: m._id.toString(),
-        senderName: sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown'
+        senderName: sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown',
+        replyToId: m.replyToId ? m.replyToId.toString() : null,
+        replyToBody: m.replyToBody || null,
+        replyToName: m.replyToName || null,
       };
     });
 
@@ -148,6 +151,27 @@ export async function POST(req, { params }) {
 
     const messageType = body?.trim() ? 'text' : 'image';
 
+    // Look up parent message to store reply snippet
+    let replyToBody = null;
+    let replyToName = null;
+    if (replyToId && ObjectId.isValid(replyToId)) {
+      try {
+        const parentMsg = await db.collection('group_chat_messages').findOne({ _id: new ObjectId(replyToId) });
+        if (parentMsg) {
+          replyToBody = parentMsg.type === 'image' ? '📷 Image' : (parentMsg.body || '').slice(0, 200);
+          const parentSender = await db.collection('admin_users').findOne(
+            { _id: ObjectId.isValid(parentMsg.senderId) ? new ObjectId(parentMsg.senderId) : parentMsg.senderId },
+            { projection: { firstName: 1, lastName: 1, username: 1 } }
+          );
+          if (parentSender) {
+            replyToName = parentSender.firstName || parentSender.lastName
+              ? `${parentSender.firstName || ''} ${parentSender.lastName || ''}`.trim()
+              : parentSender.username;
+          }
+        }
+      } catch (e) {}
+    }
+
     const newMessage = {
       groupId,
       senderId: userId,
@@ -159,10 +183,22 @@ export async function POST(req, { params }) {
       deletedFor: [],
       deletedForEveryone: false,
       replyToId: replyToId || null,
+      replyToBody: replyToBody,
+      replyToName: replyToName,
       isForwarded: isForwarded || false
     };
 
     const result = await db.collection('group_chat_messages').insertOne(newMessage);
+
+    if (mediaUrl) {
+      const mediaIdMatch = mediaUrl.match(/\/api\/chat\/media\/([0-9a-fA-F]{24})/);
+      if (mediaIdMatch && mediaIdMatch[1]) {
+        await db.collection('chat_media.files').updateOne(
+          { _id: new ObjectId(mediaIdMatch[1]) },
+          { $inc: { 'metadata.refs': 1 } }
+        );
+      }
+    }
 
     // Update group's last message preview
     await db.collection('group_chats').updateOne(

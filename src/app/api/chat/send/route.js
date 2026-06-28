@@ -72,6 +72,16 @@ export async function POST(request) {
 
     await db.collection('chat_messages').insertOne(message);
 
+    if (mediaUrl) {
+      const mediaIdMatch = mediaUrl.match(/\/api\/chat\/media\/([0-9a-fA-F]{24})/);
+      if (mediaIdMatch && mediaIdMatch[1]) {
+        await db.collection('chat_media.files').updateOne(
+          { _id: new ObjectId(mediaIdMatch[1]) },
+          { $inc: { 'metadata.refs': 1 } }
+        );
+      }
+    }
+
     // Update conversation last message time
     await db.collection('conversations').updateOne(
       { _id: new ObjectId(conversationId) },

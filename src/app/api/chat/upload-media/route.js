@@ -33,6 +33,7 @@ export async function POST(req) {
     const file = formData.get('file');
     const chatType = formData.get('chatType');
     const chatId = formData.get('chatId');
+    const clientId = formData.get('clientId'); // For cancellation tracking
 
     // --- Validate required fields ---
     if (!file || typeof file === 'string') {
@@ -88,7 +89,9 @@ export async function POST(req) {
       chatId,
       originalName: file.name,
       uploadedAt: new Date(),
+      clientId: clientId || null, // Allow client to track and cancel this specific upload
       md5, // Save custom md5 hash for future de-duplication checks
+      refs: 0, // Reference counter for safe deletion
     };
 
     const uploadStream = bucket.openUploadStream(file.name, {
@@ -105,6 +108,18 @@ export async function POST(req) {
     });
 
     const fileId = uploadStream.id;
+
+    // Check if it was cancelled during upload
+    const cancellation = await db.collection('cancelled_uploads').findOne({
+      clientId,
+      uploadedBy: user._id.toString()
+    });
+
+    if (cancellation) {
+      await bucket.delete(fileId).catch(() => {});
+      await db.collection('cancelled_uploads').deleteOne({ _id: cancellation._id });
+      return NextResponse.json({ error: 'Upload was cancelled' }, { status: 400 });
+    }
 
     return NextResponse.json({
       success: true,
