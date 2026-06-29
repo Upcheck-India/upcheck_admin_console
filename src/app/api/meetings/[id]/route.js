@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { getUserFromToken } from '../../../../lib/eventAuthHelper';
+import { sendEmail } from '../../../../lib/email';
+import { sendPushNotification } from '../../../../lib/pushNotifications';
 
 /**
  * Resolves the authenticated user from Bearer token (mobile) or cookie (web).
@@ -129,7 +131,7 @@ export async function PATCH(request, { params }) {
     const client = await clientPromise;
     const db = client.db('resources');
 
-    const meeting = await db.collection('events').findOne({ _id: objectId }, { projection: { host: 1 } });
+    const meeting = await db.collection('events').findOne({ _id: objectId });
 
     if (!meeting) {
       return NextResponse.json({ error: 'Meeting not found.' }, { status: 404 });
@@ -141,21 +143,111 @@ export async function PATCH(request, { params }) {
     }
 
     const body = await request.json();
-    const { status } = body;
+    const { status, title, description, startTime, duration, joinUrl, provider, participants } = body;
 
-    const allowedStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
-    if (!status || !allowedStatuses.includes(status)) {
-      return NextResponse.json(
-        { error: `Invalid status. Allowed values: ${allowedStatuses.join(', ')}` },
-        { status: 400 }
-      );
+    const updateDoc = { updatedAt: new Date() };
+
+    if (status !== undefined) {
+      const allowedStatuses = ['scheduled', 'in_progress', 'completed', 'cancelled'];
+      if (!allowedStatuses.includes(status)) {
+        return NextResponse.json({ error: `Invalid status. Allowed values: ${allowedStatuses.join(', ')}` }, { status: 400 });
+      }
+      updateDoc.status = status;
     }
+
+    if (title !== undefined) updateDoc.title = title.trim();
+    if (description !== undefined) updateDoc.description = description ? description.trim() : '';
+    if (startTime !== undefined) updateDoc.startTime = startTime;
+    if (duration !== undefined) updateDoc.duration = Number(duration);
+    if (joinUrl !== undefined) updateDoc.joinUrl = joinUrl ? joinUrl.trim() : '';
+    if (provider !== undefined) updateDoc.provider = provider;
+    if (participants !== undefined) updateDoc.participants = participants;
+
+    // Check if postponed (startTime changed)
+    const isTimeChanged = startTime && meeting.startTime && new Date(startTime).getTime() !== new Date(meeting.startTime).getTime();
 
     const result = await db.collection('events').findOneAndUpdate(
       { _id: objectId },
-      { $set: { status, updatedAt: new Date() } },
+      { $set: updateDoc },
       { returnDocument: 'after' }
     );
+
+    // If time changed, trigger notifications asynchronously (fire-and-forget)
+    if (isTimeChanged) {
+      ;(async () => {
+        try {
+          const allParticipants = participants || meeting.participants || [];
+          const updatedTitle = title || meeting.title;
+          const updatedJoinUrl = joinUrl || meeting.joinUrl || meeting.zoomMeetingUrl;
+          const updatedProvider = provider || meeting.provider;
+
+          const oldDate = new Date(meeting.startTime);
+          const newDate = new Date(startTime);
+
+          const oldDateStr = oldDate.toLocaleString('en-IN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'Asia/Kolkata',
+          });
+
+          const newDateStr = newDate.toLocaleString('en-IN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'Asia/Kolkata',
+          });
+
+          // Send push notifications
+          for (const participantEmail of allParticipants) {
+            try {
+              const participantUser = await db.collection('admin_users').findOne(
+                { email: { $regex: `^${participantEmail}$`, $options: 'i' } },
+                { projection: { _id: 1 } }
+              );
+              if (participantUser) {
+                await sendPushNotification(
+                  participantUser._id.toString(),
+                  '📅 Meeting Postponed',
+                  `"${updatedTitle}" rescheduled to ${newDateStr} (was ${oldDateStr})`,
+                  { type: 'meeting_postponed', meetingId: id }
+                );
+              }
+            } catch (perUserErr) {
+              console.error(`Push notify fail for ${participantEmail}:`, perUserErr.message);
+            }
+          }
+
+          // Send emails
+          for (const participantEmail of allParticipants) {
+            try {
+              const subject = `📅 Rescheduled: ${updatedTitle}`;
+              const emailOptions = {
+                host: meeting.host,
+                participants: allParticipants,
+                event: {
+                  title: updatedTitle,
+                  description: `This meeting timing has been updated.\n\n* **Old Time**: ${oldDateStr}\n* **New Time**: ${newDateStr}\n\n${description || meeting.description || ''}`,
+                  startTime: startTime,
+                  duration: duration || meeting.duration || 30,
+                  provider: updatedProvider,
+                  joinUrl: updatedJoinUrl
+                }
+              };
+              await sendEmail(participantEmail, subject, emailOptions);
+            } catch (perUserErr) {
+              console.error(`Email send fail for ${participantEmail}:`, perUserErr.message);
+            }
+          }
+        } catch (notifErr) {
+          console.error('[PATCH /api/meetings/[id]] Notifications failed:', notifErr.message);
+        }
+      })();
+    }
 
     return NextResponse.json({ success: true, meeting: enrichMeeting(result, user.email) });
   } catch (error) {

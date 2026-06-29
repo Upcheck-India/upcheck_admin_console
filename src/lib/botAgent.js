@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 import { decrypt } from './encryption.js';
 import { sendPushNotification } from './pushNotifications.js';
+import { sendEmail } from './email.js';
 
 const BOT_ID = "600000000000000000000001";
 const BOT_USERNAME = "upcheck_admin_bot";
@@ -209,6 +210,28 @@ const tools = [
           }
         },
         required: ["meetingIds"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_meeting",
+      description: "Modify/postpone an existing meeting. Call ONLY after user preview & confirmation.",
+      parameters: {
+        type: "object",
+        properties: {
+          meetingId: { type: "string", description: "The ID of the meeting to update" },
+          title: { type: "string", description: "Updated title" },
+          description: { type: "string", description: "Updated description" },
+          startTime: { type: "string", description: "Updated start time (ISO string) - postpone timing" },
+          duration: { type: "integer", description: "Updated duration in minutes" },
+          joinUrl: { type: "string", description: "Updated join link" },
+          provider: { type: "string", enum: ["google_meet", "zoom"] },
+          participants: { type: "array", items: { type: "string" }, description: "Updated participant list of emails" },
+          status: { type: "string", enum: ["scheduled", "in_progress", "completed", "cancelled"] }
+        },
+        required: ["meetingId"]
       }
     }
   }
@@ -1148,6 +1171,131 @@ async function executeTool(name, args, db, currentUser) {
         deleted: deletedList,
         failed: failedList,
         auditLog: `Upcheck Admin Bot has deleted ${deletedList.length} meeting(s) on behalf of ${userName} (${userEmail}).`
+      });
+    }
+
+    if (name === 'update_meeting') {
+      if (userRole === 'Intern') {
+        return JSON.stringify({ error: "Permission Denied: Interns are not authorized to update meetings." });
+      }
+
+      const { meetingId, title, description, startTime, duration, joinUrl, provider, participants, status } = args;
+
+      if (!meetingId || !ObjectId.isValid(meetingId)) {
+        return JSON.stringify({ error: "Invalid or missing meetingId" });
+      }
+
+      const meeting = await db.collection('events').findOne({ _id: new ObjectId(meetingId) });
+      if (!meeting) {
+        return JSON.stringify({ error: "Meeting not found" });
+      }
+
+      const isHost = (meeting.host || '').toLowerCase() === userEmail.toLowerCase();
+      if (!isHost) {
+        return JSON.stringify({ error: "Forbidden: Only the host can update/modify this meeting." });
+      }
+
+      const updateDoc = { updatedAt: new Date() };
+
+      if (title !== undefined) updateDoc.title = title.trim();
+      if (description !== undefined) updateDoc.description = description ? description.trim() : '';
+      if (startTime !== undefined) updateDoc.startTime = startTime;
+      if (duration !== undefined) updateDoc.duration = Number(duration);
+      if (joinUrl !== undefined) updateDoc.joinUrl = joinUrl ? joinUrl.trim() : '';
+      if (provider !== undefined) updateDoc.provider = provider;
+      if (participants !== undefined) updateDoc.participants = participants;
+      if (status !== undefined) updateDoc.status = status;
+
+      const isTimeChanged = startTime && meeting.startTime && new Date(startTime).getTime() !== new Date(meeting.startTime).getTime();
+
+      const result = await db.collection('events').findOneAndUpdate(
+        { _id: new ObjectId(meetingId) },
+        { $set: updateDoc },
+        { returnDocument: 'after' }
+      );
+
+      // Trigger notifications if timing changed (rescheduled/postponed)
+      if (isTimeChanged) {
+        ;(async () => {
+          try {
+            const allParticipants = participants || meeting.participants || [];
+            const updatedTitle = title || meeting.title;
+            const updatedJoinUrl = joinUrl || meeting.joinUrl || meeting.zoomMeetingUrl;
+            const updatedProvider = provider || meeting.provider;
+
+            const oldDate = new Date(meeting.startTime);
+            const newDate = new Date(startTime);
+
+            const oldDateStr = oldDate.toLocaleString('en-IN', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+              timeZone: 'Asia/Kolkata',
+            });
+
+            const newDateStr = newDate.toLocaleString('en-IN', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true,
+              timeZone: 'Asia/Kolkata',
+            });
+
+            // Send push notifications
+            for (const participantEmail of allParticipants) {
+              try {
+                const participantUser = await db.collection('admin_users').findOne(
+                  { email: { $regex: `^${participantEmail}$`, $options: 'i' } },
+                  { projection: { _id: 1 } }
+                );
+                if (participantUser) {
+                  await sendPushNotification(
+                    participantUser._id.toString(),
+                    '📅 Meeting Postponed',
+                    `"${updatedTitle}" rescheduled to ${newDateStr} (was ${oldDateStr})`,
+                    { type: 'meeting_postponed', meetingId: meetingId }
+                  ).catch(() => {});
+                }
+              } catch (perUserErr) {
+                console.error(`Push notify fail for ${participantEmail}:`, perUserErr.message);
+              }
+            }
+
+            // Send emails
+            for (const participantEmail of allParticipants) {
+              try {
+                const subject = `📅 Rescheduled: ${updatedTitle}`;
+                const emailOptions = {
+                  host: meeting.host,
+                  participants: allParticipants,
+                  event: {
+                    title: updatedTitle,
+                    description: `This meeting timing has been updated.\n\n* **Old Time**: ${oldDateStr}\n* **New Time**: ${newDateStr}\n\n${description || meeting.description || ''}`,
+                    startTime: startTime,
+                    duration: duration || meeting.duration || 30,
+                    provider: updatedProvider,
+                    joinUrl: updatedJoinUrl
+                  }
+                };
+                await sendEmail(participantEmail, subject, emailOptions).catch(() => {});
+              } catch (perUserErr) {
+                console.error(`Email send fail for ${participantEmail}:`, perUserErr.message);
+              }
+            }
+          } catch (notifErr) {
+            console.error('[botAgent update_meeting] Notifications failed:', notifErr.message);
+          }
+        })();
+      }
+
+      return JSON.stringify({
+        success: true,
+        meeting: result,
+        isTimeChanged,
+        auditLog: `Upcheck Admin Bot has updated meeting "${result.title}" on behalf of ${userName} (${userEmail}).`
       });
     }
 
