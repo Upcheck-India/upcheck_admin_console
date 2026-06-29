@@ -149,6 +149,29 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Message body or mediaUrl is required' }, { status: 400 });
     }
 
+    const group = await db.collection('group_chats').findOne({ _id: new ObjectId(groupId) });
+    if (!group) {
+      return NextResponse.json({ error: 'Group chat not found' }, { status: 404 });
+    }
+
+    const botId = "600000000000000000000001";
+    const cleanBody = body?.trim() || '';
+    const isBotMentioned = cleanBody.toLowerCase().includes('@upcheck_admin_bot');
+    const isBotMember = group.members && group.members.some(m => m.toString() === botId);
+
+    if (isBotMember && isBotMentioned) {
+      if (group.isBotProcessing) {
+        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+      }
+      const lockRes = await db.collection('group_chats').updateOne(
+        { _id: group._id, isBotProcessing: { $ne: true } },
+        { $set: { isBotProcessing: true } }
+      );
+      if (lockRes.modifiedCount === 0) {
+        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+      }
+    }
+
     const messageType = body?.trim() ? 'text' : 'image';
 
     // Look up parent message to store reply snippet
@@ -213,7 +236,6 @@ export async function POST(req, { params }) {
 
     // Send push notifications to group members
     try {
-      const group = await db.collection('group_chats').findOne({ _id: new ObjectId(groupId) });
       if (group) {
         // Find team documents to resolve members
         const groupTeams = await db.collection('teams').find({
@@ -299,6 +321,18 @@ export async function POST(req, { params }) {
       }
     } catch (pushErr) {
       console.error('Failed to trigger group chat push notifications:', pushErr);
+    }
+
+    if (isBotMember && isBotMentioned) {
+      import('../../../../../lib/botAgent.js').then(({ triggerBotAgent }) => {
+        triggerBotAgent({
+          chatType: 'group',
+          chatId: groupId,
+          body: cleanBody,
+          currentUser: user,
+          db
+        }).catch(e => console.error('Group Bot execution error:', e));
+      });
     }
 
     return NextResponse.json({

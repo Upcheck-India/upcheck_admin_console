@@ -8,6 +8,58 @@ export async function GET(request) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { user: currentUser, db } = auth;
 
+    // Ensure Bot user exists
+    const botId = "600000000000000000000001";
+    const botDetails = {
+      _id: new ObjectId(botId),
+      username: "upcheck_admin_bot",
+      firstName: "Upcheck Admin",
+      lastName: "Bot",
+      name: "Upcheck Admin Bot",
+      email: "upcheck_admin_bot@upcheck.in",
+      role: "bot",
+      messagingId: "upcheck_admin_bot",
+      messagingPrivacy: "everyone",
+      createdAt: new Date(),
+    };
+    await db.collection('admin_users').updateOne(
+      { _id: new ObjectId(botId) },
+      { $setOnInsert: botDetails },
+      { upsert: true }
+    );
+
+    // Ensure connection with bot exists by default
+    const botConnection = await db.collection('chat_connections').findOne({
+      userId: currentUser._id.toString(),
+      peerId: botId
+    });
+
+    if (!botConnection) {
+      const conversationId = new ObjectId();
+      await db.collection('conversations').insertOne({
+        _id: conversationId,
+        participants: [currentUser._id.toString(), botId],
+        lastMessageAt: new Date(),
+        createdAt: new Date(),
+      });
+      await db.collection('chat_connections').insertOne({
+        userId: currentUser._id.toString(),
+        peerId: botId,
+        status: 'accepted',
+        conversationId: conversationId.toString(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      await db.collection('chat_connections').insertOne({
+        userId: botId,
+        peerId: currentUser._id.toString(),
+        status: 'accepted',
+        conversationId: conversationId.toString(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
+
     // Get all connections for current user
     const connections = await db.collection('chat_connections')
       .find({ userId: currentUser._id.toString() })

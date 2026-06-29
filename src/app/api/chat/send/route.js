@@ -30,16 +30,30 @@ export async function POST(request) {
     }
 
     const recipientId = conversation.participants.find(p => p !== currentUser._id.toString());
+    const botId = "600000000000000000000001";
 
-    // Check connection status
-    const connection = await db.collection('chat_connections').findOne({
-      userId: currentUser._id.toString(),
-      peerId: recipientId,
-      status: 'accepted'
-    });
+    if (recipientId === botId) {
+      if (conversation.isBotProcessing) {
+        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+      }
+      const lockRes = await db.collection('conversations').updateOne(
+        { _id: conversation._id, isBotProcessing: { $ne: true } },
+        { $set: { isBotProcessing: true } }
+      );
+      if (lockRes.modifiedCount === 0) {
+        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+      }
+    } else {
+      // Check connection status
+      const connection = await db.collection('chat_connections').findOne({
+        userId: currentUser._id.toString(),
+        peerId: recipientId,
+        status: 'accepted'
+      });
 
-    if (!connection) {
-      return NextResponse.json({ error: 'Connection not accepted' }, { status: 403 });
+      if (!connection) {
+        return NextResponse.json({ error: 'Connection not accepted' }, { status: 403 });
+      }
     }
 
     // Check for duplicate (by clientId)
@@ -99,7 +113,17 @@ export async function POST(request) {
       recipientMute.isForever || (recipientMute.mutedUntil && new Date(recipientMute.mutedUntil) > new Date())
     );
 
-    if (!isRecipientMuted) {
+    if (recipientId === botId) {
+      import('../../../../lib/botAgent.js').then(({ triggerBotAgent }) => {
+        triggerBotAgent({
+          chatType: 'dm',
+          chatId: conversationId,
+          body: body?.trim() || '',
+          currentUser,
+          db
+        }).catch(e => console.error('Bot Agent execution error:', e));
+      });
+    } else if (!isRecipientMuted) {
       // Send push notification to recipient
       await sendPushNotification(
         recipientId,

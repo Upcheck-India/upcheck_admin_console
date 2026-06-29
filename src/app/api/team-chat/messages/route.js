@@ -143,6 +143,24 @@ export async function POST(request) {
     const team = await verifyTeamMember(db, teamId, currentUser._id.toString());
     if (!team) return NextResponse.json({ error: 'Not a team member' }, { status: 403 });
 
+    const botId = "600000000000000000000001";
+    const cleanBody = body?.trim() || '';
+    const isBotMentioned = cleanBody.toLowerCase().includes('@upcheck_admin_bot');
+    const isBotMember = team.members && team.members.some(m => m.toString() === botId);
+
+    if (isBotMember && isBotMentioned) {
+      if (team.isBotProcessing) {
+        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+      }
+      const lockRes = await db.collection('teams').updateOne(
+        { _id: team._id, isBotProcessing: { $ne: true } },
+        { $set: { isBotProcessing: true } }
+      );
+      if (lockRes.modifiedCount === 0) {
+        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+      }
+    }
+
     // Idempotency check
     if (clientId) {
       const existing = await db.collection('team_messages').findOne({ clientId });
@@ -261,6 +279,18 @@ export async function POST(request) {
         body?.trim() || '📷 Image',
         { type: 'team_message', teamId, teamName: team.name }
       ).catch(err => console.error('[TeamChat Push Error]', err));
+    }
+
+    if (isBotMember && isBotMentioned) {
+      import('../../../../lib/botAgent.js').then(({ triggerBotAgent }) => {
+        triggerBotAgent({
+          chatType: 'team',
+          chatId: teamId,
+          body: cleanBody,
+          currentUser,
+          db
+        }).catch(e => console.error('Team Bot execution error:', e));
+      });
     }
 
     return NextResponse.json({
