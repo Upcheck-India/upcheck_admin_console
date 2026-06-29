@@ -11,13 +11,13 @@ const tools = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "List upcoming meetings and calendar events in the workspace. Returns titles, descriptions, timings, and participant lists. Can be filtered by teamName/teamId or search query.",
+      description: "List meetings. Filters: teamName, teamId, search query.",
       parameters: {
         type: "object",
         properties: {
-          teamName: { type: "string", description: "Optional name of the team to filter meetings for (e.g. 'Dairy app')" },
-          teamId: { type: "string", description: "Optional team ID to filter meetings for" },
-          search: { type: "string", description: "Optional query to search meetings by title or description" }
+          teamName: { type: "string", description: "Filter by team name (e.g. 'Dairy app')" },
+          teamId: { type: "string", description: "Filter by team ID" },
+          search: { type: "string", description: "Search keyword" }
         }
       }
     }
@@ -26,22 +26,18 @@ const tools = [
     type: "function",
     function: {
       name: "create_meeting",
-      description: "Schedule a new meeting/event on behalf of the user. Requires title, description, startTime (ISO string), duration (minutes), provider ('google_meet' | 'zoom'), and participants list (emails). Only users with permissions can schedule meetings. Interns are forbidden.",
+      description: "Schedule a meeting. Call ONLY after user preview & confirmation.",
       parameters: {
         type: "object",
         properties: {
-          title: { type: "string", description: "Title of the meeting" },
-          description: { type: "string", description: "Brief overview of what the meeting covers" },
-          startTime: { type: "string", description: "ISO 8601 string representing the start time of the meeting" },
-          duration: { type: "integer", description: "Meeting duration in minutes (between 1 and 300)" },
-          provider: { type: "string", enum: ["google_meet", "zoom"], default: "google_meet" },
-          joinUrl: { type: "string", description: "The Google Meet or Zoom join link provided by the user. Prompt the user for this link first." },
-          sendEmailInvites: { type: "boolean", description: "Whether to send invites/notifications to participants. Defaults to true." },
-          participants: {
-            type: "array",
-            items: { type: "string" },
-            description: "List of participant email addresses"
-          }
+          title: { type: "string", description: "Title" },
+          description: { type: "string", description: "Description" },
+          startTime: { type: "string", description: "ISO startTime" },
+          duration: { type: "integer", description: "Duration in minutes" },
+          provider: { type: "string", enum: ["google_meet", "zoom"] },
+          joinUrl: { type: "string", description: "Google Meet or Zoom link provided by user" },
+          sendEmailInvites: { type: "boolean", description: "Send invites (default true)" },
+          participants: { type: "array", items: { type: "string" }, description: "Participant emails" }
         },
         required: ["title", "description", "startTime", "duration"]
       }
@@ -51,7 +47,7 @@ const tools = [
     type: "function",
     function: {
       name: "list_teams",
-      description: "Retrieve list of all active teams and departments in the organization. Accessible to Admins and Console admins only.",
+      description: "List active teams. Accessible to Admins/Console admins only.",
       parameters: { type: "object", properties: {} }
     }
   },
@@ -59,11 +55,11 @@ const tools = [
     type: "function",
     function: {
       name: "list_users",
-      description: "View the workspace directory of users, containing usernames, display names, emails, roles, and departments. Supports optional search query.",
+      description: "View workspace users. Supports optional search query.",
       parameters: {
         type: "object",
         properties: {
-          search: { type: "string", description: "Optional name or username to search/filter users" }
+          search: { type: "string", description: "Search by username/name" }
         }
       }
     }
@@ -72,7 +68,7 @@ const tools = [
     type: "function",
     function: {
       name: "list_projects",
-      description: "List active projects in the organization that the user has access to. Returns project names, description, manager, and tags.",
+      description: "List accessible projects.",
       parameters: { type: "object", properties: {} }
     }
   },
@@ -80,7 +76,7 @@ const tools = [
     type: "function",
     function: {
       name: "list_announcements",
-      description: "List active announcements in the organization that are visible to the user. Returns title, content, whether it is important, and creator details.",
+      description: "List visible announcements.",
       parameters: { type: "object", properties: {} }
     }
   },
@@ -88,13 +84,13 @@ const tools = [
     type: "function",
     function: {
       name: "create_announcement",
-      description: "Publish a new workspace announcement on behalf of the user. Only Admins and Console admins are permitted. Requires title, content, and optionally isImportant (boolean) to trigger a broadcast notification.",
+      description: "Create an announcement. Admins/Console admins only.",
       parameters: {
         type: "object",
         properties: {
-          title: { type: "string", description: "Title of the announcement" },
-          content: { type: "string", description: "Detailed content message of the announcement" },
-          isImportant: { type: "boolean", description: "Whether to mark as important and broadcast to all users" }
+          title: { type: "string", description: "Title" },
+          content: { type: "string", description: "Content" },
+          isImportant: { type: "boolean", description: "Broadcast push notification" }
         },
         required: ["title", "content"]
       }
@@ -104,11 +100,11 @@ const tools = [
     type: "function",
     function: {
       name: "get_project_details",
-      description: "Get complete details of a specific project, including managers, members list, allowed teams, and settings.",
+      description: "Get details (members, permitted teams/roles) of a project.",
       parameters: {
         type: "object",
         properties: {
-          projectId: { type: "string", description: "The ID of the project to retrieve details for" }
+          projectId: { type: "string", description: "Project ID" }
         },
         required: ["projectId"]
       }
@@ -118,11 +114,11 @@ const tools = [
     type: "function",
     function: {
       name: "list_sprints",
-      description: "List all sprints for a specific project. Returns sprint names, start/end dates, status, and IDs.",
+      description: "List sprints of a project.",
       parameters: {
         type: "object",
         properties: {
-          projectId: { type: "string", description: "The ID of the project to list sprints for" }
+          projectId: { type: "string", description: "Project ID" }
         },
         required: ["projectId"]
       }
@@ -132,16 +128,16 @@ const tools = [
     type: "function",
     function: {
       name: "query_tasks",
-      description: "Query, search, list, and filter project tasks across the workspace. Can be filtered by projectId, sprintId, assigneeId (user ID), status, priority, or nearDeadline.",
+      description: "Query and filter project tasks by project, sprint, assignee, status, priority, or deadline.",
       parameters: {
         type: "object",
         properties: {
-          projectId: { type: "string", description: "Optional project ID to filter tasks" },
-          sprintId: { type: "string", description: "Optional sprint ID to filter tasks" },
-          assigneeId: { type: "string", description: "Optional user ID to filter tasks assigned to a specific person" },
-          status: { type: "string", description: "Optional status to filter (e.g. 'Backlog', 'To Do', 'In Progress', 'Done')" },
-          priority: { type: "string", description: "Optional priority (e.g. 'Low', 'Medium', 'High', 'Critical')" },
-          nearDeadline: { type: "boolean", description: "Optional. If true, returns only tasks with deadlines in the next 7 days." }
+          projectId: { type: "string", description: "Filter by project ID" },
+          sprintId: { type: "string", description: "Filter by sprint ID or 'null' for backlog" },
+          assigneeId: { type: "string", description: "Filter by assignee ID" },
+          status: { type: "string", description: "Filter by status" },
+          priority: { type: "string", description: "Filter by priority" },
+          nearDeadline: { type: "boolean", description: "True to get tasks due in 7 days" }
         }
       }
     }
@@ -150,7 +146,7 @@ const tools = [
     type: "function",
     function: {
       name: "get_workspace_workload",
-      description: "Get a workload summary of all workspace users, including the names and counts of tasks and projects assigned to each user.",
+      description: "Get counts of tasks/projects per user across workspace.",
       parameters: { type: "object", properties: {} }
     }
   },
@@ -158,14 +154,14 @@ const tools = [
     type: "function",
     function: {
       name: "edit_announcement",
-      description: "Edit/update an existing workspace announcement. Requires announcementId and updated fields. Accessible to Admins and Console admins only.",
+      description: "Edit announcement. Admins/Console admins only.",
       parameters: {
         type: "object",
         properties: {
-          announcementId: { type: "string", description: "The ID of the announcement to update" },
-          title: { type: "string", description: "Optional updated title" },
-          content: { type: "string", description: "Optional updated content" },
-          isImportant: { type: "boolean", description: "Optional updated flag for importance" }
+          announcementId: { type: "string", description: "Announcement ID" },
+          title: { type: "string", description: "Updated title" },
+          content: { type: "string", description: "Updated content" },
+          isImportant: { type: "boolean", description: "Updated flag for push" }
         },
         required: ["announcementId"]
       }
@@ -175,11 +171,11 @@ const tools = [
     type: "function",
     function: {
       name: "delete_announcement",
-      description: "Delete an existing workspace announcement. Requires announcementId. Accessible to Admins and Console admins only.",
+      description: "Delete announcement. Admins/Console admins only.",
       parameters: {
         type: "object",
         properties: {
-          announcementId: { type: "string", description: "The ID of the announcement to delete" }
+          announcementId: { type: "string", description: "Announcement ID" }
         },
         required: ["announcementId"]
       }
@@ -189,11 +185,11 @@ const tools = [
     type: "function",
     function: {
       name: "get_project_leaderboard",
-      description: "Retrieve leaderboard ranks, points, completed tasks, comments, and badges for a specific project, or overall across all accessible projects in the workspace.",
+      description: "Get project leaderboard. Omit projectId for overall standings.",
       parameters: {
         type: "object",
         properties: {
-          projectId: { type: "string", description: "Optional project ID. If omitted, returns the overall workspace-wide leaderboard aggregated across all accessible projects." }
+          projectId: { type: "string", description: "Optional project ID" }
         }
       }
     }
@@ -1252,14 +1248,13 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
       const history = await db.collection('chat_messages')
         .find({ conversationId: chatId, status: { $ne: 'streaming' } })
         .sort({ createdAt: -1 })
-        .limit(8)
+        .limit(4)
         .toArray();
       
       history.reverse().forEach((m, idx) => {
         let content = m.body || '';
-        // Compress older messages in context history to save tokens
-        if (idx < history.length - 2 && content.length > 250) {
-          content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 250) + '... (truncated)';
+        if (idx < history.length - 1 && content.length > 150) {
+          content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 150) + '... (truncated)';
         }
         messages.push({
           role: m.senderId === BOT_ID ? 'assistant' : 'user',
@@ -1270,13 +1265,13 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
       const history = await db.collection('group_chat_messages')
         .find({ groupId: chatId, status: { $ne: 'streaming' } })
         .sort({ createdAt: -1 })
-        .limit(8)
+        .limit(4)
         .toArray();
       
       history.reverse().forEach((m, idx) => {
         let content = m.body || '';
-        if (idx < history.length - 2 && content.length > 250) {
-          content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 250) + '... (truncated)';
+        if (idx < history.length - 1 && content.length > 150) {
+          content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 150) + '... (truncated)';
         }
         messages.push({
           role: m.senderId === BOT_ID ? 'assistant' : 'user',
@@ -1287,13 +1282,13 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
       const history = await db.collection('team_messages')
         .find({ teamId: chatId, status: { $ne: 'streaming' } })
         .sort({ createdAt: -1 })
-        .limit(8)
+        .limit(4)
         .toArray();
       
       history.reverse().forEach((m, idx) => {
         let content = m.body || '';
-        if (idx < history.length - 2 && content.length > 250) {
-          content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 250) + '... (truncated)';
+        if (idx < history.length - 1 && content.length > 150) {
+          content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 150) + '... (truncated)';
         }
         messages.push({
           role: m.senderId === BOT_ID ? 'assistant' : 'user',
