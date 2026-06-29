@@ -253,14 +253,43 @@ export async function POST(req, { params }) {
           id => !mutedUserIds.has(id)
         );
 
+        // Parse mentions
+        const cleanBody = body?.trim() || '';
+        const lowerBody = cleanBody.toLowerCase();
+        const isMentionAll = lowerBody.includes('@everyone') || lowerBody.includes('@all') || lowerBody.includes('@here');
+        
+        let mentionedUserIds = new Set();
+        if (isMentionAll) {
+          nonMutedRecipients.forEach(id => mentionedUserIds.add(id));
+        } else {
+          const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
+          const matches = [...cleanBody.matchAll(mentionRegex)].map(m => m[1].toLowerCase());
+          if (matches.length > 0) {
+            const users = await db.collection('admin_users').find({
+              username: { $in: matches }
+            }, { projection: { _id: 1 } }).toArray();
+            users.forEach(u => {
+              const uIdStr = u._id.toString();
+              if (nonMutedRecipients.includes(uIdStr)) {
+                mentionedUserIds.add(uIdStr);
+              }
+            });
+          }
+        }
+
         const senderName = user.firstName || user.lastName
           ? `${user.firstName} ${user.lastName}`.trim()
           : user.username;
 
         for (const recipientId of nonMutedRecipients) {
+          const isMentioned = mentionedUserIds.has(recipientId);
+          const title = isMentioned 
+            ? `🚨 ${senderName} mentioned you in group ${group.name}`
+            : `${senderName} in group ${group.name}`;
+
           sendPushNotification(
             recipientId,
-            `${senderName} in group ${group.name}`,
+            title,
             body?.trim() || '📷 Image',
             { type: 'group_message', groupId, groupName: group.name }
           ).catch(err => console.error('[GroupChat Push Error]', err));

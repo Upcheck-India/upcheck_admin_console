@@ -223,10 +223,39 @@ export async function POST(request) {
       id => !mutedUserIds.has(id)
     );
 
+    // Parse mentions
+    const cleanBody = body?.trim() || '';
+    const lowerBody = cleanBody.toLowerCase();
+    const isMentionAll = lowerBody.includes('@everyone') || lowerBody.includes('@all') || lowerBody.includes('@here');
+    
+    let mentionedUserIds = new Set();
+    if (isMentionAll) {
+      nonMutedRecipients.forEach(id => mentionedUserIds.add(id));
+    } else {
+      const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
+      const matches = [...cleanBody.matchAll(mentionRegex)].map(m => m[1].toLowerCase());
+      if (matches.length > 0) {
+        const users = await db.collection('admin_users').find({
+          username: { $in: matches }
+        }, { projection: { _id: 1 } }).toArray();
+        users.forEach(u => {
+          const uIdStr = u._id.toString();
+          if (nonMutedRecipients.includes(uIdStr)) {
+            mentionedUserIds.add(uIdStr);
+          }
+        });
+      }
+    }
+
     for (const recipientId of nonMutedRecipients) {
+      const isMentioned = mentionedUserIds.has(recipientId);
+      const title = isMentioned 
+        ? `🚨 ${senderName} mentioned you in team ${team.name}`
+        : `${senderName} in ${team.name}`;
+
       sendPushNotification(
         recipientId,
-        `${senderName} in ${team.name}`,
+        title,
         body?.trim() || '📷 Image',
         { type: 'team_message', teamId, teamName: team.name }
       ).catch(err => console.error('[TeamChat Push Error]', err));
