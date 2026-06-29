@@ -163,3 +163,47 @@ export async function PATCH(request, { params }) {
     return NextResponse.json({ error: 'Failed to update meeting.' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/meetings/[id]
+ * Cancels/Deletes a specific meeting.
+ * RBAC: must be host.
+ */
+export async function DELETE(request, { params }) {
+  try {
+    const user = await getUser(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized. Please login again.' }, { status: 401 });
+    }
+
+    const { id } = await params;
+
+    let objectId;
+    try {
+      objectId = new ObjectId(id);
+    } catch {
+      return NextResponse.json({ error: 'Invalid meeting ID.' }, { status: 400 });
+    }
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    const meeting = await db.collection('events').findOne({ _id: objectId });
+
+    if (!meeting) {
+      return NextResponse.json({ error: 'Meeting not found.' }, { status: 404 });
+    }
+
+    const isHost = (meeting.host || '').toLowerCase() === user.email.toLowerCase();
+    if (!isHost) {
+      return NextResponse.json({ error: 'Forbidden. Only the host can cancel/delete this meeting.' }, { status: 403 });
+    }
+
+    await db.collection('events').deleteOne({ _id: objectId });
+
+    return NextResponse.json({ success: true, message: 'Meeting deleted successfully.' });
+  } catch (error) {
+    console.error('[DELETE /api/meetings/[id]] Error:', error);
+    return NextResponse.json({ error: 'Failed to cancel meeting.' }, { status: 500 });
+  }
+}

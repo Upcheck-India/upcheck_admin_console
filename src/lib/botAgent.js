@@ -193,6 +193,24 @@ const tools = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_meetings",
+      description: "Delete one or more meetings by their IDs. Call ONLY after user preview & confirmation.",
+      parameters: {
+        type: "object",
+        properties: {
+          meetingIds: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of meeting IDs to delete"
+          }
+        },
+        required: ["meetingIds"]
+      }
+    }
   }
 ];
 
@@ -1090,6 +1108,49 @@ async function executeTool(name, args, db, currentUser) {
       })).slice(0, 15));
     }
 
+    if (name === 'delete_meetings') {
+      if (userRole === 'Intern') {
+        return JSON.stringify({ error: "Permission Denied: Interns are not authorized to cancel/delete meetings." });
+      }
+
+      const { meetingIds } = args;
+      if (!meetingIds || !Array.isArray(meetingIds) || meetingIds.length === 0) {
+        return JSON.stringify({ error: "Invalid or missing meetingIds array" });
+      }
+
+      const deletedList = [];
+      const failedList = [];
+
+      for (const id of meetingIds) {
+        if (!id || !ObjectId.isValid(id)) {
+          failedList.push({ id, error: "Invalid meeting ID format" });
+          continue;
+        }
+
+        const meeting = await db.collection('events').findOne({ _id: new ObjectId(id) });
+        if (!meeting) {
+          failedList.push({ id, error: "Meeting not found" });
+          continue;
+        }
+
+        const isHost = (meeting.host || '').toLowerCase() === userEmail.toLowerCase();
+        if (!isHost) {
+          failedList.push({ id, title: meeting.title, error: "Forbidden: Only the host can cancel/delete this meeting" });
+          continue;
+        }
+
+        await db.collection('events').deleteOne({ _id: new ObjectId(id) });
+        deletedList.push({ id, title: meeting.title });
+      }
+
+      return JSON.stringify({
+        success: deletedList.length > 0,
+        deleted: deletedList,
+        failed: failedList,
+        auditLog: `Upcheck Admin Bot has deleted ${deletedList.length} meeting(s) on behalf of ${userName} (${userEmail}).`
+      });
+    }
+
     return JSON.stringify({ error: `Unknown tool: ${name}` });
   } catch (err) {
     console.error(`Execute tool error [${name}]:`, err);
@@ -1270,9 +1331,10 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
 - Keep responses concise, clear, and straight to the point unless the user requests more detail.
 
 ## Write Tool Guardrails & Confirmation Flow
-- **CRITICAL**: When the user asks to create/schedule a meeting (\`create_meeting\`) or create, edit, or delete an announcement (\`create_announcement\`, \`edit_announcement\`, \`delete_announcement\`), you **MUST NOT** call the tool immediately.
+- **CRITICAL**: When the user asks to create/schedule a meeting (\`create_meeting\`), delete/cancel meetings (\`delete_meetings\`), or create, edit, or delete an announcement (\`create_announcement\`, \`edit_announcement\`, \`delete_announcement\`), you **MUST NOT** call the tool immediately.
 - First, present a clear preview of the proposed changes/details and ask the user to explicitly confirm.
 - For meetings: ask "Would you like me to schedule this meeting? Do you want to send email invites to the participants?" and prompt them to provide the join link.
+- For cancelling meetings: ask "Would you like me to delete/cancel these meetings? (list their titles)" and confirm.
 - For announcements: ask "Would you like me to publish/edit/delete this announcement? Do you want to broadcast a push notification to all users?" Only set \`isImportant: true\` if they explicitly agree to send a push broadcast.
 - Only invoke the write tool once the user explicitly confirms (e.g., "Confirm", "Yes", "Go ahead").
 
@@ -1283,8 +1345,8 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
 - When a tool returns an error, explain it clearly and suggest next steps.
 
 ## Permission Rules
-- Intern: ❌ Denied create_meeting, list_teams, create_announcement, edit_announcement, delete_announcement
-- Member: ✅ Allowed create_meeting | ❌ Denied list_teams, create_announcement, edit_announcement, delete_announcement
+- Intern: ❌ Denied create_meeting, delete_meetings, list_teams, create_announcement, edit_announcement, delete_announcement
+- Member: ✅ Allowed create_meeting, delete_meetings | ❌ Denied list_teams, create_announcement, edit_announcement, delete_announcement
 - Admin / Console admin: ✅ Allowed all`
       }
     ];
