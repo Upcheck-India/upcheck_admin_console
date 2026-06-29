@@ -39,6 +39,8 @@ function enrichMeeting(meeting, userEmail) {
     endTime: meeting.endTime,
     provider: meeting.provider,
     joinUrl: meeting.joinUrl || meeting.zoomMeetingUrl,
+    useInterstitialJoin: !!meeting.useInterstitialJoin,
+    redirectDelay: meeting.redirectDelay || 5,
     status: meeting.status || 'scheduled',
     momDocuments: meeting.momDocuments || [],
     isRecurring: !!meeting.seriesId,
