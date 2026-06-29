@@ -7,9 +7,16 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '../../../../lib/mongodb.js';
 import { getAdminNotificationHistory, adminNotificationManager } from '../../../../lib/adminNotifications.js';
 import { alertSystem } from '../../../../lib/monitoring.js';
+import { getAuthUser } from '../../../../lib/auth.js';
 
 export async function GET(request) {
   try {
+    const auth = await getAuthUser(request);
+    if (!auth) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+    const { user: currentUser } = auth;
+
     const { searchParams } = new URL(request.url);
     const hours = parseInt(searchParams.get('hours')) || 24;
     const type = searchParams.get('type');
@@ -34,7 +41,12 @@ export async function GET(request) {
       const db = connection.db || global.mongoose?.connection?.db || connection.useDb('resources').db;
       
       const query = {
-        createdAt: { $gte: new Date(Date.now() - hours * 60 * 60 * 1000) }
+        createdAt: { $gte: new Date(Date.now() - hours * 60 * 60 * 1000) },
+        $or: [
+          { targetUser: { $exists: false } },
+          { targetUser: null },
+          { targetUser: currentUser.email.toLowerCase() }
+        ]
       };
       
       if (type) query.type = type;

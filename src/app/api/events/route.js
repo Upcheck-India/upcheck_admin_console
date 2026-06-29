@@ -258,6 +258,25 @@ export async function POST(request) {
               `${eventData.title} on ${dateStr}`,
               { type: 'new_meeting', meetingId: result.insertedId.toString() }
             );
+
+            // Insert matching record into admin_notifications for the app screen
+            await pushDb.collection('admin_notifications').insertOne({
+              id: `meet_created_${result.insertedId.toString()}_${participantUser._id.toString()}`,
+              type: 'meeting_created',
+              severity: 'low',
+              timestamp: new Date().toISOString(),
+              acknowledged: false,
+              acknowledgedAt: null,
+              acknowledgedBy: null,
+              targetUser: participantEmail.toLowerCase(),
+              data: {
+                title: '📅 New Meeting Invite',
+                message: `You have been invited to "${eventData.title}" on ${dateStr}.`,
+                meetingId: result.insertedId.toString()
+              },
+              createdAt: new Date()
+            }).catch(() => {});
+
           } catch (perUserErr) {
             console.error(`[events POST] Push notification failed for ${participantEmail}:`, perUserErr.message);
           }

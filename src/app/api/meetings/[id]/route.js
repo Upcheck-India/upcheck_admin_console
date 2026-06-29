@@ -216,6 +216,24 @@ export async function PATCH(request, { params }) {
                   `"${updatedTitle}" rescheduled to ${newDateStr} (was ${oldDateStr})`,
                   { type: 'meeting_postponed', meetingId: id }
                 );
+
+                // Insert into admin_notifications for the user's mobile screen
+                await db.collection('admin_notifications').insertOne({
+                  id: `meet_postponed_${id}_${participantUser._id.toString()}_${Date.now()}`,
+                  type: 'meeting_postponed',
+                  severity: 'medium',
+                  timestamp: new Date().toISOString(),
+                  acknowledged: false,
+                  acknowledgedAt: null,
+                  acknowledgedBy: null,
+                  targetUser: participantEmail.toLowerCase(),
+                  data: {
+                    title: '📅 Meeting Postponed',
+                    message: `Meeting "${updatedTitle}" has been rescheduled to ${newDateStr} (was ${oldDateStr}).`,
+                    meetingId: id
+                  },
+                  createdAt: new Date()
+                }).catch(() => {});
               }
             } catch (perUserErr) {
               console.error(`Push notify fail for ${participantEmail}:`, perUserErr.message);

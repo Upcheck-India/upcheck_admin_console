@@ -1258,6 +1258,24 @@ async function executeTool(name, args, db, currentUser) {
                     `"${updatedTitle}" rescheduled to ${newDateStr} (was ${oldDateStr})`,
                     { type: 'meeting_postponed', meetingId: meetingId }
                   ).catch(() => {});
+
+                  // Insert matching record into admin_notifications for the app screen
+                  await db.collection('admin_notifications').insertOne({
+                    id: `meet_postponed_${meetingId}_${participantUser._id.toString()}_${Date.now()}`,
+                    type: 'meeting_postponed',
+                    severity: 'medium',
+                    timestamp: new Date().toISOString(),
+                    acknowledged: false,
+                    acknowledgedAt: null,
+                    acknowledgedBy: null,
+                    targetUser: participantEmail.toLowerCase(),
+                    data: {
+                      title: '📅 Meeting Postponed',
+                      message: `Meeting "${updatedTitle}" has been rescheduled to ${newDateStr} (was ${oldDateStr}).`,
+                      meetingId: meetingId
+                    },
+                    createdAt: new Date()
+                  }).catch(() => {});
                 }
               } catch (perUserErr) {
                 console.error(`Push notify fail for ${participantEmail}:`, perUserErr.message);
