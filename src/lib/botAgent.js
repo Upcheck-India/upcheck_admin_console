@@ -1097,6 +1097,28 @@ async function executeTool(name, args, db, currentUser) {
   }
 }
 
+function ultraSummarize(content) {
+  if (!content) return '';
+  let cleanContent = content.replace(/\|[\s\S]*?\|/g, '');
+
+  const titleMatch = cleanContent.match(/(?:Title|Project|Meeting):\s*\**([^\n*]+)/i);
+  const dateMatch = cleanContent.match(/(?:Date & Time|Date|Time):\s*\**([^\n*]+)/i);
+  const linkMatch = cleanContent.match(/(?:Join link|Link|URL):\s*\**([^\n*`]+)/i);
+  const hostMatch = cleanContent.match(/(?:Host):\s*\**([^\n*]+)/i);
+  
+  const parts = [];
+  if (titleMatch) parts.push(`Title: "${titleMatch[1].trim()}"`);
+  if (dateMatch) parts.push(`Time: "${dateMatch[1].trim()}"`);
+  if (linkMatch) parts.push(`Link: "${linkMatch[1].trim()}"`);
+  if (hostMatch) parts.push(`Host: "${hostMatch[1].trim()}"`);
+  
+  if (parts.length > 0) {
+    return `[Context: ${parts.join(', ')}]`;
+  }
+  
+  return cleanContent.length > 60 ? cleanContent.substring(0, 60).trim() + '... (ultra-summarized)' : cleanContent.trim();
+}
+
 async function updateBotMessage(db, chatType, botMsgId, bodyText, isFinished = false) {
   const collection = chatType === 'dm' ? 'chat_messages' : (chatType === 'group' ? 'group_chat_messages' : 'team_messages');
   await db.collection(collection).updateOne(
@@ -1251,9 +1273,14 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
         .limit(4)
         .toArray();
       
+      const totalLen = history.reduce((sum, m) => sum + (m.body || '').length, 0);
+      const shouldUltraSummarize = currentUser.ultraSummarizeMode && totalLen > 350;
+
       history.reverse().forEach((m, idx) => {
         let content = m.body || '';
-        if (idx < history.length - 1 && content.length > 150) {
+        if (shouldUltraSummarize && idx < history.length - 1) {
+          content = ultraSummarize(content);
+        } else if (idx < history.length - 1 && content.length > 150) {
           content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 150) + '... (truncated)';
         }
         messages.push({
@@ -1268,9 +1295,14 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
         .limit(4)
         .toArray();
       
+      const totalLen = history.reduce((sum, m) => sum + (m.body || '').length, 0);
+      const shouldUltraSummarize = currentUser.ultraSummarizeMode && totalLen > 350;
+
       history.reverse().forEach((m, idx) => {
         let content = m.body || '';
-        if (idx < history.length - 1 && content.length > 150) {
+        if (shouldUltraSummarize && idx < history.length - 1) {
+          content = ultraSummarize(content);
+        } else if (idx < history.length - 1 && content.length > 150) {
           content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 150) + '... (truncated)';
         }
         messages.push({
@@ -1285,9 +1317,14 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
         .limit(4)
         .toArray();
       
+      const totalLen = history.reduce((sum, m) => sum + (m.body || '').length, 0);
+      const shouldUltraSummarize = currentUser.ultraSummarizeMode && totalLen > 350;
+
       history.reverse().forEach((m, idx) => {
         let content = m.body || '';
-        if (idx < history.length - 1 && content.length > 150) {
+        if (shouldUltraSummarize && idx < history.length - 1) {
+          content = ultraSummarize(content);
+        } else if (idx < history.length - 1 && content.length > 150) {
           content = content.replace(/\|[\s\S]*?\|/g, '[Table omitted]').substring(0, 150) + '... (truncated)';
         }
         messages.push({
