@@ -184,6 +184,19 @@ const tools = [
         required: ["announcementId"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_project_leaderboard",
+      description: "Retrieve leaderboard ranks, points, completed tasks, comments, and badges for a specific project, or overall across all accessible projects in the workspace.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectId: { type: "string", description: "Optional project ID. If omitted, returns the overall workspace-wide leaderboard aggregated across all accessible projects." }
+        }
+      }
+    }
   }
 ];
 
@@ -751,6 +764,334 @@ async function executeTool(name, args, db, currentUser) {
         success: true,
         message: `Upcheck Admin Bot has successfully deleted the announcement.`
       });
+    }
+
+    if (name === 'get_project_leaderboard') {
+      const { projectId } = args;
+
+      // 1. Resolve accessible projects
+      const isAdmin = userRole === 'Admin' || userRole === 'Console admin';
+      let projectsQuery = {};
+      if (!isAdmin) {
+        const userTeams = await db.collection('teams').find({
+          $or: [
+            { members: currentUser._id.toString() },
+            { lead: currentUser._id.toString() },
+            { members: currentUser._id },
+            { lead: currentUser._id }
+          ]
+        }, { projection: { _id: 1 } }).toArray();
+        const userTeamIds = userTeams.map(t => t._id.toString());
+        projectsQuery = {
+          $or: [
+            { superManager: currentUser.username },
+            { 'members.user': currentUser.username },
+            { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': userRole },
+            { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': 'Everyone' },
+            { 'permissionSettings.accessMode': 'teams_based', 'permissionSettings.allowedTeams': { $in: userTeamIds } }
+          ]
+        };
+      }
+
+      let projects = [];
+      if (projectId) {
+        if (!ObjectId.isValid(projectId)) {
+          return JSON.stringify({ error: "Invalid projectId format" });
+        }
+        const proj = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+        if (!proj) {
+          return JSON.stringify({ error: "Project not found" });
+        }
+        if (!isAdmin) {
+          const userTeams = await db.collection('teams').find({
+            $or: [
+              { members: currentUser._id.toString() },
+              { lead: currentUser._id.toString() },
+              { members: currentUser._id },
+              { lead: currentUser._id }
+            ]
+          }, { projection: { _id: 1 } }).toArray();
+          const userTeamIds = userTeams.map(t => t._id.toString());
+          const isManager = proj.superManager === currentUser.username || proj.members?.some(m => m.user === currentUser.username && m.role === 'Project Manager');
+          const isMember = proj.members?.some(m => m.user === currentUser.username);
+          const hasRoleAccess = proj.permissionSettings?.accessMode === 'roles_based' && (proj.permissionSettings.allowedRoles?.includes(userRole) || proj.permissionSettings.allowedRoles?.includes('Everyone'));
+          const hasTeamAccess = proj.permissionSettings?.accessMode === 'teams_based' && proj.permissionSettings.allowedTeams?.some(tId => userTeamIds.includes(tId));
+          if (!isManager && !isMember && !hasRoleAccess && !hasTeamAccess) {
+            return JSON.stringify({ error: "Forbidden: You do not have access to this project's leaderboard" });
+          }
+        }
+        projects = [proj];
+      } else {
+        projects = await db.collection('projects').find(projectsQuery).toArray();
+      }
+
+      if (projects.length === 0) {
+        return JSON.stringify({ leaderboard: [], message: "No accessible projects found." });
+      }
+
+      const projectIds = projects.map(p => p._id);
+
+      const tasks = await db.collection('project_tasks').find({ projectId: { $in: projectIds } }).toArray();
+      const customBadges = await db.collection('project_custom_badges').find({
+        $or: [
+          { projectId: { $in: projectIds } },
+          { projectExclusive: { $ne: true } }
+        ]
+      }).toArray();
+      const grantedBadges = await db.collection('project_member_badges').find({ projectId: { $in: projectIds } }).toArray();
+
+      const allUserIds = new Set();
+      tasks.forEach(t => {
+        t.assignees?.forEach(uid => allUserIds.add(new ObjectId(uid)));
+        if (t.reporter) allUserIds.add(new ObjectId(t.reporter));
+      });
+      const resolvedUsers = await db.collection('admin_users')
+        .find({ _id: { $in: Array.from(allUserIds) } }, { projection: { username: 1, firstName: 1, lastName: 1 } })
+        .toArray();
+      const userMap = new Map(resolvedUsers.map(u => [u._id.toString(), u.username]));
+      const userDisplayMap = new Map(resolvedUsers.map(u => [
+        u.username,
+        u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username
+      ]));
+
+      const membersSet = new Set();
+      projects.forEach(p => {
+        if (p.superManager) membersSet.add(p.superManager);
+        p.members?.forEach(m => { if (m.user) membersSet.add(m.user); });
+      });
+      resolvedUsers.forEach(u => { if (u.username) membersSet.add(u.username); });
+
+      const stats = {};
+      membersSet.forEach(username => {
+        stats[username] = {
+          username,
+          name: userDisplayMap.get(username) || username,
+          tasksCompleted: 0,
+          storyPointsCompleted: 0,
+          tasksCompletedOnTime: 0,
+          tasksCompletedEarly: 0,
+          totalTasksWithDueDate: 0,
+          commentsCount: 0,
+          bugTasksCompleted: 0,
+          points: 0,
+          badges: [],
+          reopenedTasksCount: 0,
+          overdueTasksCount: 0,
+          completedTasksList: [],
+          commentsList: []
+        };
+      });
+
+      tasks.forEach(task => {
+        const isDone = task.status === 'Done';
+        const assigneesUsernames = task.assignees?.map(uid => userMap.get(uid.toString())).filter(Boolean) || [];
+
+        task.comments?.forEach(comment => {
+          const commenter = comment.userName || comment.authorName;
+          if (commenter && stats[commenter]) {
+            stats[commenter].commentsList.push({
+              createdAt: new Date(comment.createdAt),
+              text: comment.text || '',
+              taskAssignees: assigneesUsernames,
+              taskId: task._id.toString()
+            });
+          }
+        });
+
+        let reopenedCount = 0;
+        task.activity?.forEach(act => {
+          if (act.type === 'status_change') {
+            const statusChange = act.changes?.find(c => c.field === 'status');
+            if (statusChange && statusChange.from === 'Done' && statusChange.to !== 'Done') {
+              reopenedCount += 1;
+            }
+          }
+        });
+
+        if (reopenedCount > 0) {
+          assigneesUsernames.forEach(username => {
+            if (stats[username]) {
+              stats[username].reopenedTasksCount += reopenedCount;
+            }
+          });
+        }
+
+        if (task.status !== 'Done' && task.dueDate) {
+          const dueDate = new Date(task.dueDate);
+          if (dueDate < new Date()) {
+            assigneesUsernames.forEach(username => {
+              if (stats[username]) {
+                stats[username].overdueTasksCount += 1;
+              }
+            });
+          }
+        }
+
+        if (isDone) {
+          let completionDate = task.updatedAt || new Date();
+          const statusDoneActivity = task.activity
+            ?.filter(act => act.type === 'status_change' || act.changes?.some(c => c.field === 'status' && c.to === 'Done'))
+            ?.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+          
+          if (statusDoneActivity) {
+            completionDate = new Date(statusDoneActivity.createdAt);
+          }
+
+          assigneesUsernames.forEach(username => {
+            if (stats[username]) {
+              stats[username].completedTasksList.push({
+                taskId: task._id.toString(),
+                priority: task.priority || 'Medium',
+                storyPoints: task.storyPoints || 0,
+                type: task.type || 'Feature',
+                dueDate: task.dueDate ? new Date(task.dueDate) : null,
+                completionDate,
+                reporter: task.reporter ? userMap.get(task.reporter.toString()) : null
+              });
+            }
+          });
+        }
+      });
+
+      const leaderboardList = [];
+      let maxPoints = 0;
+      let starPerformerCandidate = null;
+
+      Object.values(stats).forEach(userStats => {
+        userStats.commentsList.sort((a, b) => a.createdAt - b.createdAt);
+        let lastCommentTime = null;
+        const taskCommentCounts = {};
+
+        userStats.commentsList.forEach(comment => {
+          if (comment.text.length < 10) return;
+          if (lastCommentTime && (comment.createdAt - lastCommentTime) < 5 * 60 * 1000) return;
+          const tId = comment.taskId;
+          taskCommentCounts[tId] = (taskCommentCounts[tId] || 0) + 1;
+          if (taskCommentCounts[tId] > 3) return;
+
+          const isSelfAssigned = comment.taskAssignees.includes(userStats.username);
+          userStats.points += isSelfAssigned ? 1 : 2;
+          userStats.commentsCount += 1;
+          lastCommentTime = comment.createdAt;
+        });
+
+        userStats.completedTasksList.sort((a, b) => a.completionDate - b.completionDate);
+        let comboCount = 0;
+        let prevCompletionTime = null;
+
+        userStats.completedTasksList.forEach(ct => {
+          let basePoints = 10;
+          if (ct.priority === 'Urgent') basePoints = 20;
+          else if (ct.priority === 'High') basePoints = 15;
+          else if (ct.priority === 'Low') basePoints = 5;
+
+          const complexityPoints = (ct.storyPoints || 0) * 2;
+          const bugBonus = ct.type === 'Bug' ? 2 : 0;
+
+          let earlyBonus = 0;
+          if (ct.dueDate) {
+            userStats.totalTasksWithDueDate += 1;
+            if (ct.completionDate <= ct.dueDate) {
+              userStats.tasksCompletedOnTime += 1;
+              const diffMs = ct.dueDate - ct.completionDate;
+              if (diffMs >= 24 * 60 * 60 * 1000) {
+                earlyBonus = 10;
+                userStats.tasksCompletedEarly += 1;
+              }
+            }
+          }
+
+          let taskPoints = basePoints + complexityPoints + bugBonus + earlyBonus;
+          userStats.points += taskPoints;
+          userStats.tasksCompleted += 1;
+          userStats.storyPointsCompleted += (ct.storyPoints || 0);
+
+          if (ct.type === 'Bug') {
+            userStats.bugTasksCompleted += 1;
+          }
+
+          if (prevCompletionTime) {
+            const diffMs = ct.completionDate - prevCompletionTime;
+            if (diffMs <= 24 * 60 * 60 * 1000) {
+              comboCount += 1;
+              let comboBonus = comboCount === 1 ? 1 : comboCount === 2 ? 3 : comboCount === 3 ? 4 : 5;
+              userStats.points += comboBonus;
+            } else {
+              comboCount = 0;
+            }
+          }
+          prevCompletionTime = ct.completionDate;
+        });
+
+        const onTimeRate = userStats.totalTasksWithDueDate > 0 ? (userStats.tasksCompletedOnTime / userStats.totalTasksWithDueDate) : 1.0;
+        if (userStats.totalTasksWithDueDate >= 5 && onTimeRate >= 0.90) {
+          userStats.points += 15;
+        }
+
+        userStats.points -= (userStats.reopenedTasksCount * 4);
+        userStats.points -= (userStats.overdueTasksCount * 5);
+        if (userStats.points < 0) userStats.points = 0;
+
+        if (userStats.tasksCompletedEarly >= 3) {
+          userStats.badges.push({ name: 'Early Bird', icon: '🚀' });
+        }
+        if (userStats.tasksCompleted >= 10) {
+          userStats.badges.push({ name: 'Task Crusher', icon: '🏆' });
+        }
+        if (userStats.storyPointsCompleted >= 30) {
+          userStats.badges.push({ name: 'Velocity Master', icon: '⚡' });
+        }
+        if (userStats.commentsCount >= 15) {
+          userStats.badges.push({ name: 'Conversation Starter', icon: '💬' });
+        }
+        if (userStats.bugTasksCompleted >= 5) {
+          userStats.badges.push({ name: 'Bug Buster', icon: '🛠️' });
+        }
+        if (userStats.totalTasksWithDueDate >= 5 && userStats.tasksCompletedOnTime === userStats.totalTasksWithDueDate) {
+          userStats.badges.push({ name: 'Perfectionist', icon: '🎯' });
+        }
+
+        if (userStats.points > maxPoints) {
+          maxPoints = userStats.points;
+          starPerformerCandidate = userStats.username;
+        }
+
+        leaderboardList.push(userStats);
+      });
+
+      if (starPerformerCandidate && maxPoints >= 15) {
+        const topUser = leaderboardList.find(u => u.username === starPerformerCandidate);
+        if (topUser) {
+          topUser.badges.push({ name: 'Star Performer', icon: '🌟' });
+        }
+      }
+
+      grantedBadges.forEach(grant => {
+        const targetUser = grant.username;
+        const badge = customBadges.find(cb => cb._id.toString() === grant.badgeId.toString());
+        if (stats[targetUser] && badge) {
+          stats[targetUser].badges.push({
+            name: badge.name,
+            icon: badge.icon || '🎖️'
+          });
+        }
+      });
+
+      leaderboardList.sort((a, b) => b.points - a.points);
+      leaderboardList.forEach((item, index) => {
+        item.rank = index + 1;
+      });
+
+      return JSON.stringify(leaderboardList.map(item => ({
+        rank: item.rank,
+        username: item.username,
+        name: item.name,
+        points: item.points,
+        tasksCompleted: item.tasksCompleted,
+        storyPointsCompleted: item.storyPointsCompleted,
+        commentsCount: item.commentsCount,
+        badges: item.badges.map(b => `${b.icon} ${b.name}`)
+      })).slice(0, 15));
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });
