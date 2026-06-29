@@ -436,6 +436,15 @@ Always be helpful, precise, and state clearly when you perform actions on behalf
 
         // Execute tools
         for (const tc of toolCalls) {
+          const toolStatusMap = {
+            list_meetings: "Thinking... Listing upcoming meetings...",
+            create_meeting: "Thinking... Scheduling a new meeting...",
+            list_teams: "Thinking... Loading workspace teams...",
+            list_users: "Thinking... Querying user directory..."
+          };
+          const statusMsg = toolStatusMap[tc.function.name] || `Thinking... Running action ${tc.function.name}...`;
+          await updateBotMessage(db, chatType, botMsgId, statusMsg);
+
           let parsedArgs = {};
           try {
             parsedArgs = JSON.parse(tc.function.arguments || '{}');
