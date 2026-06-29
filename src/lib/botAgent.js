@@ -648,15 +648,17 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
         // Execute tools
         for (const tc of toolCalls) {
           const toolStatusMap = {
-            list_meetings: "Thinking... Listing upcoming meetings...",
-            create_meeting: "Thinking... Scheduling a new meeting...",
-            list_teams: "Thinking... Loading workspace teams...",
-            list_users: "Thinking... Querying user directory...",
-            list_projects: "Thinking... Loading workspace projects...",
-            list_announcements: "Thinking... Retrieving workspace announcements...",
-            create_announcement: "Thinking... Publishing workspace announcement..."
+            list_meetings:      { emoji: '📅', label: 'Loading upcoming meetings...' },
+            create_meeting:     { emoji: '📆', label: 'Scheduling a new meeting...' },
+            list_teams:         { emoji: '👥', label: 'Loading workspace teams...' },
+            list_users:         { emoji: '👤', label: 'Querying user directory...' },
+            list_projects:      { emoji: '📁', label: 'Loading workspace projects...' },
+            list_announcements: { emoji: '📢', label: 'Retrieving announcements...' },
+            create_announcement:{ emoji: '📣', label: 'Publishing announcement...' },
           };
-          const statusMsg = toolStatusMap[tc.function.name] || `Thinking... Running action ${tc.function.name}...`;
+          const statusInfo = toolStatusMap[tc.function.name] || { emoji: '⚙️', label: `Running ${tc.function.name}...` };
+          // Store as structured status JSON so the UI can render a special card
+          const statusMsg = `__BOT_STATUS__${JSON.stringify(statusInfo)}`;
           await updateBotMessage(db, chatType, botMsgId, statusMsg);
 
           let parsedArgs = {};
