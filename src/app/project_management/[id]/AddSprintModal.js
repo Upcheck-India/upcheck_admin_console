@@ -31,12 +31,17 @@ const AddSprintModal = ({ projectId, onClose, onSave }) => {
     setError(null);
 
     try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      const token = localStorage.getItem('token');
+      if (token && token !== 'null' && token !== 'undefined') {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`/api/projects/${projectId}/sprints`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify(formData),
       });
