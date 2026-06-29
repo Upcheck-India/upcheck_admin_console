@@ -3,6 +3,8 @@ import clientPromise from '../../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject, getUserPermissionLevel } from '../../../../../../../lib/projectPermissions';
 
+export const dynamic = 'force-dynamic';
+
 // Helper to verify auth and permissions
 async function getAuthorizedUserProjectSprint(req, params) {
   const token = req.cookies.get('admin_token')?.value;

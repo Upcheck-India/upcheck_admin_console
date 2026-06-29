@@ -4,6 +4,8 @@ import { ObjectId } from 'mongodb';
 import { canAccessProject, getUserPermissionLevel } from '../../../../../lib/projectPermissions';
 import { sendEmail } from '../../../../../lib/emailService';
 
+export const dynamic = 'force-dynamic';
+
 /**
  * GET  /api/projects/:id/sprints
  *      Returns list of sprints for the project (sorted by createdAt ascending)

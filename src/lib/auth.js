@@ -6,8 +6,13 @@ export async function getAuthUser(req) {
   const authHeader = req ? req.headers.get('authorization') : null;
   let token = null;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7).trim();
-  } else {
+    const parsedToken = authHeader.substring(7).trim();
+    if (parsedToken && parsedToken !== 'null' && parsedToken !== 'undefined') {
+      token = parsedToken;
+    }
+  }
+
+  if (!token) {
     // Try direct request cookies first
     if (req && typeof req.cookies?.get === 'function') {
       token = req.cookies.get('admin_token')?.value;
