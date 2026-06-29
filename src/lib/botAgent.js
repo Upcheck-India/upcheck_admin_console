@@ -1590,8 +1590,12 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
     let keepRunning = true;
     let finalContent = "";
 
-    while (keepRunning && loopCount < 3) {
+     while (keepRunning && loopCount < 3) {
       loopCount++;
+      const modelName = currentUser.useLesserIntelligence 
+        ? 'meta-llama/llama-4-scout-17b-16e-instruct' 
+        : 'openai/gpt-oss-120b';
+
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1599,7 +1603,7 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
+          model: modelName,
           messages,
           tools,
           stream: true

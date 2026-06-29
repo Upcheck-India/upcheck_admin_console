@@ -12,7 +12,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       hasKey: !!currentUser.groqApiKey,
-      ultraSummarizeMode: !!currentUser.ultraSummarizeMode
+      ultraSummarizeMode: !!currentUser.ultraSummarizeMode,
+      useLesserIntelligence: !!currentUser.useLesserIntelligence
     });
   } catch (err) {
     console.error('Get bot config error:', err);
@@ -27,7 +28,7 @@ export async function POST(request) {
     const { user: currentUser, db } = auth;
 
     const body = await request.json().catch(() => ({}));
-    const { apiKey, ultraSummarizeMode } = body;
+    const { apiKey, ultraSummarizeMode, useLesserIntelligence } = body;
 
     const updateDoc = {};
 
@@ -74,6 +75,10 @@ export async function POST(request) {
 
     if (ultraSummarizeMode !== undefined) {
       updateDoc.ultraSummarizeMode = !!ultraSummarizeMode;
+    }
+
+    if (useLesserIntelligence !== undefined) {
+      updateDoc.useLesserIntelligence = !!useLesserIntelligence;
     }
 
     if (Object.keys(updateDoc).length > 0) {
