@@ -242,7 +242,6 @@ export async function POST(request) {
     );
 
     // Parse mentions
-    const cleanBody = body?.trim() || '';
     const lowerBody = cleanBody.toLowerCase();
     const isMentionAll = lowerBody.includes('@everyone') || lowerBody.includes('@all') || lowerBody.includes('@here');
     
