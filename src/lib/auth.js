@@ -8,11 +8,18 @@ export async function getAuthUser(req) {
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.substring(7).trim();
   } else {
-    try {
-      const cookieStore = await cookies();
-      token = cookieStore.get('admin_token')?.value;
-    } catch (e) {
-      console.error('Error reading cookies in getAuthUser:', e);
+    // Try direct request cookies first
+    if (req && typeof req.cookies?.get === 'function') {
+      token = req.cookies.get('admin_token')?.value;
+    }
+    // Fallback to next/headers cookies()
+    if (!token) {
+      try {
+        const cookieStore = await cookies();
+        token = cookieStore.get('admin_token')?.value;
+      } catch (e) {
+        console.error('Error reading cookies in getAuthUser:', e);
+      }
     }
   }
   if (!token) return null;
