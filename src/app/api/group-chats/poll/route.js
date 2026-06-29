@@ -74,7 +74,7 @@ export async function GET(req) {
           groupId,
           $or: [
             { createdAt: { $gt: sinceDate } },
-            { status: 'streaming', updatedAt: { $gt: sinceDate } }
+            { updatedAt: { $gt: sinceDate } }
           ],
           deletedForEveryone: { $ne: true },
           deletedFor: { $ne: userId }

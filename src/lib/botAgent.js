@@ -145,6 +145,45 @@ const tools = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_workspace_workload",
+      description: "Get a workload summary of all workspace users, including the names and counts of tasks and projects assigned to each user.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "edit_announcement",
+      description: "Edit/update an existing workspace announcement. Requires announcementId and updated fields. Accessible to Admins and Console admins only.",
+      parameters: {
+        type: "object",
+        properties: {
+          announcementId: { type: "string", description: "The ID of the announcement to update" },
+          title: { type: "string", description: "Optional updated title" },
+          content: { type: "string", description: "Optional updated content" },
+          isImportant: { type: "boolean", description: "Optional updated flag for importance" }
+        },
+        required: ["announcementId"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "delete_announcement",
+      description: "Delete an existing workspace announcement. Requires announcementId. Accessible to Admins and Console admins only.",
+      parameters: {
+        type: "object",
+        properties: {
+          announcementId: { type: "string", description: "The ID of the announcement to delete" }
+        },
+        required: ["announcementId"]
+      }
+    }
   }
 ];
 
@@ -579,6 +618,139 @@ async function executeTool(name, args, db, currentUser) {
         description: t.description ? (t.description.length > 50 ? t.description.substring(0, 47) + '...' : t.description) : '',
         assignees: (t.assignees || []).map(id => userMap[id.toString()] || id.toString())
       })));
+    }
+
+    if (name === 'get_workspace_workload') {
+      const tasks = await db.collection('project_tasks').find({}).toArray();
+      const projects = await db.collection('projects').find({}).toArray();
+      const projectMap = projects.reduce((acc, p) => {
+        acc[p._id.toString()] = p.name;
+        return acc;
+      }, {});
+
+      const users = await db.collection('admin_users').find({ role: { $ne: 'bot' } }).toArray();
+      const userMap = users.reduce((acc, u) => {
+        acc[u._id.toString()] = {
+          username: u.username,
+          name: u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username,
+          email: u.email
+        };
+        return acc;
+      }, {});
+
+      const workload = {};
+      
+      for (const t of tasks) {
+        const assignees = t.assignees || [];
+        const projectIdStr = t.projectId?.toString();
+        const projectName = projectMap[projectIdStr] || 'Unknown Project';
+        
+        for (const assigneeId of assignees) {
+          const idStr = assigneeId.toString();
+          if (!workload[idStr]) {
+            const userDetail = userMap[idStr] || { name: 'Unknown User', username: 'unknown' };
+            workload[idStr] = {
+              userId: idStr,
+              name: userDetail.name,
+              username: userDetail.username,
+              email: userDetail.email,
+              taskCount: 0,
+              projectsCount: 0,
+              projects: new Set(),
+              tasks: []
+            };
+          }
+          workload[idStr].taskCount++;
+          workload[idStr].projects.add(projectName);
+          workload[idStr].tasks.push({
+            title: t.title,
+            status: t.status,
+            projectName: projectName
+          });
+        }
+      }
+
+      const result = Object.values(workload).map(w => ({
+        userId: w.userId,
+        name: w.name,
+        username: w.username,
+        email: w.email,
+        taskCount: w.taskCount,
+        projectsCount: w.projects.size,
+        projects: Array.from(w.projects)
+      }));
+
+      return JSON.stringify(result);
+    }
+
+    if (name === 'edit_announcement') {
+      if (userRole !== 'Admin' && userRole !== 'Console admin') {
+        return JSON.stringify({ error: `Permission Denied: Users with role '${userRole}' are not authorized to edit announcements.` });
+      }
+
+      const { announcementId, title, content, isImportant } = args;
+      if (!announcementId || !ObjectId.isValid(announcementId)) {
+        return JSON.stringify({ error: "Invalid or missing announcementId" });
+      }
+
+      const updateFields = { updatedAt: new Date() };
+      if (title && title.trim()) updateFields.title = title.trim();
+      if (content && content.trim()) {
+        const auditLog = `\n\nUpcheck Admin Bot has edited this announcement on behalf of ${userName} (${userEmail}).`;
+        updateFields.content = content.trim() + auditLog;
+      }
+      if (isImportant !== undefined) updateFields.isImportant = !!isImportant;
+
+      const result = await db.collection('announcements').findOneAndUpdate(
+        { _id: new ObjectId(announcementId) },
+        { $set: updateFields },
+        { returnDocument: 'after' }
+      );
+
+      if (!result) {
+        return JSON.stringify({ error: "Announcement not found" });
+      }
+
+      if (isImportant) {
+        try {
+          const users = await db.collection('admin_users').find({ role: { $ne: 'bot' } }).toArray();
+          for (const u of users) {
+            sendPushNotification(
+              u._id.toString(),
+              `📢 Updated: ${updateFields.title || result.title}`,
+              (updateFields.content || result.content).replace(/\n\nUpcheck[\s\S]*$/, '').substring(0, 100) + '...',
+              { type: 'announcement', announcementId }
+            ).catch(() => {});
+          }
+        } catch (e) {}
+      }
+
+      return JSON.stringify({
+        success: true,
+        message: `Upcheck Admin Bot has successfully updated the announcement.`,
+        announcementId
+      });
+    }
+
+    if (name === 'delete_announcement') {
+      if (userRole !== 'Admin' && userRole !== 'Console admin') {
+        return JSON.stringify({ error: `Permission Denied: Users with role '${userRole}' are not authorized to delete announcements.` });
+      }
+
+      const { announcementId } = args;
+      if (!announcementId || !ObjectId.isValid(announcementId)) {
+        return JSON.stringify({ error: "Invalid or missing announcementId" });
+      }
+
+      const result = await db.collection('announcements').deleteOne({ _id: new ObjectId(announcementId) });
+      if (result.deletedCount === 0) {
+        return JSON.stringify({ error: "Announcement not found" });
+      }
+
+      return JSON.stringify({
+        success: true,
+        message: `Upcheck Admin Bot has successfully deleted the announcement.`
+      });
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });

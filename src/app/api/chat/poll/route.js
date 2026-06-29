@@ -56,7 +56,7 @@ export async function GET(request) {
           conversationId,
           $or: [
             { createdAt: { $gt: sinceDate } },
-            { status: 'streaming', updatedAt: { $gt: sinceDate } }
+            { updatedAt: { $gt: sinceDate } }
           ],
           deletedFor: { $ne: currentUser._id.toString() }
         })
