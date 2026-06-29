@@ -1101,37 +1101,39 @@ function ultraSummarize(content) {
   if (!content) return '';
   let cleanContent = content.replace(/\|[\s\S]*?\|/g, '');
 
-  // 1. Extract meeting parameters
-  const titleMatch = cleanContent.match(/(?:Title|Project|Meeting):\s*\**([^\n*]+)/i);
-  const dateMatch = cleanContent.match(/(?:Date & Time|Date|Time):\s*\**([^\n*]+)/i);
-  const linkMatch = cleanContent.match(/(?:Join link|Link|URL):\s*\**([^\n*`]+)/i);
-  const hostMatch = cleanContent.match(/(?:Host):\s*\**([^\n*]+)/i);
-  const providerMatch = cleanContent.match(/(?:Provider):\s*\**([^\n*]+)/i);
-  const participantsMatch = cleanContent.match(/(?:Participants):\s*\**([^\n*]+)/i);
+  // 1. Extract parameters using flexible matchers
+  const titleMatch = cleanContent.match(/(?:Title|Project|Meeting)\**:\s*\**([^\n*`]+)/i);
+  const dateMatch = cleanContent.match(/(?:Date & Time|Date|Time)\**:\s*\**([^\n*`]+)/i);
+  const hostMatch = cleanContent.match(/Host\**:\s*\**([^\n*`]+)/i);
+  const providerMatch = cleanContent.match(/Provider\**:\s*\**([^\n*`]+)/i);
+  const annContentMatch = cleanContent.match(/(?:Content|Announcement)\**:\s*\**([^\n*`]+)/i);
+  const importanceMatch = cleanContent.match(/(?:Important|Push|Broadcast)\**:\s*\**([^\n*`]+)/i);
+  const taskMatch = cleanContent.match(/(?:Task|sprint|assignee|status|priority)\**:\s*\**([^\n*`]+)/i);
 
-  // 2. Extract announcement parameters
-  const annContentMatch = cleanContent.match(/(?:Content|Announcement):\s*\**([^\n*]+)/i);
-  const importanceMatch = cleanContent.match(/(?:Important|Push|Broadcast):\s*\**([^\n*]+)/i);
+  // 2. Extract entities format-independently (bulletproof)
+  const emails = cleanContent.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+  const uniqueEmails = Array.from(new Set(emails));
 
-  // 3. Extract task parameters
-  const taskMatch = cleanContent.match(/(?:Task|sprint|assignee|status|priority):\s*\**([^\n*]+)/i);
+  const urls = cleanContent.match(/(https?:\/\/[^\s`"]+|meet\.google\.com\/[a-z0-9-]+|zoom\.us\/j\/[0-9]+)/gi) || [];
+  const uniqueUrls = Array.from(new Set(urls));
 
   const parts = [];
   if (titleMatch) parts.push(`Title: "${titleMatch[1].trim()}"`);
   if (dateMatch) parts.push(`Time: "${dateMatch[1].trim()}"`);
-  if (linkMatch) parts.push(`Link: "${linkMatch[1].trim()}"`);
   if (hostMatch) parts.push(`Host: "${hostMatch[1].trim()}"`);
   if (providerMatch) parts.push(`Provider: "${providerMatch[1].trim()}"`);
-  if (participantsMatch) parts.push(`Participants: "${participantsMatch[1].trim().substring(0, 80)}"`);
   if (annContentMatch) parts.push(`Content: "${annContentMatch[1].trim().substring(0, 80)}"`);
   if (importanceMatch) parts.push(`Broadcast: "${importanceMatch[1].trim()}"`);
   if (taskMatch) parts.push(`Query: "${taskMatch[0].trim()}"`);
+
+  if (uniqueUrls.length > 0) parts.push(`Link: "${uniqueUrls[0]}"`);
+  if (uniqueEmails.length > 0) parts.push(`Participants: "${uniqueEmails.join(', ')}"`);
 
   if (parts.length > 0) {
     return `[Context: ${parts.join(', ')}]`;
   }
   
-  // 4. Conversational filler and stop-phrase stripper for general text
+  // 3. Conversational filler and stop-phrase stripper for general text
   let compressed = cleanContent
     .replace(/(?:sure|ok|okay|yes|no|hello|hi|hey|please|thanks|thank you|sorry|apologies|here is|here's|would you like|just reply with|let me know|to set it up|i'll need|brief overview|short name|duration of|who you want|email addresses|Google Meet or Zoom|starts with|ends at|ends with|i can help you|following details)/gi, '')
     .replace(/\s+/g, ' ')
