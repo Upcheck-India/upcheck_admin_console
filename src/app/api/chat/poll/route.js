@@ -43,17 +43,21 @@ export async function GET(request) {
         {
           conversationId,
           recipientId: currentUser._id.toString(),
-          status: { $ne: 'read' }
+          status: { $nin: ['read', 'streaming'] }
         },
         {
           $set: { status: 'read' }
         }
       );
 
+      // Fetch new messages created since last poll, AND any streaming messages updated since then
       const newMessages = await db.collection('chat_messages')
         .find({
           conversationId,
-          createdAt: { $gt: sinceDate },
+          $or: [
+            { createdAt: { $gt: sinceDate } },
+            { status: 'streaming', updatedAt: { $gt: sinceDate } }
+          ],
           deletedFor: { $ne: currentUser._id.toString() }
         })
         .sort({ createdAt: 1 })

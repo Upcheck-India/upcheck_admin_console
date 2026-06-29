@@ -72,7 +72,10 @@ export async function GET(req) {
       const msgs = await db.collection('group_chat_messages')
         .find({
           groupId,
-          createdAt: { $gt: sinceDate },
+          $or: [
+            { createdAt: { $gt: sinceDate } },
+            { status: 'streaming', updatedAt: { $gt: sinceDate } }
+          ],
           deletedForEveryone: { $ne: true },
           deletedFor: { $ne: userId }
         })

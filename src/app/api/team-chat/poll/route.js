@@ -51,7 +51,10 @@ export async function GET(request) {
         {
           $match: {
             teamId,
-            createdAt: { $gt: sinceDate },
+            $or: [
+              { createdAt: { $gt: sinceDate } },
+              { status: 'streaming', updatedAt: { $gt: sinceDate } }
+            ],
             deletedForEveryone: { $ne: true }
           }
         },
