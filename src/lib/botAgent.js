@@ -99,6 +99,52 @@ const tools = [
         required: ["title", "content"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_project_details",
+      description: "Get complete details of a specific project, including managers, members list, allowed teams, and settings.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectId: { type: "string", description: "The ID of the project to retrieve details for" }
+        },
+        required: ["projectId"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_sprints",
+      description: "List all sprints for a specific project. Returns sprint names, start/end dates, status, and IDs.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectId: { type: "string", description: "The ID of the project to list sprints for" }
+        },
+        required: ["projectId"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_tasks",
+      description: "Query, search, list, and filter project tasks across the workspace. Can be filtered by projectId, sprintId, assigneeId (user ID), status, priority, or nearDeadline.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectId: { type: "string", description: "Optional project ID to filter tasks" },
+          sprintId: { type: "string", description: "Optional sprint ID to filter tasks" },
+          assigneeId: { type: "string", description: "Optional user ID to filter tasks assigned to a specific person" },
+          status: { type: "string", description: "Optional status to filter (e.g. 'Backlog', 'To Do', 'In Progress', 'Done')" },
+          priority: { type: "string", description: "Optional priority (e.g. 'Low', 'Medium', 'High', 'Critical')" },
+          nearDeadline: { type: "boolean", description: "Optional. If true, returns only tasks with deadlines in the next 7 days." }
+        }
+      }
+    }
   }
 ];
 
@@ -187,6 +233,7 @@ async function executeTool(name, args, db, currentUser) {
         host: e.host,
         joinUrl: e.joinUrl || e.zoomMeetingUrl,
         teams: e.teams || [],
+        momDocuments: e.momDocuments || [],
         participants: e.participants ? (e.participants.length > 3 ? [...e.participants.slice(0, 3), `+${e.participants.length - 3} more`] : e.participants) : []
       })));
     }
@@ -433,6 +480,105 @@ async function executeTool(name, args, db, currentUser) {
         announcementId: result.insertedId.toString(),
         title: announcement.title
       });
+    }
+
+    if (name === 'get_project_details') {
+      const { projectId } = args;
+      if (!projectId || !ObjectId.isValid(projectId)) {
+        return JSON.stringify({ error: "Invalid or missing projectId parameter" });
+      }
+      const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+      if (!project) {
+        return JSON.stringify({ error: "Project not found" });
+      }
+      return JSON.stringify({
+        id: project._id.toString(),
+        name: project.name,
+        description: project.description,
+        superManager: project.superManager,
+        status: project.status || 'active',
+        members: project.members || [],
+        permissionSettings: project.permissionSettings || {},
+        createdAt: project.createdAt
+      });
+    }
+
+    if (name === 'list_sprints') {
+      const { projectId } = args;
+      if (!projectId || !ObjectId.isValid(projectId)) {
+        return JSON.stringify({ error: "Invalid or missing projectId parameter" });
+      }
+      const sprints = await db.collection('project_sprints')
+        .find({ projectId: new ObjectId(projectId) })
+        .sort({ createdAt: 1 })
+        .toArray();
+      return JSON.stringify(sprints.map(s => ({
+        id: s._id.toString(),
+        name: s.name,
+        startDate: s.startDate,
+        endDate: s.endDate,
+        status: s.status || 'active'
+      })));
+    }
+
+    if (name === 'query_tasks') {
+      const { projectId, sprintId, assigneeId, status, priority, nearDeadline } = args;
+      let query = {};
+      
+      if (projectId && ObjectId.isValid(projectId)) {
+        query.projectId = new ObjectId(projectId);
+      }
+      if (sprintId) {
+        if (ObjectId.isValid(sprintId)) {
+          query.sprintId = new ObjectId(sprintId);
+        } else if (sprintId === 'null' || sprintId === 'none') {
+          query.sprintId = { $exists: false };
+        }
+      }
+      if (assigneeId) {
+        query.assignees = new ObjectId(assigneeId);
+      }
+      if (status) {
+        query.status = { $regex: new RegExp(`^${status}$`, 'i') };
+      }
+      if (priority) {
+        query.priority = { $regex: new RegExp(`^${priority}$`, 'i') };
+      }
+      if (nearDeadline) {
+        const next7Days = new Date();
+        next7Days.setDate(next7Days.getDate() + 7);
+        query.dueDate = { $gte: new Date(), $lte: next7Days };
+      }
+
+      const tasks = await db.collection('project_tasks')
+        .find(query)
+        .sort({ dueDate: 1, createdAt: -1 })
+        .limit(20)
+        .toArray();
+
+      // Resolve usernames of assignees
+      const assigneeIds = [...new Set(tasks.flatMap(t => t.assignees || []).filter(Boolean))];
+      const users = await db.collection('admin_users')
+        .find({ _id: { $in: assigneeIds } })
+        .project({ firstName: 1, lastName: 1, username: 1, email: 1 })
+        .toArray();
+      const userMap = users.reduce((acc, u) => {
+        acc[u._id.toString()] = u.firstName || u.lastName 
+          ? `${u.firstName || ''} ${u.lastName || ''}`.trim() 
+          : u.username;
+        return acc;
+      }, {});
+
+      return JSON.stringify(tasks.map(t => ({
+        id: t._id.toString(),
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate,
+        storyPoints: t.storyPoints || 0,
+        description: t.description ? (t.description.length > 50 ? t.description.substring(0, 47) + '...' : t.description) : '',
+        assignees: (t.assignees || []).map(id => userMap[id.toString()] || id.toString())
+      })));
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });
