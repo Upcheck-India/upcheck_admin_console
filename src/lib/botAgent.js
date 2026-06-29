@@ -348,7 +348,7 @@ Always be helpful, precise, and state clearly when you perform actions on behalf
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: 'llama3-70b-8192',
+          model: 'openai/gpt-oss-120b',
           messages,
           tools,
           stream: true
