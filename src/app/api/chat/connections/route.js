@@ -18,6 +18,7 @@ export async function GET(request) {
       name: "Upcheck Admin Bot",
       email: "upcheck_admin_bot@upcheck.in",
       role: "bot",
+      avatar: "/api/media/6a420c78389ce06e791c5c61",
       messagingId: "upcheck_admin_bot",
       messagingPrivacy: "everyone",
       createdAt: new Date(),
