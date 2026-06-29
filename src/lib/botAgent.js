@@ -50,8 +50,13 @@ const tools = [
     type: "function",
     function: {
       name: "list_users",
-      description: "View the workspace directory of users, containing usernames, display names, emails, roles, and departments.",
-      parameters: { type: "object", properties: {} }
+      description: "View the workspace directory of users, containing usernames, display names, emails, roles, and departments. Supports optional search query.",
+      parameters: {
+        type: "object",
+        properties: {
+          search: { type: "string", description: "Optional name or username to search/filter users" }
+        }
+      }
     }
   },
   {
@@ -102,18 +107,20 @@ async function executeTool(name, args, db, currentUser) {
           { hostId: currentUser._id.toString() },
           { host: userEmail },
           { participants: userEmail }
-        ]
-      }).sort({ startTime: 1 }).toArray();
+        ],
+        // Show meetings starting from 24 hours ago and onwards
+        startTime: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+      }).sort({ startTime: 1 }).limit(10).toArray();
 
       return JSON.stringify(events.map(e => ({
         id: e._id.toString(),
         title: e.title,
-        description: e.description,
+        description: e.description ? (e.description.length > 80 ? e.description.substring(0, 77) + '...' : e.description) : '',
         startTime: e.startTime,
         duration: e.duration,
         host: e.host,
         joinUrl: e.joinUrl || e.zoomMeetingUrl,
-        participants: e.participants
+        participants: e.participants ? (e.participants.length > 3 ? [...e.participants.slice(0, 3), `+${e.participants.length - 3} more`] : e.participants) : []
       })));
     }
 
@@ -198,20 +205,36 @@ async function executeTool(name, args, db, currentUser) {
     }
 
     if (name === 'list_users') {
-      const users = await db.collection('admin_users').find(
-        { role: { $ne: 'bot' } },
-        { projection: { password: 0, sessionToken: 0, backupCodes: 0 } }
-      ).toArray();
+      const search = args.search?.trim();
+      let query = { role: { $ne: 'bot' } };
+      if (search) {
+        query.$or = [
+          { username: { $regex: search, $options: 'i' } },
+          { firstName: { $regex: search, $options: 'i' } },
+          { lastName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } }
+        ];
+      }
+      const users = await db.collection('admin_users')
+        .find(query, { projection: { password: 0, sessionToken: 0, backupCodes: 0 } })
+        .limit(search ? 15 : 12)
+        .toArray();
 
-      return JSON.stringify(users.map(u => ({
-        id: u._id.toString(),
-        username: u.username,
-        name: u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username,
-        email: u.email,
-        role: u.role,
-        department: u.department,
-        jobTitle: u.jobTitle
-      })));
+      const totalCount = await db.collection('admin_users').countDocuments({ role: { $ne: 'bot' } });
+
+      return JSON.stringify({
+        users: users.map(u => ({
+          id: u._id.toString(),
+          username: u.username,
+          name: u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username,
+          email: u.email,
+          role: u.role,
+          department: u.department,
+          jobTitle: u.jobTitle
+        })),
+        totalWorkspaceUsers: totalCount,
+        message: users.length < totalCount && !search ? "Showing first 12 users. Use search parameter to filter if looking for a specific user." : undefined
+      });
     }
 
     if (name === 'list_projects') {
@@ -241,11 +264,11 @@ async function executeTool(name, args, db, currentUser) {
           ]
         };
       }
-      const projects = await db.collection('projects').find(query).sort({ createdAt: -1 }).toArray();
+      const projects = await db.collection('projects').find(query).sort({ createdAt: -1 }).limit(8).toArray();
       return JSON.stringify(projects.map(p => ({
         id: p._id.toString(),
         name: p.name,
-        description: p.description,
+        description: p.description ? (p.description.length > 80 ? p.description.substring(0, 77) + '...' : p.description) : '',
         superManager: p.superManager,
         status: p.status || 'active',
         tags: p.tags || []
@@ -274,11 +297,11 @@ async function executeTool(name, args, db, currentUser) {
           ]
         };
       }
-      const announcements = await db.collection('announcements').find(query).sort({ createdAt: -1 }).limit(15).toArray();
+      const announcements = await db.collection('announcements').find(query).sort({ createdAt: -1 }).limit(5).toArray();
       return JSON.stringify(announcements.map(a => ({
         id: a._id.toString(),
         title: a.title,
-        content: a.content,
+        content: a.content ? (a.content.length > 80 ? a.content.substring(0, 77) + '...' : a.content) : '',
         isImportant: a.isImportant,
         createdBy: a.createdBy?.name || a.createdBy?.username || 'Unknown',
         createdAt: a.createdAt
@@ -510,7 +533,7 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
       const history = await db.collection('chat_messages')
         .find({ conversationId: chatId, status: { $ne: 'streaming' } })
         .sort({ createdAt: -1 })
-        .limit(10)
+        .limit(5)
         .toArray();
       
       history.reverse().forEach(m => {
@@ -523,7 +546,7 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
       const history = await db.collection('group_chat_messages')
         .find({ groupId: chatId, status: { $ne: 'streaming' } })
         .sort({ createdAt: -1 })
-        .limit(10)
+        .limit(5)
         .toArray();
       
       history.reverse().forEach(m => {
@@ -536,7 +559,7 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
       const history = await db.collection('team_messages')
         .find({ teamId: chatId, status: { $ne: 'streaming' } })
         .sort({ createdAt: -1 })
-        .limit(10)
+        .limit(5)
         .toArray();
       
       history.reverse().forEach(m => {
