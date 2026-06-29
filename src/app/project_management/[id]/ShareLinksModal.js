@@ -37,6 +37,7 @@ function VisitorsPanel({ shareLink, onClose }) {
       try {
         const res = await fetch(`/api/share/s/${shareLink.slug}/visitors`, {
           headers: authHeaders(),
+          credentials: 'include',
         });
         if (!res.ok) throw new Error('Failed to fetch visitors');
         const data = await res.json();
@@ -471,6 +472,7 @@ export default function ShareLinksModal({ projectId, onClose }) {
     try {
       const res = await fetch(`/api/projects/${projectId}/share-links`, {
         headers: authHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch share links');
       const data = await res.json();
@@ -486,6 +488,7 @@ export default function ShareLinksModal({ projectId, onClose }) {
     try {
       const res = await fetch(`/api/projects/${projectId}/sprints`, {
         headers: authHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to fetch sprints');
       const data = await res.json();
@@ -511,6 +514,7 @@ export default function ShareLinksModal({ projectId, onClose }) {
       const res = await fetch(`/api/projects/${projectId}/share-links`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
       if (!res.ok) {
@@ -534,6 +538,7 @@ export default function ShareLinksModal({ projectId, onClose }) {
       const res = await fetch(`/api/projects/${projectId}/share-links/${shareId}`, {
         method: 'DELETE',
         headers: authHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Failed to revoke');
       setShareLinks(prev => prev.filter(l => l._id !== shareId));
