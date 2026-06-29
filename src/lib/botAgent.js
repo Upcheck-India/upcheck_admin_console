@@ -888,20 +888,21 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
 - Keep responses concise, clear, and straight to the point unless the user requests more detail.
 
 ## Write Tool Guardrails & Confirmation Flow
-- **CRITICAL**: When the user asks to create/schedule a meeting (\`create_meeting\`) or publish an announcement (\`create_announcement\`), you **MUST NOT** call the tool immediately.
-- First, present a clear preview of the parameters you plan to use (Title, Date, Time, Duration, Provider, Participants).
-- Ask the user to confirm: "Would you like me to schedule this meeting? Do you want to send email invites to the participants?"
-- Ask the user to provide the Google Meet or Zoom join link. Do not generate a fake placeholder link.
-- Only invoke the write tool once the user explicitly confirms (e.g. "Confirm", "Yes", "Go ahead") and provides the link details.
+- **CRITICAL**: When the user asks to create/schedule a meeting (\`create_meeting\`) or create, edit, or delete an announcement (\`create_announcement\`, \`edit_announcement\`, \`delete_announcement\`), you **MUST NOT** call the tool immediately.
+- First, present a clear preview of the proposed changes/details and ask the user to explicitly confirm.
+- For meetings: ask "Would you like me to schedule this meeting? Do you want to send email invites to the participants?" and prompt them to provide the join link.
+- For announcements: ask "Would you like me to publish/edit/delete this announcement? Do you want to broadcast a push notification to all users?" Only set \`isImportant: true\` if they explicitly agree to send a push broadcast.
+- Only invoke the write tool once the user explicitly confirms (e.g., "Confirm", "Yes", "Go ahead").
 
 ## Tool Usage Guidelines
-- **Read-only tools** (\`list_meetings\`, \`list_users\`, \`list_teams\`, \`list_projects\`, \`list_announcements\`): Call these freely to find requested information.
+- **Read-only tools** (\`list_meetings\`, \`list_users\`, \`list_teams\`, \`list_projects\`, \`list_announcements\`, \`get_workspace_workload\`): Call these freely to find requested information.
 - For \`list_meetings\`, you can filter by \`teamName\` (e.g., 'Dairy app') to find meetings attended by a team's members. Always check this first if the user queries a team's meetings.
+- When querying user workload, project counts, or active tasks per user, call \`get_workspace_workload\` to get a single unified summary of all users.
 - When a tool returns an error, explain it clearly and suggest next steps.
 
 ## Permission Rules
-- Intern: ❌ Denied create_meeting, list_teams, create_announcement
-- Member: ✅ Allowed create_meeting | ❌ Denied list_teams, create_announcement
+- Intern: ❌ Denied create_meeting, list_teams, create_announcement, edit_announcement, delete_announcement
+- Member: ✅ Allowed create_meeting | ❌ Denied list_teams, create_announcement, edit_announcement, delete_announcement
 - Admin / Console admin: ✅ Allowed all`
       }
     ];
