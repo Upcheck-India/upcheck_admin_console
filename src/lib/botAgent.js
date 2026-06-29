@@ -53,6 +53,38 @@ const tools = [
       description: "View the workspace directory of users, containing usernames, display names, emails, roles, and departments.",
       parameters: { type: "object", properties: {} }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_projects",
+      description: "List active projects in the organization that the user has access to. Returns project names, description, manager, and tags.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "list_announcements",
+      description: "List active announcements in the organization that are visible to the user. Returns title, content, whether it is important, and creator details.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_announcement",
+      description: "Publish a new workspace announcement on behalf of the user. Only Admins and Console admins are permitted. Requires title, content, and optionally isImportant (boolean) to trigger a broadcast notification.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Title of the announcement" },
+          content: { type: "string", description: "Detailed content message of the announcement" },
+          isImportant: { type: "boolean", description: "Whether to mark as important and broadcast to all users" }
+        },
+        required: ["title", "content"]
+      }
+    }
   }
 ];
 
@@ -180,6 +212,135 @@ async function executeTool(name, args, db, currentUser) {
         department: u.department,
         jobTitle: u.jobTitle
       })));
+    }
+
+    if (name === 'list_projects') {
+      const isAdmin = userRole === 'Admin' || userRole === 'Console admin';
+      let query = {};
+      if (!isAdmin) {
+        // Fetch teams user belongs to
+        const userTeams = await db.collection('teams').find({
+          $or: [
+            { members: currentUser._id.toString() },
+            { lead: currentUser._id.toString() },
+            { members: currentUser._id },
+            { lead: currentUser._id }
+          ]
+        }).toArray();
+        const userTeamIds = userTeams.map(t => t._id.toString());
+        const teamAccessConditions = userTeamIds.map(teamId => ({
+          'permissionSettings.allowedTeams': teamId
+        }));
+        query = {
+          $or: [
+            { superManager: currentUser.username },
+            { 'members.user': currentUser.username },
+            { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': currentUser.role },
+            { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': 'Everyone' },
+            ...teamAccessConditions.map(cond => ({ 'permissionSettings.accessMode': 'teams_based', ...cond }))
+          ]
+        };
+      }
+      const projects = await db.collection('projects').find(query).sort({ createdAt: -1 }).toArray();
+      return JSON.stringify(projects.map(p => ({
+        id: p._id.toString(),
+        name: p.name,
+        description: p.description,
+        superManager: p.superManager,
+        status: p.status || 'active',
+        tags: p.tags || []
+      })));
+    }
+
+    if (name === 'list_announcements') {
+      const isAdmin = userRole === 'Admin' || userRole === 'Console admin';
+      let query = {};
+      if (!isAdmin) {
+        const userTeams = await db.collection('teams').find({
+          $or: [
+            { members: currentUser._id.toString() },
+            { lead: currentUser._id.toString() },
+            { members: currentUser._id },
+            { lead: currentUser._id }
+          ]
+        }, { projection: { _id: 1 } }).toArray();
+        const userTeamIds = userTeams.map(t => t._id.toString());
+        query = {
+          $or: [
+            { teams: { $exists: false } },
+            { teams: { $size: 0 } },
+            { teams: null },
+            { teams: { $in: userTeamIds } }
+          ]
+        };
+      }
+      const announcements = await db.collection('announcements').find(query).sort({ createdAt: -1 }).limit(15).toArray();
+      return JSON.stringify(announcements.map(a => ({
+        id: a._id.toString(),
+        title: a.title,
+        content: a.content,
+        isImportant: a.isImportant,
+        createdBy: a.createdBy?.name || a.createdBy?.username || 'Unknown',
+        createdAt: a.createdAt
+      })));
+    }
+
+    if (name === 'create_announcement') {
+      if (userRole !== 'Admin' && userRole !== 'Console admin') {
+        return JSON.stringify({ error: `Permission Denied: Users with role '${userRole}' are not authorized to publish announcements.` });
+      }
+      const { title, content, isImportant = false } = args;
+      if (!title || !title.trim()) {
+        return JSON.stringify({ error: "Title is required." });
+      }
+      if (!content || !content.trim()) {
+        return JSON.stringify({ error: "Content is required." });
+      }
+
+      const auditLog = `\n\nUpcheck Admin Bot has published this announcement on behalf of ${userName} (${userEmail}).`;
+      const announcement = {
+        title: title.trim(),
+        content: content.trim() + auditLog,
+        isImportant: !!isImportant,
+        teams: [],
+        buttonText: '',
+        buttonUrl: '',
+        buttonColor: '',
+        createdBy: {
+          id: currentUser._id.toString(),
+          username: currentUser.username,
+          email: userEmail,
+          name: userName,
+        },
+        createdAt: new Date(),
+        reactions: [],
+        dismissedBy: [],
+      };
+
+      const result = await db.collection('announcements').insertOne(announcement);
+
+      if (isImportant) {
+        try {
+          const users = await db.collection('admin_users').find({ role: { $ne: 'bot' } }).toArray();
+          for (const u of users) {
+            sendPushNotification(
+              u._id.toString(),
+              `📢 ${title.trim()}`,
+              content.trim().length > 100 ? `${content.trim().substring(0, 100)}...` : content.trim(),
+              { type: 'announcement', announcementId: result.insertedId.toString() }
+            ).catch(() => {});
+          }
+        } catch (pushErr) {
+          console.error('Trigger announcement push error:', pushErr);
+        }
+      }
+
+      return JSON.stringify({
+        success: true,
+        message: `Upcheck Admin Bot has successfully published the announcement on behalf of ${userName}.`,
+        announcementId: result.insertedId.toString(),
+        title: announcement.title
+      });
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });
@@ -440,7 +601,10 @@ Always be helpful, precise, and state clearly when you perform actions on behalf
             list_meetings: "Thinking... Listing upcoming meetings...",
             create_meeting: "Thinking... Scheduling a new meeting...",
             list_teams: "Thinking... Loading workspace teams...",
-            list_users: "Thinking... Querying user directory..."
+            list_users: "Thinking... Querying user directory...",
+            list_projects: "Thinking... Loading workspace projects...",
+            list_announcements: "Thinking... Retrieving workspace announcements...",
+            create_announcement: "Thinking... Publishing workspace announcement..."
           };
           const statusMsg = toolStatusMap[tc.function.name] || `Thinking... Running action ${tc.function.name}...`;
           await updateBotMessage(db, chatType, botMsgId, statusMsg);
