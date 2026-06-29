@@ -262,18 +262,20 @@ export async function POST(req, { params }) {
         if (isMentionAll) {
           nonMutedRecipients.forEach(id => mentionedUserIds.add(id));
         } else {
-          const mentionRegex = /@([a-zA-Z0-9_.-]+)/g;
-          const matches = [...cleanBody.matchAll(mentionRegex)].map(m => m[1].toLowerCase());
-          if (matches.length > 0) {
-            const users = await db.collection('admin_users').find({
-              username: { $in: matches }
-            }, { projection: { _id: 1 } }).toArray();
-            users.forEach(u => {
-              const uIdStr = u._id.toString();
-              if (nonMutedRecipients.includes(uIdStr)) {
-                mentionedUserIds.add(uIdStr);
+          const recipientObjIds = nonMutedRecipients.map(id => {
+            try { return new ObjectId(id); } catch { return id; }
+          });
+          const recipientUsers = await db.collection('admin_users').find({
+            _id: { $in: recipientObjIds }
+          }, { projection: { username: 1 } }).toArray();
+
+          for (const rUser of recipientUsers) {
+            if (rUser.username) {
+              const mentionTag = `@${rUser.username.toLowerCase()}`;
+              if (lowerBody.includes(mentionTag)) {
+                mentionedUserIds.add(rUser._id.toString());
               }
-            });
+            }
           }
         }
 
