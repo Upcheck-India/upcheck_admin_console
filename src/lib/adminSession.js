@@ -77,9 +77,29 @@ function isLocalIP(ip) {
 
 async function getLocation(ip) {
   const isLocal = isLocalIP(ip);
-  const url = isLocal ? 'http://ip-api.com/json/' : `http://ip-api.com/json/${ip}`;
+  
+  // Try ipapi.co first (more accurate city mapping for Jio/Indian IPv6 prefixes)
+  const ipapiURL = isLocal ? 'https://ipapi.co/json/' : `https://ipapi.co/${ip}/json/`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(ipapiURL, { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && !data.error) {
+        const locationStr = `${data.city || ''}, ${data.country_name || ''}`.trim().replace(/^,\s*/, '') || 'Unknown Location';
+        return {
+          location: locationStr,
+          ip: data.ip || ip
+        };
+      }
+    }
+  } catch (e) {
+    // ignore, try fallback
+  }
+
+  // Fallback to ip-api.com
+  const ipapiURL2 = isLocal ? 'http://ip-api.com/json/' : `http://ip-api.com/json/${ip}`;
+  try {
+    const res = await fetch(ipapiURL2, { signal: AbortSignal.timeout(2000) });
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === 'success') {
@@ -93,6 +113,7 @@ async function getLocation(ip) {
   } catch (e) {
     // ignore
   }
+
   return {
     location: isLocal ? 'Localhost' : 'Unknown Location',
     ip: ip
