@@ -12,13 +12,14 @@ const tools = [
     type: "function",
     function: {
       name: "list_meetings",
-      description: "List meetings. Filters: teamName, teamId, search query.",
+      description: "List meetings. By default only returns upcoming/recent meetings (from 24h ago onwards) to prevent clutter.",
       parameters: {
         type: "object",
         properties: {
           teamName: { type: "string", description: "Filter by team name (e.g. 'Dairy app')" },
           teamId: { type: "string", description: "Filter by team ID" },
-          search: { type: "string", description: "Search keyword" }
+          search: { type: "string", description: "Search keyword in title/description" },
+          includePast: { type: "boolean", description: "Set true to include past meetings (prior to 24h ago)" }
         }
       }
     }
@@ -234,6 +235,30 @@ const tools = [
         required: ["meetingId"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_email_broadcast",
+      description: "Send an email broadcast to specific users or teams. Admins/Console admins only. Call ONLY after user preview & confirmation.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipients: {
+            type: "object",
+            description: "Target recipients configuration",
+            properties: {
+              emails: { type: "array", items: { type: "string" }, description: "Specific email addresses" },
+              usernames: { type: "array", items: { type: "string" }, description: "Specific usernames" },
+              teamNames: { type: "array", items: { type: "string" }, description: "Specific team names (all members of these teams will receive the email)" }
+            }
+          },
+          subject: { type: "string", description: "Email subject line" },
+          body: { type: "string", description: "Email body content" }
+        },
+        required: ["subject", "body"]
+      }
+    }
   }
 ];
 
@@ -246,9 +271,10 @@ async function executeTool(name, args, db, currentUser) {
     const userEmail = currentUser.email;
 
     if (name === 'list_meetings') {
-      const { teamId, teamName, search } = args;
+      const { teamId, teamName, search, includePast = false } = args;
       let query = {};
 
+      // 1. Build Host/Participant/Team filter
       if (teamId || teamName) {
         let teamMemberEmails = [];
         let teamDoc = null;
@@ -288,27 +314,52 @@ async function executeTool(name, args, db, currentUser) {
         ];
       }
 
-      // Filter upcoming/recent meetings (starts from 24h ago) by default unless specifically searching for a team
-      if (!teamId && !teamName) {
-        query.startTime = { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) };
+      // 2. Build Time filter (Default: only recent/upcoming starting 24h ago)
+      let timeConditions = null;
+      if (!includePast) {
+        const cutoffDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const cutoffStr = cutoffDate.toISOString();
+        timeConditions = {
+          $or: [
+            { startTime: { $gte: cutoffDate } },
+            { startTime: { $gte: cutoffStr } }
+          ]
+        };
       }
 
+      // 3. Build Search filter
+      let searchConditions = null;
       if (search) {
         const searchRegex = { $regex: search, $options: 'i' };
-        if (query.$or) {
-          query = {
-            $and: [
-              { $or: query.$or },
-              { $or: [ { title: searchRegex }, { description: searchRegex } ] }
-            ]
-          };
-        } else {
-          query.$or = [ { title: searchRegex }, { description: searchRegex } ];
-        }
+        searchConditions = {
+          $or: [
+            { title: searchRegex },
+            { description: searchRegex }
+          ]
+        };
+      }
+
+      // 4. Combine all conditions using $and to prevent parameter overwriting
+      const andConditions = [];
+      if (query.$or) {
+        andConditions.push({ $or: query.$or });
+      } else if (Object.keys(query).length > 0) {
+        andConditions.push(query);
+      }
+      if (timeConditions) {
+        andConditions.push(timeConditions);
+      }
+      if (searchConditions) {
+        andConditions.push(searchConditions);
+      }
+
+      let finalQuery = {};
+      if (andConditions.length > 0) {
+        finalQuery = { $and: andConditions };
       }
 
       const events = await db.collection('events')
-        .find(query)
+        .find(finalQuery)
         .sort({ startTime: 1 })
         .limit(15)
         .toArray();
@@ -573,10 +624,13 @@ async function executeTool(name, args, db, currentUser) {
 
     if (name === 'get_project_details') {
       const { projectId } = args;
-      if (!projectId || !ObjectId.isValid(projectId)) {
+      if (!projectId) {
         return JSON.stringify({ error: "Invalid or missing projectId parameter" });
       }
-      const project = await db.collection('projects').findOne({ _id: new ObjectId(projectId) });
+      const queryIds = [projectId];
+      if (ObjectId.isValid(projectId)) queryIds.push(new ObjectId(projectId));
+
+      const project = await db.collection('projects').findOne({ _id: { $in: queryIds } });
       if (!project) {
         return JSON.stringify({ error: "Project not found" });
       }
@@ -594,11 +648,14 @@ async function executeTool(name, args, db, currentUser) {
 
     if (name === 'list_sprints') {
       const { projectId } = args;
-      if (!projectId || !ObjectId.isValid(projectId)) {
+      if (!projectId) {
         return JSON.stringify({ error: "Invalid or missing projectId parameter" });
       }
+      const queryIds = [projectId];
+      if (ObjectId.isValid(projectId)) queryIds.push(new ObjectId(projectId));
+
       const sprints = await db.collection('project_sprints')
-        .find({ projectId: new ObjectId(projectId) })
+        .find({ projectId: { $in: queryIds } })
         .sort({ createdAt: 1 })
         .toArray();
       return JSON.stringify(sprints.map(s => ({
@@ -614,18 +671,24 @@ async function executeTool(name, args, db, currentUser) {
       const { projectId, sprintId, assigneeId, status, priority, nearDeadline } = args;
       let query = {};
       
-      if (projectId && ObjectId.isValid(projectId)) {
-        query.projectId = new ObjectId(projectId);
+      if (projectId) {
+        const pIds = [projectId];
+        if (ObjectId.isValid(projectId)) pIds.push(new ObjectId(projectId));
+        query.projectId = { $in: pIds };
       }
       if (sprintId) {
-        if (ObjectId.isValid(sprintId)) {
-          query.sprintId = new ObjectId(sprintId);
-        } else if (sprintId === 'null' || sprintId === 'none') {
+        if (sprintId === 'null' || sprintId === 'none') {
           query.sprintId = { $exists: false };
+        } else {
+          const sIds = [sprintId];
+          if (ObjectId.isValid(sprintId)) sIds.push(new ObjectId(sprintId));
+          query.sprintId = { $in: sIds };
         }
       }
       if (assigneeId) {
-        query.assignees = new ObjectId(assigneeId);
+        const uIds = [assigneeId];
+        if (ObjectId.isValid(assigneeId)) uIds.push(new ObjectId(assigneeId));
+        query.assignees = { $in: uIds };
       }
       if (status) {
         query.status = { $regex: new RegExp(`^${status}$`, 'i') };
@@ -648,7 +711,9 @@ async function executeTool(name, args, db, currentUser) {
       // Resolve usernames of assignees
       const assigneeIds = [...new Set(tasks.flatMap(t => t.assignees || []).filter(Boolean))];
       const users = await db.collection('admin_users')
-        .find({ _id: { $in: assigneeIds } })
+        .find({ _id: { $in: assigneeIds.map(id => {
+          try { return new ObjectId(id); } catch { return id; }
+        }) } })
         .project({ firstName: 1, lastName: 1, username: 1, email: 1 })
         .toArray();
       const userMap = users.reduce((acc, u) => {
@@ -1145,12 +1210,15 @@ async function executeTool(name, args, db, currentUser) {
       const failedList = [];
 
       for (const id of meetingIds) {
-        if (!id || !ObjectId.isValid(id)) {
+        if (!id) {
           failedList.push({ id, error: "Invalid meeting ID format" });
           continue;
         }
 
-        const meeting = await db.collection('events').findOne({ _id: new ObjectId(id) });
+        const queryIds = [id];
+        if (ObjectId.isValid(id)) queryIds.push(new ObjectId(id));
+
+        const meeting = await db.collection('events').findOne({ _id: { $in: queryIds } });
         if (!meeting) {
           failedList.push({ id, error: "Meeting not found" });
           continue;
@@ -1162,7 +1230,7 @@ async function executeTool(name, args, db, currentUser) {
           continue;
         }
 
-        await db.collection('events').deleteOne({ _id: new ObjectId(id) });
+        await db.collection('events').deleteOne({ _id: { $in: queryIds } });
         deletedList.push({ id, title: meeting.title });
       }
 
@@ -1181,11 +1249,13 @@ async function executeTool(name, args, db, currentUser) {
 
       const { meetingId, title, description, startTime, duration, joinUrl, provider, participants, status } = args;
 
-      if (!meetingId || !ObjectId.isValid(meetingId)) {
+      if (!meetingId) {
         return JSON.stringify({ error: "Invalid or missing meetingId" });
       }
+      const queryIds = [meetingId];
+      if (ObjectId.isValid(meetingId)) queryIds.push(new ObjectId(meetingId));
 
-      const meeting = await db.collection('events').findOne({ _id: new ObjectId(meetingId) });
+      const meeting = await db.collection('events').findOne({ _id: { $in: queryIds } });
       if (!meeting) {
         return JSON.stringify({ error: "Meeting not found" });
       }
@@ -1209,7 +1279,7 @@ async function executeTool(name, args, db, currentUser) {
       const isTimeChanged = startTime && meeting.startTime && new Date(startTime).getTime() !== new Date(meeting.startTime).getTime();
 
       const result = await db.collection('events').findOneAndUpdate(
-        { _id: new ObjectId(meetingId) },
+        { _id: { $in: queryIds } },
         { $set: updateDoc },
         { returnDocument: 'after' }
       );
@@ -1314,6 +1384,108 @@ async function executeTool(name, args, db, currentUser) {
         meeting: result,
         isTimeChanged,
         auditLog: `Upcheck Admin Bot has updated meeting "${result.title}" on behalf of ${userName} (${userEmail}).`
+      });
+    }
+
+    if (name === 'send_email_broadcast') {
+      if (userRole !== 'Admin' && userRole !== 'Console admin') {
+        return JSON.stringify({ error: `Permission Denied: Users with role '${userRole}' are not authorized to send email broadcasts.` });
+      }
+
+      const { recipients, subject, body } = args;
+      if (!subject || !subject.trim()) {
+        return JSON.stringify({ error: "Subject is required." });
+      }
+      if (!body || !body.trim()) {
+        return JSON.stringify({ error: "Body is required." });
+      }
+
+      let emailList = [];
+
+      if (recipients) {
+        if (recipients.emails && Array.isArray(recipients.emails)) {
+          emailList = emailList.concat(recipients.emails.filter(Boolean));
+        }
+
+        if (recipients.usernames && Array.isArray(recipients.usernames)) {
+          const userDocs = await db.collection('admin_users').find({
+            username: { $in: recipients.usernames.map(u => u.trim()) }
+          }).toArray();
+          const userEmails = userDocs.map(u => u.email).filter(Boolean);
+          emailList = emailList.concat(userEmails);
+        }
+
+        if (recipients.teamNames && Array.isArray(recipients.teamNames)) {
+          const teamDocs = await db.collection('teams').find({
+            name: { $in: recipients.teamNames.map(t => new RegExp(`^${t.trim()}$`, 'i')) }
+          }).toArray();
+
+          const allMemberIds = [];
+          for (const team of teamDocs) {
+            if (team.lead) allMemberIds.push(team.lead);
+            if (team.members && Array.isArray(team.members)) {
+              allMemberIds.push(...team.members);
+            }
+          }
+
+          if (allMemberIds.length > 0) {
+            const memberDocs = await db.collection('admin_users').find({
+              _id: { $in: allMemberIds.map(id => {
+                try { return new ObjectId(id); } catch { return id; }
+              }) }
+            }).toArray();
+            const teamEmails = memberDocs.map(u => u.email).filter(Boolean);
+            emailList = emailList.concat(teamEmails);
+          }
+        }
+      }
+
+      const uniqueEmails = Array.from(new Set(emailList.map(e => e.trim().toLowerCase())));
+
+      if (uniqueEmails.length === 0) {
+        return JSON.stringify({ error: "No valid recipient email addresses found. Please specify valid emails, usernames, or teamNames." });
+      }
+
+      const { sendEmail: sendUnifiedEmail } = await import('./emailService.js');
+      const results = [];
+      
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+          <div style="background-color: #0f172a; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; color: white;">
+            <h2 style="margin: 0; font-size: 20px;">Organization Broadcast</h2>
+            <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.8;">Sent by ${userName} via Upcheck Admin Bot</p>
+          </div>
+          <div style="padding: 24px; color: #334155; line-height: 1.6; font-size: 15px;">
+            <h3 style="color: #0f172a; margin-top: 0; margin-bottom: 16px; font-size: 18px;">${subject}</h3>
+            <div style="white-space: pre-wrap;">${body}</div>
+          </div>
+          <div style="border-top: 1px solid #e2e8f0; padding-top: 16px; text-align: center; font-size: 11px; color: #94a3b8;">
+            This email was sent to you by the organization administrator via Upcheck Technologies.
+          </div>
+        </div>
+      `;
+
+      for (const recipientEmail of uniqueEmails) {
+        try {
+          await sendUnifiedEmail({
+            to: recipientEmail,
+            subject: subject,
+            html: htmlBody,
+            text: `${subject}\n\nSent by ${userName} via Upcheck Admin Bot\n\n${body}`,
+            type: 'broadcast'
+          });
+          results.push({ email: recipientEmail, status: 'sent' });
+        } catch (err) {
+          results.push({ email: recipientEmail, status: 'failed', error: err.message });
+        }
+      }
+
+      const successCount = results.filter(r => r.status === 'sent').length;
+      return JSON.stringify({
+        success: true,
+        message: `Successfully sent broadcast to ${successCount} out of ${uniqueEmails.length} recipients.`,
+        sentCount: successCount,
+        recipients: results
       });
     }
 
@@ -1497,22 +1669,25 @@ export async function triggerBotAgent({ chatType, chatId, body, currentUser, db 
 - Keep responses concise, clear, and straight to the point unless the user requests more detail.
 
 ## Write Tool Guardrails & Confirmation Flow
-- **CRITICAL**: When the user asks to create/schedule a meeting (\`create_meeting\`), delete/cancel meetings (\`delete_meetings\`), or create, edit, or delete an announcement (\`create_announcement\`, \`edit_announcement\`, \`delete_announcement\`), you **MUST NOT** call the tool immediately.
+- **CRITICAL**: When the user asks to create/schedule a meeting (\`create_meeting\`), delete/cancel meetings (\`delete_meetings\`), publish, edit, or delete an announcement (\`create_announcement\`, \`edit_announcement\`, \`delete_announcement\`), or send an email broadcast (\`send_email_broadcast\`), you **MUST NOT** call the tool immediately.
 - First, present a clear preview of the proposed changes/details and ask the user to explicitly confirm.
 - For meetings: ask "Would you like me to schedule this meeting? Do you want to send email invites to the participants?" and prompt them to provide the join link.
 - For cancelling meetings: ask "Would you like me to delete/cancel these meetings? (list their titles)" and confirm.
 - For announcements: ask "Would you like me to publish/edit/delete this announcement? Do you want to broadcast a push notification to all users?" Only set \`isImportant: true\` if they explicitly agree to send a push broadcast.
+- For email broadcasts: resolve recipients, present a preview of the subject, body, and the list of matching recipient email addresses, and ask "Would you like me to send this email broadcast to the listed recipients?"
 - Only invoke the write tool once the user explicitly confirms (e.g., "Confirm", "Yes", "Go ahead").
 
 ## Tool Usage Guidelines
 - **Read-only tools** (\`list_meetings\`, \`list_users\`, \`list_teams\`, \`list_projects\`, \`list_announcements\`, \`get_workspace_workload\`): Call these freely to find requested information.
+- For \`list_meetings\`: call this tool whenever the user asks about meetings. You **MUST NOT** hallucinate or make up meetings that are not returned by the tool. If the tool returns no meetings, inform the user that there are no meetings scheduled.
+- If you need to search or find past meetings, you must explicitly pass \`includePast: true\` to \`list_meetings\`.
 - For \`list_meetings\`, you can filter by \`teamName\` (e.g., 'Dairy app') to find meetings attended by a team's members. Always check this first if the user queries a team's meetings.
 - When querying user workload, project counts, or active tasks per user, call \`get_workspace_workload\` to get a single unified summary of all users.
 - When a tool returns an error, explain it clearly and suggest next steps.
 
 ## Permission Rules
-- Intern: ❌ Denied create_meeting, delete_meetings, list_teams, create_announcement, edit_announcement, delete_announcement
-- Member: ✅ Allowed create_meeting, delete_meetings | ❌ Denied list_teams, create_announcement, edit_announcement, delete_announcement
+- Intern: ❌ Denied create_meeting, delete_meetings, list_teams, create_announcement, edit_announcement, delete_announcement, send_email_broadcast
+- Member: ✅ Allowed create_meeting, delete_meetings | ❌ Denied list_teams, create_announcement, edit_announcement, delete_announcement, send_email_broadcast
 - Admin / Console admin: ✅ Allowed all`
       }
     ];
