@@ -403,10 +403,11 @@ const ProjectManagementPage = () => {
     );
 
     return (
-      <div className={`group relative bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-gray-100 flex flex-col justify-between ${menuOpen ? 'z-30' : 'hover:z-20 z-10'}`}>
+      <div className={`group relative bg-surface rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 border border-border-default flex flex-col h-full ${menuOpen ? 'z-30' : 'hover:z-20 z-10'}`}>
         {/* Full gradient overlay that fades in on hover */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none rounded-xl" />
         
+        {/* Card content container */}
         <div className="relative z-10 p-5 flex flex-col flex-grow">
           {/* Status badge */}
           <div className="absolute top-0 right-0">
@@ -416,65 +417,63 @@ const ProjectManagementPage = () => {
             </span>
           </div>
 
-          {/* Card content */}
-          <div className="pr-16 mb-4">
-            <div className="flex items-start gap-4 mb-3">
-              {project.logo && (project.logo.startsWith('/') || project.logo.startsWith('http://') || project.logo.startsWith('https://') || project.logo.startsWith('data:')) ? (
-                <img src={project.logo} alt={`${project.name} logo`} className="h-12 w-12 rounded-xl object-cover flex-shrink-0 shadow-sm border border-gray-100" />
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center shadow-sm flex-shrink-0">
-                  <FolderKanban className="w-6 h-6 text-white" />
-                </div>
-              )}
-              <div className="min-w-0 mt-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-bold text-gray-900 truncate group-hover:text-blue-700 transition-colors duration-300">{project.name}</h3>
-                  {projectUnreadCounts[project._id] > 0 && (
-                    <span className="relative flex h-5 w-5 shrink-0">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-white text-[10px] font-bold items-center justify-center">
-                        {projectUnreadCounts[project._id]}
-                      </span>
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-500 line-clamp-2 mt-0.5">{project.description || 'No description'}</p>
+          {/* Core Info */}
+          <div className="pr-16 mb-4 flex items-start gap-4">
+            {project.logo && (project.logo.startsWith('/') || project.logo.startsWith('http://') || project.logo.startsWith('https://') || project.logo.startsWith('data:')) ? (
+              <img src={project.logo} alt={`${project.name} logo`} className="h-12 w-12 rounded-xl object-cover flex-shrink-0 shadow-sm border border-border-default" />
+            ) : (
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-teal-500 flex items-center justify-center shadow-sm flex-shrink-0">
+                <FolderKanban className="w-6 h-6 text-white" />
               </div>
+            )}
+            <div className="min-w-0 mt-1">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold text-text-primary truncate group-hover:text-blue-500 transition-colors duration-300">{project.name}</h3>
+                {projectUnreadCounts[project._id] > 0 && (
+                  <span className="relative flex h-5 w-5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-5 w-5 bg-red-500 text-white text-[10px] font-bold items-center justify-center">
+                      {projectUnreadCounts[project._id]}
+                    </span>
+                  </span>
+                )}
+              </div>
+              <p className="text-sm text-text-tertiary line-clamp-2 mt-0.5">{project.description || 'No description'}</p>
             </div>
+          </div>
 
           {/* Tags */}
           {project.tags && project.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mb-3">
               {project.tags.slice(0, 3).map(tag => (
-                <span key={tag} className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full font-medium">
+                <span key={tag} className="px-2 py-0.5 bg-blue-50/10 text-blue-500 text-xs rounded-full font-medium border border-blue-500/20">
                   {tag}
                 </span>
               ))}
               {project.tags.length > 3 && (
-                <span className="text-xs text-gray-400">+{project.tags.length - 3}</span>
+                <span className="text-xs text-text-tertiary">+{project.tags.length - 3}</span>
               )}
             </div>
           )}
 
           {/* Super Manager */}
-          <div className="flex items-center text-sm text-gray-500 mb-3">
+          <div className="flex items-center text-sm text-text-secondary mb-3 mt-auto">
             <ShieldCheck className="h-4 w-4 mr-2 text-blue-500" />
             <span className="truncate">{project.superManager || 'N/A'}</span>
           </div>
 
           {/* Members summary */}
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-text-tertiary">
             <User className="h-3.5 w-3.5" />
             <span>{projectManagers.length} PMs, {otherMembers.length} members</span>
           </div>
         </div>
-      </div>
 
-        {/* Actions row */}
-        <div className="relative z-10 flex gap-2 mt-auto pt-4 border-t border-gray-100/50">
+        {/* Actions row footer */}
+        <div className="relative z-10 flex items-center gap-2 px-5 pb-5 pt-4 border-t border-border-default mt-auto">
           <button
             onClick={() => router.push(`/project_management/${project._id}`)}
-            className="flex-1 text-center bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 text-sm shadow-sm hover:shadow"
+            className="flex-grow text-center bg-blue-50/10 hover:bg-blue-600 text-blue-500 hover:text-white font-semibold py-2 px-4 rounded-lg transition-all duration-300 text-sm shadow-sm hover:shadow border border-blue-500/20"
           >
             View Project
           </button>
@@ -482,14 +481,14 @@ const ProjectManagementPage = () => {
             <>
               <button
                 onClick={() => setShareModalProjectId(project._id)}
-                className="p-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors duration-200"
+                className="p-2 bg-green-50/10 hover:bg-green-600 text-green-500 hover:text-white border border-green-500/20 rounded-lg transition-colors duration-200"
                 title="Share links"
               >
                 <Share2 className="h-4 w-4" />
               </button>
               <button
                 onClick={() => handleDeleteClick(project)}
-                className="p-2 bg-red-50 hover:bg-red-100 text-red-700 rounded-lg transition-colors duration-200"
+                className="p-2 bg-red-50/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 rounded-lg transition-colors duration-200"
                 title="Delete project"
               >
                 <Trash2 className="h-4 w-4" />
@@ -533,9 +532,9 @@ const ProjectManagementPage = () => {
         .animate-fade-in { animation: fade-in 0.25s ease-out; }
       `}</style>
 
-      <div className="min-h-screen bg-[#f8f9fb]">
+      <div className="min-h-screen bg-background text-text-primary">
         {/* Header */}
-        <header className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm">
+        <header className="bg-surface border-b border-border-default sticky top-0 z-40 shadow-sm">
           <div className="max-w-screen-2xl mx-auto px-4 lg:px-8 py-3">
             <div className="flex items-center gap-4">
               {/* Brand */}

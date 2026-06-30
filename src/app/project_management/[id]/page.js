@@ -421,14 +421,14 @@ const ProjectDetailPage = () => {
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-surface rounded-xl shadow-sm border border-border-default overflow-hidden text-text-primary">
           {/* Pill-style Tab Navigation */}
-          <div className="p-4 border-b border-gray-100 bg-gray-50/50">
-            <div className="flex flex-wrap gap-1 bg-gray-100/80 p-1 rounded-lg w-max border border-gray-200 shadow-inner">
+          <div className="p-4 border-b border-border-default bg-surface">
+            <div className="flex flex-wrap gap-1 bg-surface-variant p-1 rounded-lg w-max border border-border-default shadow-inner">
               <button 
                 onClick={() => handleTabChange('overview')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'overview' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  activeTab === 'overview' ? 'bg-surface text-blue-500 shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                 }`}
               >
                 <BarChart3 className="h-4 w-4 mr-2" /> Overview
@@ -436,7 +436,7 @@ const ProjectDetailPage = () => {
               <button 
                 onClick={() => handleTabChange('tasks')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'tasks' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  activeTab === 'tasks' ? 'bg-surface text-blue-500 shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                 }`}
               >
                 <ListChecks className="h-4 w-4 mr-2" /> Tasks
@@ -444,7 +444,7 @@ const ProjectDetailPage = () => {
               <button 
                 onClick={() => handleTabChange('members')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  activeTab === 'members' ? 'bg-surface text-blue-500 shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                 }`}
               >
                 <Users className="h-4 w-4 mr-2" /> Members
@@ -453,7 +453,7 @@ const ProjectDetailPage = () => {
               <button 
                 onClick={() => handleTabChange('messages')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'messages' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  activeTab === 'messages' ? 'bg-surface text-blue-500 shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                 }`}
               >
                 <MessageSquare className="h-4 w-4 mr-2" /> Messages
@@ -463,7 +463,7 @@ const ProjectDetailPage = () => {
                 <button 
                   onClick={() => handleTabChange('github')} 
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                    activeTab === 'github' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    activeTab === 'github' ? 'bg-surface text-text-primary shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                   }`}
                 >
                   <Github className="h-4 w-4 mr-2" /> GitHub
@@ -474,7 +474,7 @@ const ProjectDetailPage = () => {
                 <button 
                   onClick={() => handleTabChange('canvas')} 
                   className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                    activeTab === 'canvas' ? 'bg-white text-yellow-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    activeTab === 'canvas' ? 'bg-surface text-yellow-500 shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                   }`}
                 >
                   <StickyNote className="h-4 w-4 mr-2" /> Canvas
@@ -484,7 +484,7 @@ const ProjectDetailPage = () => {
               <button 
                 onClick={() => handleTabChange('leaderboard')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'leaderboard' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  activeTab === 'leaderboard' ? 'bg-surface text-indigo-500 shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                 }`}
               >
                 <Trophy className="h-4 w-4 mr-2" /> Leaderboard
@@ -493,7 +493,7 @@ const ProjectDetailPage = () => {
               <button 
                 onClick={() => handleTabChange('settings')} 
                 className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
-                  activeTab === 'settings' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  activeTab === 'settings' ? 'bg-surface text-text-primary shadow-sm border border-border-default' : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
                 }`}
               >
                 <Settings className="h-4 w-4 mr-2" /> Settings
@@ -501,7 +501,7 @@ const ProjectDetailPage = () => {
             </div>
           </div>
           
-          <div className="p-2 md:p-6 bg-white min-h-[500px]">
+          <div className="p-2 md:p-6 bg-surface min-h-[500px]">
             {renderTabContent()}
           </div>
          </div>

@@ -137,23 +137,23 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
   }, [task.assignees, currentUser]);
 
   const cardClassName = useMemo(() => {
-    let classes = 'bg-white p-3 rounded-lg shadow-sm border relative group touch-none transition-all duration-200';
+    let classes = 'bg-surface p-3 rounded-lg border relative group touch-none transition-all duration-300';
     
     if (dateStatus) {
       if (dateStatus.label === 'Overdue') {
-        classes += ' bg-red-50/45 hover:bg-red-100/40';
+        classes += ' bg-red-500/[0.02] dark:bg-red-500/[0.02] hover:bg-red-500/[0.07] dark:hover:bg-red-500/[0.07] hover:backdrop-blur-md hover:border-red-500/40 hover:shadow-[0_0_15px_rgba(239,68,68,0.08)]';
       } else if (dateStatus.label === 'Due Soon') {
-        classes += ' bg-amber-50/45 hover:bg-amber-100/40';
+        classes += ' bg-amber-500/[0.02] dark:bg-amber-500/[0.02] hover:bg-amber-500/[0.07] dark:hover:bg-amber-500/[0.07] hover:backdrop-blur-md hover:border-amber-500/40 hover:shadow-[0_0_15px_rgba(245,158,11,0.08)]';
       }
     } else {
-      classes += ' hover:bg-gray-50/40';
+      classes += ' hover:bg-blue-500/[0.04] dark:hover:bg-blue-500/[0.04] hover:backdrop-blur-md hover:border-blue-500/35 hover:shadow-[0_0_15px_rgba(59,130,246,0.06)]';
     }
     
-    let borderClass = 'border-gray-200';
+    let borderClass = 'border-border-default';
     if (isMyTask) {
-      borderClass = 'border-blue-400 ring-[1px] ring-blue-400/20';
+      borderClass = 'border-blue-500/40 ring-[1px] ring-blue-500/10';
     } else if (dateStatus) {
-      borderClass = dateStatus.label === 'Overdue' ? 'border-red-200' : 'border-amber-200';
+      borderClass = dateStatus.label === 'Overdue' ? 'border-red-500/25' : 'border-amber-500/25';
     }
     
     return `${classes} ${borderClass}`;
@@ -170,16 +170,16 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
       {/* Priority dot */}
       {priorityDotColor && (
         <span
-          className={`absolute top-2 left-2 w-2.5 h-2.5 rounded-full ${priorityDotColor}`}
+          className={`absolute top-2.5 left-2.5 w-2 h-2 rounded-full ${priorityDotColor}`}
           title={task.priority}
         />
       )}
 
-      <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white bg-opacity-75 rounded-md">
+      <div className="absolute top-2 right-2 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-white/90 dark:bg-[#151e28]/95 backdrop-blur-md border border-gray-200 dark:border-border-default px-1.5 py-1 rounded-lg shadow-md">
         {/* View button for all users */}
         <button 
           onClick={handleView} 
-          className="text-gray-500 hover:text-blue-600 p-1"
+          className="text-text-secondary hover:text-blue-400 p-1 transition-colors"
           type="button"
           title="View task"
         >
@@ -188,7 +188,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
         {canDrag && !isFirst && (
           <button 
             onClick={(e) => { e.stopPropagation(); onMoveUp(); }} 
-            className="text-gray-500 hover:text-blue-600 p-1"
+            className="text-text-secondary hover:text-blue-400 p-1 transition-colors"
             type="button"
             title="Move up"
           >
@@ -198,7 +198,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
         {canDrag && !isLast && (
           <button 
             onClick={(e) => { e.stopPropagation(); onMoveDown(); }} 
-            className="text-gray-500 hover:text-blue-600 p-1"
+            className="text-text-secondary hover:text-blue-400 p-1 transition-colors"
             type="button"
             title="Move down"
           >
@@ -208,7 +208,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
         {canEdit && (
           <button 
             onClick={handleEdit} 
-            className="text-gray-500 hover:text-blue-600 p-1"
+            className="text-text-secondary hover:text-blue-400 p-1 transition-colors"
             type="button"
             title="Edit task"
           >
@@ -218,7 +218,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
         {canDelete && (
           <button 
             onClick={handleDelete} 
-            className="text-gray-500 hover:text-red-600 p-1"
+            className="text-text-secondary hover:text-red-400 p-1 transition-colors"
             type="button"
             title="Delete task"
           >
@@ -228,7 +228,7 @@ const TaskCard = ({ task, userMap, canEdit, canDelete, canDrag, onEdit, onDelete
       </div>
       
       <div className={`flex items-start justify-between ${priorityDotColor ? 'pl-4' : ''}`}>
-        <h4 className="font-semibold text-gray-800 pr-4 text-sm flex-1">
+        <h4 className="font-semibold text-text-primary pr-4 text-sm flex-1">
           {task.title}
         </h4>
         <div className="flex items-center space-x-1.5 flex-shrink-0">
@@ -319,18 +319,18 @@ const Column = ({ id, title, tasks, userMap, canEdit, canDelete, canDrag, onEdit
   });
 
   return (
-    <div ref={setNodeRef} className="bg-gray-100 rounded-lg p-4 flex flex-col">
-      <h3 className="font-semibold text-gray-700 mb-4 border-b pb-2 flex justify-between items-center">
+    <div ref={setNodeRef} className="bg-surface-variant/30 rounded-xl p-4 flex flex-col border border-border-default/60 min-h-[550px] shadow-xs">
+      <h3 className="font-semibold text-text-primary mb-4 border-b border-border-default pb-2 flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <span>{title}</span>
-          <span className="text-sm font-normal bg-gray-200 text-gray-600 rounded-full px-2 py-0.5">
+          <span className="text-xs font-semibold bg-surface border border-border-default text-text-secondary rounded-full px-2.5 py-0.5">
             {tasks.length}
           </span>
         </div>
         {canCreate && (
           <button
             onClick={() => onAddTask(id)}
-            className="text-gray-500 hover:text-blue-600 p-1 rounded hover:bg-gray-200 transition-colors"
+            className="text-text-secondary hover:text-blue-500 p-1 rounded hover:bg-surface transition-colors"
             type="button"
             title={`Add task to ${title}`}
           >
@@ -944,25 +944,25 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
       )}
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="p-4 sm:p-6 bg-gray-50 min-h-full">
+        <div className="p-4 sm:p-6 bg-surface min-h-full">
           {project?.settings?.enableLeaderboardShoutout !== false && leaderboard.length > 0 && leaderboard[0].points > 0 && (
-            <div className="mb-3 bg-amber-50/60 border border-amber-200/35 rounded-lg py-1 px-3 inline-flex items-center gap-1.5 text-xs text-amber-900 shadow-xs">
+            <div className="mb-3 bg-amber-500/10 border border-amber-500/20 rounded-lg py-1.5 px-3 inline-flex items-center gap-1.5 text-xs text-amber-500 shadow-xs">
               <Trophy className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
               <span>
-                Top Performer: <span className="font-semibold text-amber-950">@{leaderboard[0].username}</span> with <span className="font-semibold text-amber-950">{leaderboard[0].points} points</span>
+                Top Performer: <span className="font-semibold text-amber-400">@{leaderboard[0].username}</span> with <span className="font-semibold text-amber-400">{leaderboard[0].points} points</span>
               </span>
             </div>
           )}
 
           <div className="flex flex-col mb-6">
             {/* Sprint Tabs */}
-            <div className="flex items-center mb-3 space-x-2 overflow-x-auto sticky top-0 bg-gray-50 z-10 py-2">
+            <div className="flex items-center mb-3 space-x-2 overflow-x-auto sticky top-0 bg-surface z-10 py-2">
               <button
                 onClick={() => setCurrentSprintId(null)}
-                className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
+                className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap border ${
                   currentSprintId === null
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                    ? 'bg-blue-600 border-blue-600 text-white'
+                    : 'bg-surface-variant text-text-secondary border-border-default hover:bg-border-default hover:text-text-primary'
                 }`}
               >
                 Product Board
@@ -1002,13 +1002,13 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center">
+                       <div className="flex items-center">
                         <button
                           onClick={() => setCurrentSprintId(s._id)}
-                          className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap ${
+                          className={`px-4 py-1.5 rounded-md text-sm whitespace-nowrap border ${
                             currentSprintId === s._id
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                              ? 'bg-blue-600 border-blue-600 text-white'
+                              : 'bg-surface-variant text-text-secondary border-border-default hover:bg-border-default hover:text-text-primary'
                           }`}
                         >
                           {s.name}
@@ -1023,7 +1023,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
                                 setSprintMenuPosition({ x: rect.left, y: rect.bottom + 4 });
                                 setSprintMenuOpen(isMenuOpen ? null : s._id);
                               }}
-                              className="ml-1 p-1 rounded hover:bg-gray-300 text-gray-500 hover:text-gray-700"
+                              className="ml-1 p-1 rounded hover:bg-surface-variant text-text-secondary hover:text-text-primary border border-border-default"
                               title="Sprint options"
                               type="button"
                             >
@@ -1072,7 +1072,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               {isManager && (
                 <button
                   onClick={openSprintModal}
-                  className="flex items-center px-2 py-1.5 rounded-md bg-green-600 text-white text-sm hover:bg-green-700"
+                  className="flex items-center px-3 py-1.5 rounded-md bg-green-500/10 text-green-500 border border-green-500/30 text-sm hover:bg-green-500/20 transition-colors font-semibold"
                 >
                   <PlusCircle className="h-4 w-4 mr-1" /> Add Sprint
                 </button>
@@ -1086,27 +1086,27 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
         </div>
 
           {/* Filter Bar */}
-          <div className="flex flex-wrap items-center gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
+          <div className="flex flex-wrap items-center gap-3 bg-surface-variant p-3 rounded-lg border border-border-default mb-4">
             <select
               value={filterPriority}
               onChange={(e) => setFilterPriority(e.target.value)}
-              className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="text-sm border border-border-default rounded-md px-2 py-1.5 bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25"
             >
-              <option value="All">All Priorities</option>
-              <option value="Urgent">🔴 Urgent</option>
-              <option value="High">🟠 High</option>
-              <option value="Medium">🟡 Medium</option>
-              <option value="Low">🟢 Low</option>
+              <option value="All" className="bg-surface text-text-primary">All Priorities</option>
+              <option value="Urgent" className="bg-surface text-text-primary">🔴 Urgent</option>
+              <option value="High" className="bg-surface text-text-primary">🟠 High</option>
+              <option value="Medium" className="bg-surface text-text-primary">🟡 Medium</option>
+              <option value="Low" className="bg-surface text-text-primary">🟢 Low</option>
             </select>
 
             <select
               value={filterAssignee}
               onChange={(e) => setFilterAssignee(e.target.value)}
-              className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="text-sm border border-border-default rounded-md px-2 py-1.5 bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25"
             >
-              <option value="All">All Assignees</option>
+              <option value="All" className="bg-surface text-text-primary">All Assignees</option>
               {Array.from(userMap.values()).map(u => (
-                <option key={u._id} value={u._id}>{u.username}</option>
+                <option key={u._id} value={u._id} className="bg-surface text-text-primary">{u.username}</option>
               ))}
             </select>
 
@@ -1115,7 +1115,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               placeholder="Search tasks..."
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
-              className="text-sm border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 flex-1 min-w-[160px]"
+              className="text-sm border border-border-default rounded-md px-2 py-1.5 bg-surface text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500/25 flex-1 min-w-[160px]"
             />
 
             <button
@@ -1123,8 +1123,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               onClick={() => setFilterMyTasksOnly(prev => !prev)}
               className={`text-sm border rounded-md px-3 py-1.5 font-medium transition-all duration-200 flex items-center gap-1.5 shrink-0 ${
                 filterMyTasksOnly
-                  ? "border-blue-500 text-blue-600 bg-blue-50 hover:bg-blue-100/50"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50 bg-white"
+                  ? "border-blue-500 text-blue-500 bg-blue-500/10 hover:bg-blue-500/20"
+                  : "border-border-default text-text-secondary hover:bg-surface-variant bg-surface"
               }`}
             >
               <User className="h-4 w-4" />
@@ -1135,7 +1135,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               <button
                 type="button"
                 onClick={() => { setFilterPriority('All'); setFilterAssignee('All'); setFilterSearch(''); setFilterMyTasksOnly(false); }}
-                className="text-xs text-gray-500 hover:text-red-600 flex items-center gap-1"
+                className="text-xs text-text-tertiary hover:text-red-500 flex items-center gap-1"
               >
                 <X className="h-3 w-3" /> Clear filters
               </button>
@@ -1145,11 +1145,11 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
           {/* Header */}
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center gap-4">
-              <h2 className="text-xl font-bold text-gray-800">Project Tasks</h2>
+              <h2 className="text-xl font-bold text-text-primary">Project Tasks</h2>
               {canAccessDocumentation && (
                 <button
                   onClick={handleGoToDocumentation}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                  className="inline-flex items-center px-3 py-2 border border-border-default text-sm font-medium rounded-md shadow-sm text-text-secondary bg-surface hover:bg-surface-variant transition-colors"
                   type="button"
                   title="View project documentation"
                 >
@@ -1160,7 +1160,7 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
               {isManager && (
                 <button
                   onClick={() => setIsShareLinksModalOpen(true)}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50"
+                  className="inline-flex items-center px-3 py-2 border border-border-default text-sm font-medium rounded-md shadow-sm text-text-secondary bg-surface hover:bg-surface-variant transition-colors"
                   type="button"
                   title="Share project"
                 >
@@ -1172,8 +1172,8 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
                 onClick={() => setIsChatSidebarOpen(prev => !prev)}
                 className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-md shadow-sm transition-all duration-200 ${
                   isChatSidebarOpen
-                    ? 'bg-blue-50 text-blue-600 border-blue-300 font-semibold'
-                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    ? 'bg-blue-500/10 text-blue-500 border-blue-500/30 font-semibold'
+                    : 'bg-surface border-border-default text-text-secondary hover:bg-surface-variant'
                 }`}
                 type="button"
                 title="Toggle Team Chat Sidebar"

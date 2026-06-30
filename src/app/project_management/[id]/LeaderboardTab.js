@@ -318,16 +318,16 @@ export default function LeaderboardTab({ project, projectId }) {
     <div className="space-y-8 p-2 md:p-4">
       
       {/* Gamification Header Banner */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
+      <div className="bg-surface-variant border border-border-default rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-sm">
         <div className="flex items-center gap-4 text-center md:text-left flex-col md:flex-row">
           <div className="p-3.5 bg-blue-500 text-white rounded-2xl shadow-md border border-blue-400">
             <Trophy className="h-7 w-7 animate-bounce-slow" />
           </div>
           <div>
-            <h3 className="font-bold text-gray-900 text-lg md:text-xl flex items-center justify-center md:justify-start gap-2">
+            <h3 className="font-bold text-text-primary text-lg md:text-xl flex items-center justify-center md:justify-start gap-2">
               Teammate Leaderboard <Sparkles className="h-4.5 w-4.5 text-yellow-500" />
             </h3>
-            <p className="text-sm text-gray-600 mt-1 max-w-xl">
+            <p className="text-sm text-text-secondary mt-1 max-w-xl">
               Earn points by completing tasks, estimations, and participating in tasks discussions. Complete tasks early for massive score boosters!
             </p>
           </div>
@@ -336,7 +336,7 @@ export default function LeaderboardTab({ project, projectId }) {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowGuide(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-xl text-sm font-semibold shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border border-blue-500/20 rounded-xl text-sm font-semibold shadow-sm transition-all"
           >
             <HelpCircle className="w-4 h-4" />
             Rules Guide
@@ -344,7 +344,7 @@ export default function LeaderboardTab({ project, projectId }) {
           {isManager && (
             <button
               onClick={() => setShowAdminConsole(!showAdminConsole)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl text-sm font-semibold shadow-sm transition-all"
+              className="flex items-center gap-1.5 px-4 py-2 bg-surface hover:bg-surface-variant text-text-primary border border-border-default rounded-xl text-sm font-semibold shadow-sm transition-all"
             >
               <Settings className="w-4 h-4" />
               {showAdminConsole ? 'Hide Management' : 'Manage Badges'}

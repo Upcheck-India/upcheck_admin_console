@@ -49,15 +49,15 @@ export default function GitHubTab({ project, projectId }) {
   return (
     <div className="space-y-6">
       {/* Sub-navigation Pill Tabs */}
-      <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 w-max">
+      <div className="flex space-x-1 bg-surface-variant border border-border-default rounded-lg p-1 w-max">
         {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveSubTab(tab.id)}
             className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md transition-all duration-300 ${
               activeSubTab === tab.id
-                ? 'bg-white text-blue-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                ? 'bg-surface text-blue-500 shadow-sm border border-border-default'
+                : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
             }`}
           >
             <tab.icon className="w-4 h-4" />
@@ -67,7 +67,7 @@ export default function GitHubTab({ project, projectId }) {
       </div>
 
       {/* Tab Content */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 text-text-primary">
         {activeSubTab === 'overview' && <OverviewPanel projectId={projectId} project={project} showContributors={showContributors} />}
         {activeSubTab === 'branches' && showBranches && <BranchesPanel projectId={projectId} />}
         {activeSubTab === 'commits' && showCommits && <CommitsPanel projectId={projectId} />}
