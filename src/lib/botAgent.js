@@ -259,8 +259,121 @@ const tools = [
         required: ["subject", "body"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_perms",
+      description: "Get the role and permissions of a user. Defaults to the current user context.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username to check" },
+          email: { type: "string", description: "Optional user email to check" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_teams",
+      description: "Get list of teams a user belongs to (as member or lead). Defaults to current user.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username" },
+          email: { type: "string", description: "Optional user email" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_connections",
+      description: "Get the list of direct chat connections (DMs) of a user. Defaults to current user.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username" },
+          email: { type: "string", description: "Optional user email" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_teammates",
+      description: "Get list of all teammates who share at least one team with this user. Defaults to current user.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username" },
+          email: { type: "string", description: "Optional user email" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_tasks",
+      description: "Get tasks assigned to a specific user. Defaults to current user.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username" },
+          email: { type: "string", description: "Optional user email" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_projects",
+      description: "Get list of projects a user belongs to (super manager, member, or via role/team access). Defaults to current user.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username" },
+          email: { type: "string", description: "Optional user email" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_user_meetings",
+      description: "Get upcoming meetings for a user (next 7 days only). Defaults to current user.",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "Optional username" },
+          email: { type: "string", description: "Optional user email" }
+        }
+      }
+    }
   }
 ];
+
+async function resolveUser(db, currentUser, args) {
+  const { username, email } = args;
+  if (!username && !email) return currentUser;
+
+  let query = {};
+  if (email) {
+    query.email = { $regex: new RegExp(`^${email.trim()}$`, 'i') };
+  } else if (username) {
+    query.username = { $regex: new RegExp(`^${username.trim()}$`, 'i') };
+  }
+
+  const user = await db.collection('admin_users').findOne(query);
+  return user || null;
+}
 
 async function executeTool(name, args, db, currentUser) {
   try {
@@ -1487,6 +1600,186 @@ async function executeTool(name, args, db, currentUser) {
         sentCount: successCount,
         recipients: results
       });
+    }
+
+    if (name === 'get_user_perms' || name === 'get_user_teams' || name === 'get_user_connections' || name === 'get_user_teammates' || name === 'get_user_tasks' || name === 'get_user_projects' || name === 'get_user_meetings') {
+      const targetUser = await resolveUser(db, currentUser, args);
+      if (!targetUser) return JSON.stringify({ error: "User not found." });
+      const userIdStr = targetUser._id.toString();
+
+      if (name === 'get_user_perms') {
+        const role = targetUser.role || 'Member';
+        return JSON.stringify({
+          username: targetUser.username,
+          email: targetUser.email,
+          role: role,
+          permissions: {
+            canCreateMeetings: role !== 'Intern',
+            canDeleteMeetings: role !== 'Intern',
+            canListTeams: role === 'Admin' || role === 'Console admin',
+            canManageAnnouncements: role === 'Admin' || role === 'Console admin',
+            canSendEmails: role === 'Admin' || role === 'Console admin'
+          }
+        });
+      }
+
+      if (name === 'get_user_teams') {
+        const teams = await db.collection('teams').find({
+          $or: [
+            { members: userIdStr },
+            { lead: userIdStr },
+            { members: targetUser._id },
+            { lead: targetUser._id }
+          ]
+        }).toArray();
+
+        return JSON.stringify(teams.map(t => ({
+          id: t._id.toString(),
+          name: t.name,
+          description: t.description,
+          isLead: t.lead?.toString() === userIdStr
+        })));
+      }
+
+      if (name === 'get_user_connections') {
+        const connections = await db.collection('chat_connections').find({
+          userId: userIdStr,
+          status: 'accepted'
+        }).toArray();
+
+        const peerIds = connections.map(c => {
+          try { return new ObjectId(c.peerId); } catch { return c.peerId; }
+        });
+
+        const peerUsers = await db.collection('admin_users').find({
+          _id: { $in: peerIds }
+        }, { projection: { password: 0, sessionToken: 0, backupCodes: 0 } }).toArray();
+
+        return JSON.stringify(peerUsers.map(u => ({
+          id: u._id.toString(),
+          username: u.username,
+          name: u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username,
+          email: u.email
+        })));
+      }
+
+      if (name === 'get_user_teammates') {
+        const teams = await db.collection('teams').find({
+          $or: [
+            { members: userIdStr },
+            { lead: userIdStr },
+            { members: targetUser._id },
+            { lead: targetUser._id }
+          ]
+        }).toArray();
+
+        const teammateIds = new Set();
+        for (const t of teams) {
+          if (t.lead) teammateIds.add(t.lead.toString());
+          t.members?.forEach(m => teammateIds.add(m.toString()));
+        }
+        teammateIds.delete(userIdStr);
+
+        const teammates = await db.collection('admin_users').find({
+          _id: { $in: Array.from(teammateIds).map(id => {
+            try { return new ObjectId(id); } catch { return id; }
+          }) }
+        }, { projection: { password: 0, sessionToken: 0, backupCodes: 0 } }).toArray();
+
+        return JSON.stringify(teammates.map(u => ({
+          id: u._id.toString(),
+          username: u.username,
+          name: u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username,
+          email: u.email
+        })));
+      }
+
+      if (name === 'get_user_tasks') {
+        const uIds = [userIdStr];
+        try { uIds.push(new ObjectId(userIdStr)); } catch (e) {}
+
+        const tasks = await db.collection('project_tasks').find({
+          assignees: { $in: uIds }
+        }).sort({ dueDate: 1 }).limit(20).toArray();
+
+        return JSON.stringify(tasks.map(t => ({
+          id: t._id.toString(),
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          storyPoints: t.storyPoints || 0
+        })));
+      }
+
+      if (name === 'get_user_projects') {
+        const username = targetUser.username;
+        const userTeams = await db.collection('teams').find({
+          $or: [
+            { members: userIdStr },
+            { lead: userIdStr },
+            { members: targetUser._id },
+            { lead: targetUser._id }
+          ]
+        }).toArray();
+        const userTeamIds = userTeams.map(t => t._id.toString());
+
+        const query = {
+          $or: [
+            { superManager: username },
+            { 'members.user': username },
+            { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': targetUser.role },
+            { 'permissionSettings.accessMode': 'roles_based', 'permissionSettings.allowedRoles': 'Everyone' },
+            { 'permissionSettings.accessMode': 'teams_based', 'permissionSettings.allowedTeams': { $in: userTeamIds } }
+          ]
+        };
+
+        const projects = await db.collection('projects').find(query).toArray();
+
+        return JSON.stringify(projects.map(p => ({
+          id: p._id.toString(),
+          name: p.name,
+          description: p.description ? (p.description.length > 80 ? p.description.substring(0, 77) + '...' : p.description) : '',
+          superManager: p.superManager,
+          status: p.status || 'active',
+          isManager: p.superManager === username || p.members?.some(m => m.user === username && m.role === 'Project Manager')
+        })));
+      }
+
+      if (name === 'get_user_meetings') {
+        const email = targetUser.email;
+        const cutoffStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const cutoffEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+        const query = {
+          $and: [
+            {
+              $or: [
+                { hostId: userIdStr },
+                { host: email },
+                { participants: email }
+              ]
+            },
+            {
+              $or: [
+                { startTime: { $gte: cutoffStart, $lte: cutoffEnd } },
+                { startTime: { $gte: cutoffStart.toISOString(), $lte: cutoffEnd.toISOString() } }
+              ]
+            }
+          ]
+        };
+
+        const events = await db.collection('events').find(query).sort({ startTime: 1 }).toArray();
+
+        return JSON.stringify(events.map(e => ({
+          id: e._id.toString(),
+          title: e.title,
+          startTime: e.startTime,
+          duration: e.duration,
+          host: e.host,
+          joinUrl: e.joinUrl || e.zoomMeetingUrl
+        })));
+      }
     }
 
     return JSON.stringify({ error: `Unknown tool: ${name}` });
