@@ -239,13 +239,13 @@ const ChatThread = () => {
 
   const handleSend = async () => {
     const text = messageText.trim();
-    if (!text || sending) return;
+    if (!text || sending || !user) return;
 
     const clientId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const optimisticMessage = {
       _id: clientId,
       conversationId,
-      senderId: user._id,
+      senderId: user.id || user._id,
       body: text,
       status: 'sending',
       createdAt: new Date().toISOString(),
