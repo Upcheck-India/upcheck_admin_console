@@ -1607,6 +1607,60 @@ async function executeTool(name, args, db, currentUser) {
       if (!targetUser) return JSON.stringify({ error: "User not found." });
       const userIdStr = targetUser._id.toString();
 
+      const isSelf = userIdStr === currentUser._id.toString();
+      const isAdmin = userRole === 'Admin' || userRole === 'Console admin';
+
+      if (!isSelf && !isAdmin) {
+        if (name === 'get_user_connections') {
+          return JSON.stringify({ error: "Permission Denied: You cannot view another user's direct chat connections." });
+        }
+
+        if (name === 'get_user_tasks' || name === 'get_user_projects' || name === 'get_user_meetings') {
+          const sharedTeamsCount = await db.collection('teams').countDocuments({
+            $and: [
+              {
+                $or: [
+                  { members: currentUser._id.toString() },
+                  { lead: currentUser._id.toString() },
+                  { members: currentUser._id },
+                  { lead: currentUser._id }
+                ]
+              },
+              {
+                $or: [
+                  { members: targetUser._id.toString() },
+                  { lead: targetUser._id.toString() },
+                  { members: targetUser._id },
+                  { lead: targetUser._id }
+                ]
+              }
+            ]
+          });
+
+          if (sharedTeamsCount === 0) {
+            const currentUserProjects = await db.collection('projects').find({
+              $or: [
+                { superManager: currentUser.username },
+                { 'members.user': currentUser.username }
+              ]
+            }, { projection: { name: 1 } }).toArray();
+            const currentUserProjectNames = currentUserProjects.map(p => p.name);
+
+            const sharedProjectsCount = await db.collection('projects').countDocuments({
+              name: { $in: currentUserProjectNames },
+              $or: [
+                { superManager: targetUser.username },
+                { 'members.user': targetUser.username }
+              ]
+            });
+
+            if (sharedProjectsCount === 0) {
+              return JSON.stringify({ error: "Permission Denied: You can only query tasks, projects, or meetings of users who share a team or project with you." });
+            }
+          }
+        }
+      }
+
       if (name === 'get_user_perms') {
         const role = targetUser.role || 'Member';
         return JSON.stringify({
