@@ -14,17 +14,25 @@ export const ADMIN_SESSION_MAX_AGE = 7200; // seconds (2 hours) - matches passwo
 
 function getClientIP(request) {
   if (!request) return 'unknown';
+  const cfConnectingIP = request.headers.get('cf-connecting-ip');
+  const trueClientIP = request.headers.get('true-client-ip');
+  if (cfConnectingIP) return cfConnectingIP.trim();
+  if (trueClientIP) return trueClientIP.trim();
+
   const forwarded = request.headers.get('x-forwarded-for');
   const realIP = request.headers.get('x-real-ip');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  if (realIP) return realIP;
+  if (forwarded) {
+    const parts = forwarded.split(',');
+    return parts[0].trim();
+  }
+  if (realIP) return realIP.trim();
   return 'unknown';
 }
 
 function getDeviceType(ua) {
   if (!ua) return 'unknown';
   if (/tablet|ipad|playbook|silk/i.test(ua)) return 'tablet';
-  if (/mobile|iphone|ipod|android/i.test(ua)) return 'mobile';
+  if (/mobile|iphone|ipod|android|okhttp/i.test(ua)) return 'mobile';
   return 'desktop';
 }
 
@@ -36,13 +44,14 @@ function parseUserAgent(ua) {
   else if (/android/i.test(ua)) os = 'Android';
   else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
   else if (/linux/i.test(ua)) os = 'Linux';
+  else if (/okhttp/i.test(ua)) os = 'Android'; // Default okhttp client to Android OS
 
   let browser = 'Unknown Browser';
   if (/edg/i.test(ua)) browser = 'Edge';
   else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
   else if (/firefox/i.test(ua)) browser = 'Firefox';
   else if (/safari/i.test(ua)) browser = 'Safari';
-  else if (/expo/i.test(ua)) browser = 'Expo App';
+  else if (/expo/i.test(ua) || /okhttp/i.test(ua) || /react-native/i.test(ua)) browser = 'Expo App';
 
   return `${browser} on ${os}`;
 }
