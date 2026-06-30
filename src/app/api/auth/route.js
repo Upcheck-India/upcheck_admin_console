@@ -5,6 +5,8 @@ import crypto from 'crypto';
 import clientPromise from "../../../lib/mongodb";
 import { ObjectId } from 'mongodb';
 
+import { issueAdminSessionToken } from '../../../lib/adminSession';
+
 export async function POST(req) {
   try {
     const client = await clientPromise;
@@ -60,19 +62,9 @@ export async function POST(req) {
     }
 
     if (user) {
-      const sessionToken = crypto.randomBytes(32).toString('hex');
+      const sessionToken = await issueAdminSessionToken(db, user._id, req);
       console.log('Generated session token for user:', user.username);
 
-      // Update user with session token
-      await db.collection('admin_users').updateOne(
-        { _id: user._id },
-        { 
-          $set: { 
-            sessionToken,
-            lastLogin: new Date() 
-          } 
-        }
-      );
 
       // Set cookie with proper settings
       const maxAge = rememberMe ? 7 * 24 * 60 * 60 : 7200; // 7 days or 2 hours

@@ -148,7 +148,7 @@ export async function POST(request) {
     // ── Success — clear the rate-limit record ─────────────────────────────────
     await clearAttempts(db, limit.key);
 
-    const sessionToken = await issueAdminSessionToken(db, user._id);
+    const sessionToken = await issueAdminSessionToken(db, user._id, req);
     await setAdminSessionCookie(sessionToken);
 
     const remaining = (user.backupCodes || []).filter(c => !c.used).length - 1;

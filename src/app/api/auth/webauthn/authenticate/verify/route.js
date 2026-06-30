@@ -151,7 +151,7 @@ export async function POST(request) {
     );
 
     // Establish the same admin session a password login would create.
-    const sessionToken = await issueAdminSessionToken(db, user._id);
+    const sessionToken = await issueAdminSessionToken(db, user._id, request);
     await setAdminSessionCookie(sessionToken);
 
     console.log(`Successfully authenticated user ${user.email} with WebAuthn`);

@@ -39,7 +39,54 @@ export async function getAuthUser(req) {
   try {
     const client = await clientPromise;
     const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
+    
+    let user = null;
+    const session = await db.collection('admin_sessions').findOne({ token });
+    
+    if (session) {
+      user = await db.collection('admin_users').findOne({ _id: session.userId });
+      if (user) {
+        db.collection('admin_sessions').updateOne(
+          { _id: session._id },
+          { $set: { lastUsedAt: new Date() } }
+        ).catch(err => console.error('Failed to update session lastUsedAt:', err));
+      }
+    } else {
+      // Rollout fallback: check if user has this token in their sessionToken array or field
+      user = await db.collection('admin_users').findOne({ sessionToken: token });
+      if (user) {
+        // Backfill active session record for rollout continuity
+        const userAgent = req ? (req.headers?.get('user-agent') || '') : '';
+        let os = 'Unknown OS';
+        if (/windows/i.test(userAgent)) os = 'Windows';
+        else if (/macintosh|mac os x/i.test(userAgent)) os = 'macOS';
+        else if (/android/i.test(userAgent)) os = 'Android';
+        else if (/iphone|ipad|ipod/i.test(userAgent)) os = 'iOS';
+        else if (/linux/i.test(userAgent)) os = 'Linux';
+        
+        let browser = 'Unknown Browser';
+        if (/edg/i.test(userAgent)) browser = 'Edge';
+        else if (/chrome|crios/i.test(userAgent)) browser = 'Chrome';
+        else if (/firefox/i.test(userAgent)) browser = 'Firefox';
+        else if (/safari/i.test(userAgent)) browser = 'Safari';
+        else if (/expo/i.test(userAgent)) browser = 'Expo App';
+
+        const clientIP = req ? (req.headers?.get('x-forwarded-for')?.split(',')[0].trim() || req.headers?.get('x-real-ip') || '127.0.0.1') : '127.0.0.1';
+
+        await db.collection('admin_sessions').insertOne({
+          userId: user._id,
+          token,
+          ip: clientIP,
+          userAgent: userAgent.substring(0, 300),
+          deviceType: /mobile|iphone|ipod|android/i.test(userAgent) ? 'mobile' : 'desktop',
+          name: `${browser} on ${os}`,
+          location: 'Unknown Location',
+          createdAt: new Date(),
+          lastUsedAt: new Date()
+        }).catch(err => console.error('Failed to backfill session:', err));
+      }
+    }
+
     if (!user) return null;
     return { user, db, client };
   } catch (error) {

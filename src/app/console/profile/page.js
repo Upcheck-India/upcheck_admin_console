@@ -63,6 +63,12 @@ const TrustedDevices = dynamic(
   { ssr: false, loading: () => <div className="p-4">Loading device security settings...</div> }
 );
 
+// Dynamically import the ActiveSessions component with no SSR
+const ActiveSessions = dynamic(
+  () => import('../../../components/ActiveSessions'),
+  { ssr: false, loading: () => <div className="p-4">Loading active sessions...</div> }
+);
+
 export default function ProfilePage() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1016,11 +1022,20 @@ export default function ProfilePage() {
 
         {/* Security Section */}
         <div className="mt-6 space-y-6">
+          {/* Active Sessions Section */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
+              <Shield className="w-5 h-5 mr-2 text-blue-600" />
+              Active Sessions & Device Security
+            </h2>
+            <ActiveSessions />
+          </div>
+
           {/* Trusted Devices Section */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
               <Lock className="w-5 h-5 mr-2 text-green-600" />
-              Secure Auth
+              Secure Auth (Passkeys & Backup Codes)
             </h2>
             <TrustedDevices />
           </div>
