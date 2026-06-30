@@ -24,8 +24,8 @@ export async function POST(request, { params }) {
     }
 
     // 2. Check update rights (Admin or distributor)
-    const userRole = user.role || 'member';
-    const isAdmin = userRole === 'admin' || userRole === 'console_admin';
+    const userRole = (user.role || 'member').toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
     const isDistributor = app.distributorId === user._id.toString();
 
     if (!isAdmin && !isDistributor) {

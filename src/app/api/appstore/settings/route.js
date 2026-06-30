@@ -38,8 +38,8 @@ export async function PUT(request) {
     const { user, db } = auth;
 
     // Enforce Admin RBAC check
-    const userRole = user.role || 'member';
-    if (userRole !== 'admin' && userRole !== 'console_admin') {
+    const userRole = (user.role || 'member').toLowerCase();
+    if (userRole !== 'admin' && userRole !== 'console admin' && userRole !== 'console_admin') {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 

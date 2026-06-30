@@ -26,8 +26,8 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'App or version file not found' }, { status: 404 });
     }
 
-    const userRole = user.role || 'member';
-    const isAdmin = userRole === 'admin' || userRole === 'console_admin';
+    const userRole = (user.role || 'member').toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
     const isDistributor = app.distributorId === user._id.toString();
 
     // 2. Enforce download visibility permissions check

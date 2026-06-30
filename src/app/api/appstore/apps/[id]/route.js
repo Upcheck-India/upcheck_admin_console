@@ -20,8 +20,8 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
 
-    const userRole = user.role || 'member';
-    const isAdmin = userRole === 'admin' || userRole === 'console_admin';
+    const userRole = (user.role || 'member').toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
 
     // Verify view rights
     if (!isAdmin && app.distributorId !== user._id.toString()) {
@@ -97,8 +97,8 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
 
-    const userRole = user.role || 'member';
-    const isAdmin = userRole === 'admin' || userRole === 'console_admin';
+    const userRole = (user.role || 'member').toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
     const isDistributor = app.distributorId === user._id.toString();
 
     if (!isAdmin && !isDistributor) {
@@ -115,10 +115,16 @@ export async function PUT(request, { params }) {
       category,
       tags,
       teamId,
-      accessSettings
+      accessSettings,
+      status
     } = body;
 
     const updateDoc = {};
+    if (status !== undefined) {
+      if (['active', 'decommissioned', 'hidden'].includes(status)) {
+        updateDoc.status = status;
+      }
+    }
     if (name) updateDoc.name = name.trim();
     if (projectId !== undefined) updateDoc.projectId = projectId ? projectId.toString() : null;
     if (author) updateDoc.author = author.trim();
@@ -176,8 +182,8 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: 'App not found' }, { status: 404 });
     }
 
-    const userRole = user.role || 'member';
-    const isAdmin = userRole === 'admin' || userRole === 'console_admin';
+    const userRole = (user.role || 'member').toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
     const isDistributor = app.distributorId === user._id.toString();
 
     if (!isAdmin && !isDistributor) {

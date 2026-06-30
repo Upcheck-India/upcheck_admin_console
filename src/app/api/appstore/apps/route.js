@@ -4,8 +4,8 @@ import { ObjectId } from 'mongodb';
 
 // Check if user has permission to distribute apps
 async function canUserDistribute(user, db) {
-  const userRole = user.role || 'member';
-  if (userRole === 'admin' || userRole === 'console_admin') return true;
+  const userRole = (user.role || 'member').toLowerCase();
+  if (userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin') return true;
 
   const settings = await db.collection('appstore_settings').findOne({});
   if (!settings) return false; // Default to admins only
@@ -44,8 +44,8 @@ export async function GET(request) {
     const settings = await db.collection('appstore_settings').findOne({});
     const isGlobalDownloadAllowed = settings ? settings.allowAnyoneToDownload : true;
     
-    const userRole = user.role || 'member';
-    const isAdmin = userRole === 'admin' || userRole === 'console_admin';
+    const userRole = (user.role || 'member').toLowerCase();
+    const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
 
     if (!isGlobalDownloadAllowed && !isAdmin) {
       // Forbidden by global settings
@@ -66,6 +66,11 @@ export async function GET(request) {
 
     // Filter apps based on RBAC and app-specific accessSettings
     const filteredApps = apps.filter(app => {
+      // Hide apps unless user is Admin or the distributor
+      if (app.status === 'hidden' && !isAdmin && app.distributorId !== user._id.toString()) {
+        return false;
+      }
+
       if (isAdmin) return true;
       if (app.distributorId === user._id.toString()) return true;
 
@@ -87,7 +92,9 @@ export async function GET(request) {
     }).map(app => {
       // Determine download permission
       let canDownload = true;
-      if (!isAdmin && app.distributorId !== user._id.toString()) {
+      if (app.status === 'decommissioned' && !isAdmin && app.distributorId !== user._id.toString()) {
+        canDownload = false;
+      } else if (!isAdmin && app.distributorId !== user._id.toString()) {
         const downloadPerms = app.accessSettings?.downloadPermissions;
         if (downloadPerms?.restricted) {
           const allowedRoles = downloadPerms.allowedRoles || [];
