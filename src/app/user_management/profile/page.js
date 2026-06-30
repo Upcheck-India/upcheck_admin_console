@@ -1,7 +1,8 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { IdCard, Loader2, Save, Check } from 'lucide-react';
+import Link from 'next/link';
+import { IdCard, Loader2, Save, Check, ArrowLeft } from 'lucide-react';
 import HRNav from '../_components/HRNav';
 import {
   GENDERS, MARITAL_STATUSES, BLOOD_GROUPS,
@@ -135,6 +136,13 @@ export default function ProfilePage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-5xl mx-auto">
+        <Link
+          href="/console"
+          className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Console
+        </Link>
         <HRNav />
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">

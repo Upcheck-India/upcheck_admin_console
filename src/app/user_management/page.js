@@ -1,10 +1,11 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Users, Trash2, Edit2, Plus, X, Search, User, UserX,
   AlertCircle, Building2, Filter, Mail, MessageCircle,
-  CodeXml, FileText, Settings as SettingsIcon, CheckCircle, ChevronDown, Copy, Database
+  CodeXml, FileText, Settings as SettingsIcon, CheckCircle, ChevronDown, Copy, Database, ArrowLeft
 } from 'lucide-react';
 import DocumentationSettingsModal from './components/DocumentationSettingsModal';
 import ExternalUsersTab from './components/ExternalUsersTab';
@@ -1234,6 +1235,13 @@ const UserManagement = () => {
       />
 
       <div className="max-w-7xl mx-auto">
+        <Link
+          href="/console"
+          className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Console
+        </Link>
         <HRNav />
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>

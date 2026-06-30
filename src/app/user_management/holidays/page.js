@@ -1,10 +1,11 @@
 'use client';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   CalendarCheck, Plus, Edit2, Trash2, X, Loader2,
   ChevronLeft, ChevronRight, Sparkles, CalendarDays,
-  List, LayoutGrid,
+  List, LayoutGrid, ArrowLeft
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
 import { HOLIDAY_TYPES } from '../../../lib/hr/leave';
@@ -183,6 +184,13 @@ export default function HolidaysPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-6xl mx-auto">
+        <Link
+          href="/console"
+          className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Console
+        </Link>
         <HRNav />
 
         {/* Header */}
