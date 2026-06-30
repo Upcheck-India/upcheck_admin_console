@@ -150,14 +150,23 @@ export async function POST(request) {
 
     if (isBotMember && isBotMentioned) {
       if (team.isBotProcessing) {
-        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
-      }
-      const lockRes = await db.collection('teams').updateOne(
-        { _id: team._id, isBotProcessing: { $ne: true } },
-        { $set: { isBotProcessing: true } }
-      );
-      if (lockRes.modifiedCount === 0) {
-        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+        const lockAge = Date.now() - new Date(team.botProcessingStartedAt || team.updatedAt || 0).getTime();
+        if (lockAge > 120000) {
+          await db.collection('teams').updateOne(
+            { _id: team._id },
+            { $set: { isBotProcessing: true, botProcessingStartedAt: new Date() } }
+          );
+        } else {
+          return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+        }
+      } else {
+        const lockRes = await db.collection('teams').updateOne(
+          { _id: team._id, isBotProcessing: { $ne: true } },
+          { $set: { isBotProcessing: true, botProcessingStartedAt: new Date() } }
+        );
+        if (lockRes.modifiedCount === 0) {
+          return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+        }
       }
     }
 

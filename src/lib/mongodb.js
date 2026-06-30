@@ -27,6 +27,20 @@ if (process.env.NODE_ENV === 'development') {
   clientPromise = client.connect();
 }
 
+// Automatically clear stale bot locks on startup/restart
+clientPromise.then(async (resolvedClient) => {
+  try {
+    const db = resolvedClient.db('resources');
+    await Promise.all([
+      db.collection('conversations').updateMany({ isBotProcessing: true }, { $set: { isBotProcessing: false }, $unset: { botProcessingStartedAt: "" } }),
+      db.collection('group_chats').updateMany({ isBotProcessing: true }, { $set: { isBotProcessing: false }, $unset: { botProcessingStartedAt: "" } }),
+      db.collection('teams').updateMany({ isBotProcessing: true }, { $set: { isBotProcessing: false }, $unset: { botProcessingStartedAt: "" } })
+    ]);
+  } catch (err) {
+    console.error('Failed to clear stale bot processing locks on startup:', err);
+  }
+}).catch(() => {});
+
 // Mongoose connection management
 export async function connectToDatabase() {
   if (global.mongoose.conn) {

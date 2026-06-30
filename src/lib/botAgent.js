@@ -1920,7 +1920,7 @@ async function releaseLock(db, chatType, chatId) {
   const collection = chatType === 'dm' ? 'conversations' : (chatType === 'group' ? 'group_chats' : 'teams');
   await db.collection(collection).updateOne(
     { _id: new ObjectId(chatId) },
-    { $set: { isBotProcessing: false } }
+    { $set: { isBotProcessing: false }, $unset: { botProcessingStartedAt: "" } }
   );
 }
 

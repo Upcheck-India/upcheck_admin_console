@@ -34,14 +34,23 @@ export async function POST(request) {
 
     if (recipientId === botId) {
       if (conversation.isBotProcessing) {
-        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
-      }
-      const lockRes = await db.collection('conversations').updateOne(
-        { _id: conversation._id, isBotProcessing: { $ne: true } },
-        { $set: { isBotProcessing: true } }
-      );
-      if (lockRes.modifiedCount === 0) {
-        return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+        const lockAge = Date.now() - new Date(conversation.botProcessingStartedAt || conversation.updatedAt || 0).getTime();
+        if (lockAge > 120000) {
+          await db.collection('conversations').updateOne(
+            { _id: conversation._id },
+            { $set: { isBotProcessing: true, botProcessingStartedAt: new Date() } }
+          );
+        } else {
+          return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+        }
+      } else {
+        const lockRes = await db.collection('conversations').updateOne(
+          { _id: conversation._id, isBotProcessing: { $ne: true } },
+          { $set: { isBotProcessing: true, botProcessingStartedAt: new Date() } }
+        );
+        if (lockRes.modifiedCount === 0) {
+          return NextResponse.json({ error: 'Please wait. I am currently busy processing another task.' }, { status: 409 });
+        }
       }
     } else {
       // Check connection status
