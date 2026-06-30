@@ -47,22 +47,47 @@ function parseUserAgent(ua) {
   return `${browser} on ${os}`;
 }
 
+function isLocalIP(ip) {
+  if (!ip) return true;
+  const cleanIp = ip.trim();
+  return (
+    cleanIp === '127.0.0.1' ||
+    cleanIp === '::1' ||
+    cleanIp === 'unknown' ||
+    cleanIp.startsWith('::ffff:127.0.0.1') ||
+    cleanIp.startsWith('192.168.') ||
+    cleanIp.startsWith('10.') ||
+    cleanIp.startsWith('172.16.') ||
+    cleanIp.startsWith('172.17.') ||
+    cleanIp.startsWith('172.18.') ||
+    cleanIp.startsWith('172.19.') ||
+    cleanIp.startsWith('172.20.') ||
+    cleanIp.startsWith('172.31.')
+  );
+}
+
 async function getLocation(ip) {
-  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip === 'unknown') {
-    return 'Localhost';
-  }
+  const isLocal = isLocalIP(ip);
+  const url = isLocal ? 'http://ip-api.com/json/' : `http://ip-api.com/json/${ip}`;
   try {
-    const res = await fetch(`http://ip-api.com/json/${ip}`, { signal: AbortSignal.timeout(2000) });
+    const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === 'success') {
-        return `${data.city || ''}, ${data.country || ''}`.trim().replace(/^,\s*/, '') || 'Unknown Location';
+        const locationStr = `${data.city || ''}, ${data.country || ''}`.trim().replace(/^,\s*/, '') || 'Unknown Location';
+        return {
+          location: locationStr,
+          ip: data.query || ip
+        };
       }
     }
   } catch (e) {
     // ignore
   }
-  return 'Unknown Location';
+  return {
+    location: isLocal ? 'Localhost' : 'Unknown Location',
+    ip: ip
+  };
 }
 
 export async function createSession(db, userId, request = null) {
@@ -70,11 +95,14 @@ export async function createSession(db, userId, request = null) {
   const user = await db.collection('admin_users').findOne({ _id: userId });
   if (!user) throw new Error('User not found');
 
-  const ip = getClientIP(request);
+  const rawIp = getClientIP(request);
   const userAgent = request ? (request.headers.get('user-agent') || '') : '';
   const deviceType = getDeviceType(userAgent);
   const deviceName = parseUserAgent(userAgent);
-  const location = await getLocation(ip);
+  const locationInfo = await getLocation(rawIp);
+  const ip = locationInfo.ip;
+  const location = locationInfo.location;
+
 
   // Check if this is a new device or new location
   const existingSessions = await db.collection('admin_sessions')

@@ -44,7 +44,8 @@ export async function GET(request) {
 
     return NextResponse.json({
       success: true,
-      trustedDevices: enrichedSessions, // Keep trustedDevices key for mobile app compatibility
+      devices: enrichedSessions, // For Web Console
+      trustedDevices: enrichedSessions, // For Mobile App
       maxConcurrentSessions: user.maxConcurrentSessions || 1,
       emailAlertsOnNewLogin: user.emailAlertsOnNewLogin !== false
     });
