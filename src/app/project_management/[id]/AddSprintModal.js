@@ -68,13 +68,13 @@ const AddSprintModal = ({ projectId, onClose, onSave }) => {
       }}
     >
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-lg relative flex flex-col"
+        className="bg-surface border border-border-default rounded-lg shadow-xl w-full max-w-lg relative flex flex-col"
         style={{ maxHeight: '90vh' }}
       >
         {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg z-10">
-          <h2 className="text-xl font-bold">Create New Sprint</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-800">
+        <div className="flex justify-between items-center p-4 border-b border-border-default sticky top-0 bg-surface rounded-t-lg z-10">
+          <h2 className="text-xl font-bold text-text-primary">Create New Sprint</h2>
+          <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
             <X className="h-6 w-6" />
           </button>
         </div>
@@ -88,7 +88,7 @@ const AddSprintModal = ({ projectId, onClose, onSave }) => {
           {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="name" className="block text-sm font-medium text-text-secondary">
               Name (optional)
             </label>
             <input
@@ -98,13 +98,13 @@ const AddSprintModal = ({ projectId, onClose, onSave }) => {
               value={formData.name}
               onChange={handleChange}
               placeholder="e.g., Sprint 3"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+              className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm bg-surface text-text-primary"
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="startDate" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="startDate" className="block text-sm font-medium text-text-secondary">
                 Start Date
               </label>
               <input
@@ -113,11 +113,11 @@ const AddSprintModal = ({ projectId, onClose, onSave }) => {
                 id="startDate"
                 value={formData.startDate}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm bg-surface text-text-primary"
               />
             </div>
             <div>
-              <label htmlFor="endDate" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="endDate" className="block text-sm font-medium text-text-secondary">
                 End Date
               </label>
               <input
@@ -126,18 +126,18 @@ const AddSprintModal = ({ projectId, onClose, onSave }) => {
                 id="endDate"
                 value={formData.endDate}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm"
+                className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm bg-surface text-text-primary"
               />
             </div>
           </div>
         </form>
 
         {/* Footer */}
-        <div className="flex justify-end space-x-3 p-4 border-t sticky bottom-0 bg-white rounded-b-lg z-10">
+        <div className="flex justify-end space-x-3 p-4 border-t border-border-default sticky bottom-0 bg-surface rounded-b-lg z-10">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+            className="px-4 py-2 text-sm font-medium text-text-secondary bg-surface border border-border-default rounded-md shadow-sm hover:bg-surface-variant"
           >
             Cancel
           </button>

@@ -49,6 +49,25 @@
     color: rgb(var(--foreground-rgb));
     background: rgb(var(--background-start-rgb));
   }
+
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select {
+    color: var(--text-primary);
+    background-color: var(--surface);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-tertiary);
+  }
 }
 
 @layer utilities {
@@ -59,3 +78,131 @@
     animation: shimmer 0.8s linear infinite;
   }
 }
+
+/* Global utility overrides for Dark Mode */
+.dark .bg-white {
+  background-color: var(--surface);
+}
+
+.dark .bg-slate-50, 
+.dark .bg-gray-50, 
+.dark .bg-slate-100, 
+.dark .bg-gray-100 {
+  background-color: var(--surface-variant);
+}
+
+.dark .border-gray-100,
+.dark .border-slate-100,
+.dark .border-gray-150,
+.dark .border-slate-150,
+.dark .border-gray-200, 
+.dark .border-slate-200, 
+.dark .border-gray-300, 
+.dark .border-slate-300,
+.dark .border,
+.dark .border-b,
+.dark .border-t,
+.dark .border-l,
+.dark .border-r {
+  border-color: var(--border-default) !important;
+}
+
+.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border-default) !important;
+}
+
+.dark .text-gray-900, 
+.dark .text-slate-900 {
+  color: var(--text-primary);
+}
+
+.dark .text-gray-800, 
+.dark .text-slate-800, 
+.dark .text-gray-700, 
+.dark .text-slate-700, 
+.dark .text-gray-600, 
+.dark .text-slate-600 {
+  color: var(--text-secondary);
+}
+
+.dark .text-gray-500, 
+.dark .text-slate-500, 
+.dark .text-gray-400, 
+.dark .text-slate-400 {
+  color: var(--text-tertiary);
+}
+
+/* Alert/Banner dark mode styling overrides */
+.dark .bg-yellow-50, 
+.dark .bg-amber-50, 
+.dark .bg-orange-50 {
+  background-color: rgba(240, 140, 0, 0.15) !important;
+  color: #FDEBC8 !important;
+  border-color: rgba(240, 140, 0, 0.3) !important;
+}
+
+.dark .bg-green-50, 
+.dark .bg-emerald-50 {
+  background-color: rgba(39, 168, 85, 0.15) !important;
+  color: #D4EDDA !important;
+  border-color: rgba(39, 168, 85, 0.3) !important;
+}
+
+.dark .bg-red-50, 
+.dark .bg-rose-50 {
+  background-color: rgba(224, 53, 53, 0.15) !important;
+  color: #FAD5D5 !important;
+  border-color: rgba(224, 53, 53, 0.3) !important;
+}
+
+.dark .bg-blue-50, 
+.dark .bg-sky-50 {
+  background-color: rgba(26, 127, 212, 0.15) !important;
+  color: #CCDFF6 !important;
+  border-color: rgba(26, 127, 212, 0.3) !important;
+}
+
+/* Badge dark mode styling overrides */
+.dark .bg-yellow-100, 
+.dark .bg-amber-100, 
+.dark .bg-orange-100 {
+  background-color: rgba(240, 140, 0, 0.2) !important;
+  color: #FEF6E4 !important;
+}
+
+.dark .bg-green-100, 
+.dark .bg-emerald-100 {
+  background-color: rgba(39, 168, 85, 0.2) !important;
+  color: #EAF7EE !important;
+}
+
+.dark .bg-red-100, 
+.dark .bg-rose-100 {
+  background-color: rgba(224, 53, 53, 0.2) !important;
+  color: #FDF0F0 !important;
+}
+
+.dark .bg-blue-100, 
+.dark .bg-sky-100 {
+  background-color: rgba(26, 127, 212, 0.2) !important;
+  color: #EBF4FD !important;
+}
+
+/* Global hover overrides for Dark Mode */
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-gray-200:hover,
+.dark .hover\:bg-slate-200:hover,
+.dark .hover\:bg-blue-50:hover,
+.dark .hover\:bg-blue-100:hover {
+  background-color: var(--surface-variant) !important;
+}
+
+

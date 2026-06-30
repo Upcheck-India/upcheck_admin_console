@@ -45,9 +45,13 @@ import {
   Tablet,
   Monitor,
   Fingerprint,
-  Download
+  Download,
+  Sun,
+  Moon
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+
+import { useTheme } from '../../utils/ThemeContext';
 
 // Dynamically import the GithubRepoManager component with no SSR
 const GithubRepoManager = dynamic(
@@ -70,6 +74,7 @@ const ActiveSessions = dynamic(
 );
 
 export default function ProfilePage() {
+  const { theme, toggleTheme } = useTheme();
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -549,12 +554,12 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-background text-text-primary py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Back button */}
         <button
           onClick={() => router.push('/console')}
-          className="flex items-center text-gray-600 hover:text-gray-900 mb-6 group"
+          className="flex items-center text-text-secondary hover:text-text-primary mb-6 group"
         >
           <ChevronLeft className="w-5 h-5 mr-1 transform group-hover:-translate-x-1 transition-transform" />
           Back to Console
@@ -576,35 +581,56 @@ export default function ProfilePage() {
         )}
 
         {/* Profile Header */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-6">
+        <div className="bg-surface border border-border-default rounded-2xl shadow-sm overflow-hidden mb-6">
           <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 px-6 py-8">
-            <div className="flex items-center space-x-4">
-              <div className="h-20 w-20 rounded-full bg-white flex items-center justify-center">
-                <span className="text-3xl font-bold text-blue-600">
-                  {userData?.username?.charAt(0).toUpperCase()}
-                </span>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center space-x-4">
+                <div className="h-20 w-20 rounded-full bg-white flex items-center justify-center">
+                  <span className="text-3xl font-bold text-blue-600">
+                    {userData?.username?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold text-white">{userData?.username}</h1>
+                  <p className="text-blue-100">{userData?.role}</p>
+                  {userData?._id && (
+                    <div className="text-xs text-white mt-1 flex items-center">
+                      <span className="mr-1">Account ID: {userData._id}</span>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(userData._id);
+                          toast.success('Account ID copied to clipboard');
+                        }}
+                        className="text-white"
+                        title="Copy to clipboard"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-white">{userData?.username}</h1>
-                <p className="text-blue-100">{userData?.role}</p>
-                {userData?._id && (
-                      <div className="text-xs text-white mt-1 flex items-center">
-                        <span className="mr-1">Account ID: {userData._id}</span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(userData._id);
-                            toast.success('Account ID copied to clipboard');
-                          }}
-                          className="text-white"
-                          title="Copy to clipboard"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                          </svg>
-                        </button>
-                      </div>
-                    )}
-              </div>
+
+              {/* Theme Toggle Button */}
+              <button
+                onClick={toggleTheme}
+                className="self-start sm:self-auto px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-white/40 flex items-center gap-2 text-sm font-medium backdrop-blur-sm border border-white/10"
+                title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+              >
+                {theme === 'dark' ? (
+                  <>
+                    <Sun className="w-4 h-4 text-yellow-300" />
+                    <span>Light Mode</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-4 h-4 text-indigo-200" />
+                    <span>Dark Mode</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -612,9 +638,9 @@ export default function ProfilePage() {
         {/* Profile Content Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Basic Information */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
+          <div className="bg-surface border border-border-default rounded-xl shadow-sm p-6 text-text-primary">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold flex items-center text-gray-900">
+              <h2 className="text-lg font-semibold flex items-center text-text-primary">
                 <User className="w-5 h-5 mr-2 text-blue-500" />
                 Basic Information
               </h2>
@@ -747,23 +773,23 @@ export default function ProfilePage() {
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Email</span>
-                  <span className="text-gray-900 flex items-center">
+                  <span className="text-text-secondary">Email</span>
+                  <span className="text-text-primary flex items-center">
                     <Mail className="w-4 h-4 mr-2 text-blue-500" />
                     {userData?.email || 'No email added'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Department</span>
-                  <span className="text-gray-900 flex items-center">
+                  <span className="text-text-secondary">Department</span>
+                  <span className="text-text-primary flex items-center">
                     <Building2 className="w-4 h-4 mr-2 text-blue-500" />
                     {userData?.department || 'Unassigned'}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-600">Role</span>
+                  <span className="text-text-secondary">Role</span>
                   <div className="flex flex-col">
-                    <span className="text-gray-900 flex items-center">
+                    <span className="text-text-primary flex items-center">
                       <Briefcase className="w-4 h-4 mr-2 text-blue-500" />
                       {userData?.role}
                     </span>
@@ -771,14 +797,14 @@ export default function ProfilePage() {
                 </div>
                 {userData?.phone && (
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Phone</span>
-                    <span className="text-gray-900">{userData.phone}</span>
+                    <span className="text-text-secondary">Phone</span>
+                    <span className="text-text-primary">{userData.phone}</span>
                   </div>
                 )}
                 {userData?.location && (
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Location</span>
-                    <span className="text-gray-900 flex items-center">
+                    <span className="text-text-secondary">Location</span>
+                    <span className="text-text-primary flex items-center">
                       <MapPin className="w-4 h-4 mr-2 text-blue-500" />
                       {userData.location}
                     </span>
@@ -786,13 +812,13 @@ export default function ProfilePage() {
                 )}
                 {userData?.bio && (
                   <div className="pt-2">
-                    <span className="text-gray-600 block mb-1">Bio</span>
-                    <p className="text-gray-900">{userData.bio}</p>
+                    <span className="text-text-secondary block mb-1">Bio</span>
+                    <p className="text-text-primary">{userData.bio}</p>
                   </div>
                 )}
                 {userData?.linkedinProfile && (
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">LinkedIn</span>
+                    <span className="text-text-secondary">LinkedIn</span>
                     <a
                       href={userData.linkedinProfile}
                       target="_blank"
@@ -809,14 +835,14 @@ export default function ProfilePage() {
           </div>
           
           {/* Notifications */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
+          <div className="bg-surface border border-border-default rounded-xl shadow-sm p-6 text-text-primary">
+            <h2 className="text-lg font-semibold mb-4 flex items-center text-text-primary">
               <Bell className="w-5 h-5 mr-2 text-blue-500" />
               Notifications
             </h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-gray-600">Email Notifications</span>
+                <span className="text-text-secondary">Email Notifications</span>
                 <span className="flex items-center">
                   <Bell className="w-4 h-4 mr-2 text-teal-500" />
                   <span className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full text-sm">
@@ -830,8 +856,8 @@ export default function ProfilePage() {
 
         {/* Connected Accounts Section */}
         <div className="mt-6">
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
+          <div className="bg-surface border border-border-default rounded-xl shadow-sm p-6 text-text-primary">
+            <h2 className="text-lg font-semibold mb-4 flex items-center text-text-primary">
               <Users className="w-5 h-5 mr-2 text-purple-500" />
               Connected Accounts
             </h2>
@@ -904,9 +930,9 @@ export default function ProfilePage() {
 
         {/* GitHub Repositories Section */}
         {userData?.oauth?.github?.login && (
-          <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <div className="bg-surface rounded-xl border border-border-default p-6 shadow-sm text-text-primary">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-medium text-gray-900">GitHub Repositories</h3>
+              <h3 className="text-lg font-medium text-text-primary">GitHub Repositories</h3>
               <div className="flex space-x-2">
                 <a
                   href={`https://github.com/${userData.oauth.github.login}`}
@@ -1023,8 +1049,8 @@ export default function ProfilePage() {
         {/* Security Section */}
         <div className="mt-6 space-y-6">
           {/* Active Sessions Section */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
+          <div className="bg-surface border border-border-default rounded-xl shadow-sm p-6 text-text-primary">
+            <h2 className="text-lg font-semibold mb-6 flex items-center text-text-primary">
               <Shield className="w-5 h-5 mr-2 text-blue-600" />
               Active Sessions & Device Security
             </h2>
@@ -1032,8 +1058,8 @@ export default function ProfilePage() {
           </div>
 
           {/* Trusted Devices Section */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-6 flex items-center text-gray-900">
+          <div className="bg-surface border border-border-default rounded-xl shadow-sm p-6 text-text-primary">
+            <h2 className="text-lg font-semibold mb-6 flex items-center text-text-primary">
               <Lock className="w-5 h-5 mr-2 text-green-600" />
               Secure Auth (Passkeys & Backup Codes)
             </h2>
@@ -1041,13 +1067,13 @@ export default function ProfilePage() {
           </div>
 
           {/* Account Security Section */}
-          <div className="bg-white rounded-xl shadow-sm p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center text-gray-900">
+          <div className="bg-surface border border-border-default rounded-xl shadow-sm p-6 text-text-primary">
+            <h2 className="text-lg font-semibold mb-4 flex items-center text-text-primary">
               <Lock className="w-5 h-5 mr-2 text-red-500" />
               Account Security
             </h2>
             <div className="space-y-4">
-              <div className="text-gray-500 text-sm mb-4">
+              <div className="text-text-secondary text-sm mb-4">
                 Manage your account security settings
               </div>
               <button
@@ -1073,9 +1099,9 @@ export default function ProfilePage() {
       {/* Delete Account Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Delete Account</h3>
-            <p className="text-gray-600 mb-4">
+          <div className="bg-surface border border-border-default rounded-lg max-w-md w-full p-6 text-text-primary">
+            <h3 className="text-lg font-semibold text-text-primary mb-4">Delete Account</h3>
+            <p className="text-text-secondary mb-4">
               {userData?.perms?.includes('users.manage')
                 ? 'Are you sure you want to delete your account? This action cannot be undone.'
                 : 'Please contact an administrator to delete your account.'}

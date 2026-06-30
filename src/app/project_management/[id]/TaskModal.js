@@ -366,13 +366,51 @@ const TaskModal = ({
   const customStyles = {
     control: (provided) => ({
       ...provided,
-      borderColor: '#d1d5db',
+      backgroundColor: 'var(--surface)',
+      borderColor: 'var(--border-default)',
+      color: 'var(--text-primary)',
       '&:hover': { borderColor: '#a5b4fc' },
       boxShadow: 'none',
     }),
+    singleValue: (provided) => ({
+      ...provided,
+      color: 'var(--text-primary)',
+    }),
+    multiValue: (provided) => ({
+      ...provided,
+      backgroundColor: 'var(--surface-variant)',
+    }),
+    multiValueLabel: (provided) => ({
+      ...provided,
+      color: 'var(--text-primary)',
+    }),
+    multiValueRemove: (provided) => ({
+      ...provided,
+      color: 'var(--text-secondary)',
+      '&:hover': {
+        backgroundColor: 'var(--surface-variant)',
+        color: 'var(--text-primary)',
+      },
+    }),
     menu: (provided) => ({
       ...provided,
+      backgroundColor: 'var(--surface)',
+      border: '1px solid var(--border-default)',
       zIndex: 9999,
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected 
+        ? '#0D84D6' 
+        : state.isFocused 
+          ? 'var(--surface-variant)' 
+          : 'var(--surface)',
+      color: state.isSelected 
+        ? '#ffffff' 
+        : 'var(--text-primary)',
+      '&:active': {
+        backgroundColor: '#0D84D6',
+      },
     }),
   };
 
@@ -397,17 +435,17 @@ const TaskModal = ({
       onClick={handleBackdropClick}
     >
       <div
-        className="bg-white rounded-lg shadow-xl w-full max-w-2xl relative flex flex-col"
+        className="bg-surface border border-border-default rounded-lg shadow-xl w-full max-w-2xl relative flex flex-col"
         style={{ maxHeight: '90vh' }}
       >
         {/* ── Header ── */}
-        <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg z-10">
-          <h2 className="text-xl font-bold">
+        <div className="flex justify-between items-center p-4 border-b border-border-default sticky top-0 bg-surface rounded-t-lg z-10">
+          <h2 className="text-xl font-bold text-text-primary">
             {task && task._id ? 'Edit Task' : 'Add New Task'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 transition-colors"
+            className="text-text-secondary hover:text-text-primary transition-colors"
             aria-label="Close modal"
           >
             <X className="h-6 w-6" />
@@ -424,7 +462,7 @@ const TaskModal = ({
 
           {/* Title */}
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="title" className="block text-sm font-medium text-text-secondary mb-1">
               Title *
             </label>
             <input
@@ -434,14 +472,14 @@ const TaskModal = ({
               value={formData.title}
               onChange={handleChange}
               required
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-surface text-text-primary"
               placeholder="Enter task title"
             />
           </div>
 
           {/* Description */}
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="description" className="block text-sm font-medium text-text-secondary mb-1">
               Description
             </label>
             <textarea
@@ -450,15 +488,15 @@ const TaskModal = ({
               value={formData.description}
               onChange={handleChange}
               rows="3"
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-surface text-text-primary"
               placeholder="Enter task description"
             />
           </div>
 
           {/* Sub-tasks */}
-          <div className="pt-2 border-t border-gray-100">
+          <div className="pt-2 border-t border-border-default">
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">Sub-tasks</label>
+              <label className="block text-sm font-medium text-text-secondary">Sub-tasks</label>
               <button
                 type="button"
                 onClick={addSubtask}
@@ -475,19 +513,19 @@ const TaskModal = ({
                       type="checkbox"
                       checked={st.isCompleted}
                       onChange={(e) => updateSubtask(st.id, 'isCompleted', e.target.checked)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-border-default rounded"
                     />
                     <input
                       type="text"
                       value={st.title}
                       onChange={(e) => updateSubtask(st.id, 'title', e.target.value)}
                       placeholder="Sub-task title"
-                      className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 px-2 py-1 text-sm border border-border-default rounded-md focus:ring-blue-500 focus:border-blue-500 bg-surface text-text-primary"
                     />
                     <button
                       type="button"
                       onClick={() => removeSubtask(st.id)}
-                      className="text-gray-400 hover:text-red-500 p-1"
+                      className="text-text-secondary hover:text-red-500 p-1"
                     >
                       <X className="h-4 w-4" />
                     </button>
@@ -499,7 +537,7 @@ const TaskModal = ({
 
           {/* Assignees */}
           <div>
-            <label htmlFor="assignees" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="assignees" className="block text-sm font-medium text-text-secondary mb-1">
               Assignees
             </label>
             <Select
@@ -516,7 +554,7 @@ const TaskModal = ({
 
           {/* Reporter */}
           <div>
-            <label htmlFor="reporter" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="reporter" className="block text-sm font-medium text-text-secondary mb-1">
               Reporter
             </label>
             <Select
@@ -534,7 +572,7 @@ const TaskModal = ({
           {/* Sprint */}
           {sprints.length > 0 && (
             <div>
-              <label htmlFor="sprint" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="sprint" className="block text-sm font-medium text-text-secondary mb-1">
                 Sprint
               </label>
               <Select
@@ -556,7 +594,7 @@ const TaskModal = ({
           {/* Status & Type — 2-col */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="status" className="block text-sm font-medium text-text-secondary mb-1">
                 Status
               </label>
               <Select
@@ -569,7 +607,7 @@ const TaskModal = ({
               />
             </div>
             <div>
-              <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="type" className="block text-sm font-medium text-text-secondary mb-1">
                 Type
               </label>
               <Select
@@ -586,7 +624,7 @@ const TaskModal = ({
           {/* ── Feature 1 & 2: Priority + Story Points — 2-col ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label htmlFor="priority" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="priority" className="block text-sm font-medium text-text-secondary mb-1">
                 Priority
               </label>
               <Select
@@ -600,7 +638,7 @@ const TaskModal = ({
               />
             </div>
             <div>
-              <label htmlFor="storyPoints" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="storyPoints" className="block text-sm font-medium text-text-secondary mb-1">
                 Story Points
               </label>
               <input
@@ -612,7 +650,7 @@ const TaskModal = ({
                 step="1"
                 value={formData.storyPoints}
                 onChange={handleChange}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-surface text-text-primary"
               />
             </div>
           </div>
@@ -620,7 +658,7 @@ const TaskModal = ({
           {/* ── Feature 3: Labels ── */}
           {labelOptions.length > 0 && (
             <div>
-              <label htmlFor="labels" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="labels" className="block text-sm font-medium text-text-secondary mb-1">
                 Labels
               </label>
               <Select
@@ -638,10 +676,10 @@ const TaskModal = ({
           )}
 
           {/* ── Feature 4: Linked Files ── */}
-          <div className="pt-2 border-t border-gray-100">
+          <div className="pt-2 border-t border-border-default">
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                <Link2 className="inline h-4 w-4 mr-1 text-gray-500" />
+              <label className="block text-sm font-medium text-text-secondary">
+                <Link2 className="inline h-4 w-4 mr-1 text-text-secondary" />
                 Linked Files
               </label>
               <button
@@ -659,14 +697,14 @@ const TaskModal = ({
                 {formData.linkedFiles.map(f => (
                   <span
                     key={f.fileId}
-                    className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded-full px-3 py-1 text-xs text-gray-700"
+                    className="inline-flex items-center gap-1 bg-surface-variant border border-border-default rounded-full px-3 py-1 text-xs text-text-primary"
                   >
                     {getMimeIcon(f.mimeType)}
                     <span className="max-w-[160px] truncate">{f.fileName}</span>
                     <button
                       type="button"
                       onClick={() => removeLinkedFile(f.fileId)}
-                      className="ml-1 text-gray-400 hover:text-red-500"
+                      className="ml-1 text-text-secondary hover:text-red-500"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -679,27 +717,27 @@ const TaskModal = ({
             {showFileSearch && (
               <div
                 ref={fileSearchRef}
-                className="border border-gray-200 rounded-md bg-white shadow-lg p-3 space-y-2"
+                className="border border-border-default rounded-md bg-surface shadow-lg p-3 space-y-2"
               >
-                <div className="flex items-center gap-2 border border-gray-300 rounded-md px-2 py-1">
-                  <Search className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                <div className="flex items-center gap-2 border border-border-default rounded-md px-2 py-1 bg-surface">
+                  <Search className="h-4 w-4 text-text-secondary flex-shrink-0" />
                   <input
                     type="text"
                     value={fileSearchQuery}
                     onChange={e => setFileSearchQuery(e.target.value)}
                     placeholder="Search files..."
-                    className="flex-1 text-sm outline-none"
+                    className="flex-1 text-sm outline-none bg-surface text-text-primary"
                     autoFocus
                   />
                 </div>
-                <div className="max-h-44 overflow-y-auto divide-y divide-gray-100">
+                <div className="max-h-44 overflow-y-auto divide-y divide-border-default">
                   {isFetchingFiles && (
-                    <div className="flex items-center gap-2 py-3 justify-center text-sm text-gray-500">
+                    <div className="flex items-center gap-2 py-3 justify-center text-sm text-text-secondary">
                       <Loader2 className="h-4 w-4 animate-spin" /> Loading…
                     </div>
                   )}
                   {!isFetchingFiles && fileResults.length === 0 && (
-                    <p className="text-sm text-gray-500 italic py-3 text-center">No files found.</p>
+                    <p className="text-sm text-text-secondary italic py-3 text-center">No files found.</p>
                   )}
                   {!isFetchingFiles && fileResults.map(file => {
                     const alreadyLinked = formData.linkedFiles.some(
@@ -711,12 +749,12 @@ const TaskModal = ({
                         type="button"
                         disabled={alreadyLinked}
                         onClick={() => linkFile(file)}
-                        className={`w-full flex items-center gap-2 px-2 py-2 text-sm text-left hover:bg-blue-50 transition-colors ${alreadyLinked ? 'opacity-40 cursor-not-allowed' : ''}`}
+                        className={`w-full flex items-center gap-2 px-2 py-2 text-sm text-left hover:bg-surface-variant transition-colors ${alreadyLinked ? 'opacity-40 cursor-not-allowed' : ''}`}
                       >
                         {getMimeIcon(file.mimeType)}
                         <span className="truncate">{file.name || file.fileName}</span>
                         {alreadyLinked && (
-                          <span className="ml-auto text-xs text-gray-400 flex-shrink-0">linked</span>
+                          <span className="ml-auto text-xs text-text-secondary flex-shrink-0">linked</span>
                         )}
                       </button>
                     );
@@ -728,7 +766,7 @@ const TaskModal = ({
 
           {/* Due Date */}
           <div>
-            <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="dueDate" className="block text-sm font-medium text-text-secondary mb-1">
               Due Date
             </label>
             <input
@@ -737,47 +775,47 @@ const TaskModal = ({
               id="dueDate"
               value={formData.dueDate}
               onChange={handleChange}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="mt-1 block w-full px-3 py-2 border border-border-default rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-surface text-text-primary"
             />
           </div>
         </form>
 
         {/* ── Feature 5: Activity feed (replaces Comments section) ── */}
         {task && task._id && (
-          <div className="px-6 pb-6 pt-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
-            <h3 className="text-sm font-bold text-gray-800 mb-3">
+          <div className="px-6 pb-6 pt-2 border-t border-border-default bg-surface-variant flex-shrink-0">
+            <h3 className="text-sm font-bold text-text-primary mb-3">
               Activity ({activityFeed.length})
             </h3>
             <div className="space-y-2 mb-4 max-h-52 overflow-y-auto pr-1">
               {activityFeed.length === 0 && (
-                <p className="text-sm text-gray-500 italic">No activity yet. Be the first to start the discussion!</p>
+                <p className="text-sm text-text-secondary italic">No activity yet. Be the first to start the discussion!</p>
               )}
               {activityFeed.map((entry, index) => {
                 if (entry._type === 'comment') {
                   const c = entry.data;
                   return (
-                    <div key={`comment-${index}`} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm text-sm">
+                    <div key={`comment-${index}`} className="bg-surface p-3 rounded-lg border border-border-default shadow-sm text-sm text-text-primary">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-base leading-none">💬</span>
                         <span className="font-bold text-blue-600">{c.authorName}</span>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-text-secondary">
                           {new Date(c.createdAt).toLocaleString()}
                         </span>
                       </div>
-                      <p className="text-gray-700 whitespace-pre-wrap pl-6">{c.text}</p>
+                      <p className="text-text-primary whitespace-pre-wrap pl-6">{c.text}</p>
                     </div>
                   );
                 } else {
                   const a = entry.data;
                   return (
-                    <div key={`activity-${index}`} className="flex items-start gap-2 px-2 py-1.5 text-sm text-gray-600">
+                    <div key={`activity-${index}`} className="flex items-start gap-2 px-2 py-1.5 text-sm text-text-secondary">
                       <span className="text-base leading-none mt-0.5 flex-shrink-0">
                         {getActivityIcon(a.type)}
                       </span>
                       <div>
                         <span>{getActivityLabel(a)}</span>
                         {a.createdAt && (
-                          <span className="ml-2 text-xs text-gray-400">
+                          <span className="ml-2 text-xs text-text-secondary">
                             {new Date(a.createdAt).toLocaleString()}
                           </span>
                         )}
@@ -793,7 +831,7 @@ const TaskModal = ({
                 value={newCommentText}
                 onChange={(e) => setNewCommentText(e.target.value)}
                 placeholder="Type your comment… (Use @ to mention)"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
+                className="flex-1 px-3 py-2 border border-border-default rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm bg-surface text-text-primary"
               />
               <button
                 type="submit"
@@ -807,11 +845,11 @@ const TaskModal = ({
         )}
 
         {/* ── Footer ── */}
-        <div className="flex justify-end space-x-3 p-4 border-t sticky bottom-0 bg-white rounded-b-lg z-10">
+        <div className="flex justify-end space-x-3 p-4 border-t border-border-default sticky bottom-0 bg-surface rounded-b-lg z-10">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            className="px-4 py-2 text-sm font-medium text-text-secondary bg-surface border border-border-default rounded-md shadow-sm hover:bg-surface-variant focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
           >
             Cancel
           </button>

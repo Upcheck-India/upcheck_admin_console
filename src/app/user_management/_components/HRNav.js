@@ -22,7 +22,7 @@ export default function HRNav() {
     item.exact ? pathname === item.href : pathname.startsWith(item.href);
 
   return (
-    <div className="mb-6 border-b border-gray-200 bg-white rounded-t-lg">
+    <div className="mb-6 border-b border-border-default bg-surface rounded-t-lg">
       <nav className="flex flex-wrap gap-1 px-2 -mb-px overflow-x-auto" aria-label="HR sections">
         {HR_NAV_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -34,7 +34,7 @@ export default function HRNav() {
               className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
                 active
                   ? 'text-blue-600 border-blue-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                  : 'text-text-secondary border-transparent hover:text-text-primary hover:border-border-default'
               }`}
             >
               <Icon className="h-4 w-4" />

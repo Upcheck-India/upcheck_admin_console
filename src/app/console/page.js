@@ -51,10 +51,10 @@ import FormattedText from '../../components/FormattedText';
 
 // Components
 const LoadingState = () => (
-  <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+  <div className="min-h-screen bg-background text-text-primary flex items-center justify-center">
     <div className="text-center">
       <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-      <p className="mt-4 text-gray-600">Loading console...</p>
+      <p className="mt-4 text-text-secondary">Loading console...</p>
     </div>
   </div>
 );
@@ -260,9 +260,9 @@ const AdminLandingPage = () => {
 
   return (
     <>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <div className="min-h-screen bg-background text-text-primary">
         {/* Top Navigation */}
-        <nav className="bg-white border-b shadow-sm">
+        <nav className="bg-surface border-b border-border-default shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
               <div className="flex items-center">
@@ -381,8 +381,8 @@ const AdminLandingPage = () => {
         >
           <div className="relative">
             <Bot className="w-6 h-6 text-white" />
-            <div className="absolute -top-12 right-0 bg-white px-3 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap">
-              <span className="text-sm font-medium text-gray-700">Open Jovan Chat</span>
+            <div className="absolute -top-12 right-0 bg-surface border border-border-default px-3 py-1.5 rounded-lg shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap text-text-primary">
+              <span className="text-sm font-medium text-text-primary">Open Jovan Chat</span>
             </div>
           </div>
         </Link>
@@ -406,7 +406,7 @@ const AdminLandingPage = () => {
             });
 
             return (
-              <div className="relative overflow-hidden bg-white border border-gray-200/80 rounded-2xl shadow-sm mb-8 transition-all duration-300 hover:shadow-md">
+              <div className="relative overflow-hidden bg-surface border border-border-default rounded-2xl shadow-sm mb-8 transition-all duration-300 hover:shadow-md">
                 {/* Accent Bar */}
                 <div className={`absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b ${currentNotif.isImportant ? 'from-red-500 to-amber-500' : 'from-teal-500 to-blue-500'}`} />
                 
@@ -640,7 +640,7 @@ const AdminLandingPage = () => {
           </div>
 
           {/* Quick Access Tools */}
-          <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
+          <div className="mt-8 bg-surface border border-border-default rounded-lg shadow-sm p-6 text-text-primary">
             <h3 className="text-lg font-semibold mb-4 bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
               Quick Access
             </h3>
@@ -655,7 +655,7 @@ const AdminLandingPage = () => {
                 <Link 
                   key={index}
                   href={tool.link}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-md bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 text-gray-700"
+                  className="flex items-center space-x-2 px-4 py-2 rounded-md bg-surface-variant hover:bg-border-default text-text-secondary border border-border-default transition-colors duration-150"
                 >
                   {tool.icon}
                   <span>{tool.label}</span>
@@ -666,16 +666,16 @@ const AdminLandingPage = () => {
         </main>
 
         {/* Footer */}
-        <footer className="bg-white border-t mt-8">
+        <footer className="bg-surface border-t border-border-default mt-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex flex-col md:flex-row justify-between items-center">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-text-secondary">
                 © 2025 Upcheck. All rights reserved.
               </div>
               <div className="flex space-x-6 mt-4 md:mt-0">
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-900">Help Center</a>
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-900">Documentation</a>
-                <a href="#" className="text-sm text-gray-500 hover:text-gray-900">Support</a>
+                <a href="#" className="text-sm text-text-secondary hover:text-text-primary">Help Center</a>
+                <a href="#" className="text-sm text-text-secondary hover:text-text-primary">Documentation</a>
+                <a href="#" className="text-sm text-text-secondary hover:text-text-primary">Support</a>
               </div>
             </div>
           </div>
@@ -685,10 +685,10 @@ const AdminLandingPage = () => {
       {/* Jovan AI Coming Soon Modal */}
       {showJovanModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 my-8 md:mx-auto p-4 md:p-6 relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-surface border border-border-default rounded-xl shadow-xl w-full max-w-lg mx-4 my-8 md:mx-auto p-4 md:p-6 relative max-h-[90vh] overflow-y-auto text-text-primary">
             <button
               onClick={() => setShowJovanModal(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 z-10"
+              className="absolute top-4 right-4 text-text-secondary hover:text-text-primary z-10"
             >
               <X className="w-5 h-5 md:w-6 md:h-6" />
             </button>
@@ -761,11 +761,11 @@ const AdminLandingPage = () => {
 
       {/* Online Users Modal */}
       {showOnlineModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
+          <div className="bg-surface border border-border-default rounded-lg shadow-lg max-w-md w-full p-6 text-text-primary">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Online Users ({onlineUsers.length})</h2>
-              <button onClick={() => setShowOnlineModal(false)}>
+              <button onClick={() => setShowOnlineModal(false)} className="text-text-secondary hover:text-text-primary">
                 <X className="h-5 w-5"/>
               </button>
             </div>

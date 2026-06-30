@@ -29,13 +29,13 @@ const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [] }) 
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-xl relative flex flex-col" style={{ maxHeight: '90vh' }}>
+      <div className="bg-surface border border-border-default rounded-lg shadow-xl w-full max-w-xl relative flex flex-col" style={{ maxHeight: '90vh' }}>
         {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b sticky top-0 bg-white rounded-t-lg z-10">
-          <h2 className="text-xl font-bold truncate pr-4">{task.title}</h2>
+        <div className="flex justify-between items-center p-4 border-b border-border-default sticky top-0 bg-surface rounded-t-lg z-10">
+          <h2 className="text-xl font-bold truncate pr-4 text-text-primary">{task.title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 transition-colors"
+            className="text-text-secondary hover:text-text-primary transition-colors"
             aria-label="Close modal"
           >
             <X className="h-6 w-6" />
@@ -46,34 +46,34 @@ const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [] }) 
         <div className="p-6 space-y-4 overflow-y-auto flex-grow">
           {task.description && (
             <div>
-              <h3 className="font-semibold text-gray-700 mb-1">Description</h3>
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{task.description}</p>
+              <h3 className="font-semibold text-text-secondary mb-1">Description</h3>
+              <p className="text-sm text-text-primary whitespace-pre-wrap">{task.description}</p>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h4 className="text-sm font-medium text-gray-500">Type</h4>
-              <p className="text-sm text-gray-800">{task.type}</p>
+              <h4 className="text-sm font-medium text-text-tertiary">Type</h4>
+              <p className="text-sm text-text-primary">{task.type}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-gray-500">Status</h4>
-              <p className="text-sm text-gray-800">{task.status}</p>
+              <h4 className="text-sm font-medium text-text-tertiary">Status</h4>
+              <p className="text-sm text-text-primary">{task.status}</p>
             </div>
             <div>
-              <h4 className="text-sm font-medium text-gray-500">Sprint / Board</h4>
-              <p className="text-sm text-gray-800">{sprintName}</p>
+              <h4 className="text-sm font-medium text-text-tertiary">Sprint / Board</h4>
+              <p className="text-sm text-text-primary">{sprintName}</p>
             </div>
             {task.dueDate && (
               <div>
-                <h4 className="text-sm font-medium text-gray-500">Due Date</h4>
-                <p className="text-sm text-gray-800">{new Date(task.dueDate).toLocaleDateString()}</p>
+                <h4 className="text-sm font-medium text-text-tertiary">Due Date</h4>
+                <p className="text-sm text-text-primary">{new Date(task.dueDate).toLocaleDateString()}</p>
               </div>
             )}
           </div>
 
           <div>
-            <h4 className="text-sm font-medium text-gray-500 mb-1">Assignees</h4>
+            <h4 className="text-sm font-medium text-text-tertiary mb-1">Assignees</h4>
             {assigneeUsers.length > 0 ? (
               <div className="flex items-center space-x-2">
                 {assigneeUsers.map((user) => (
@@ -81,16 +81,16 @@ const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [] }) 
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-800 italic">Unassigned</p>
+              <p className="text-sm text-text-primary italic">Unassigned</p>
             )}
           </div>
 
           {reporterUser && (
             <div>
-              <h4 className="text-sm font-medium text-gray-500 mb-1">Reporter</h4>
+              <h4 className="text-sm font-medium text-text-tertiary mb-1">Reporter</h4>
               <div className="flex items-center space-x-2">
                 <UserAvatar user={reporterUser} />
-                <span className="text-sm text-gray-800">{reporterUser.username}</span>
+                <span className="text-sm text-text-primary">{reporterUser.username}</span>
               </div>
             </div>
           )}

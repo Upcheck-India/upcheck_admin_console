@@ -26,8 +26,8 @@ const SecureLoading = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 flex items-center justify-center">
-      <div className="bg-white p-8 rounded-xl shadow-lg max-w-sm w-full mx-4">
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="bg-surface border border-border-default p-8 rounded-xl shadow-lg max-w-sm w-full mx-4">
         <div className="flex flex-col items-center space-y-6">
           {/* Animated logo placeholder */}
           <div className="w-16 h-16 bg-blue-500 rounded-lg animate-pulse" />
@@ -37,12 +37,12 @@ const SecureLoading = () => {
           
           {/* Loading message */}
           <div className="text-center space-y-3">
-            <p className="text-gray-600 text-sm font-medium">
+            <p className="text-text-secondary text-sm font-medium">
               {loadingMessage}
             </p>
             
             {/* Loading bar */}
-            <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+            <div className="w-full bg-surface-variant rounded-full h-1.5 overflow-hidden">
               <div className="bg-blue-500 h-full rounded-full animate-loading-bar" />
             </div>
           </div>
