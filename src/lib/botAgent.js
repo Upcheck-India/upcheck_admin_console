@@ -524,7 +524,13 @@ async function executeTool(name, args, db, currentUser) {
         sendNotification: !!sendEmailInvites,
         createdAt: new Date(),
         provider: provider,
-        joinUrl: joinUrl || `https://meet.google.com/${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`
+        joinUrl: joinUrl || `https://meet.google.com/${Math.random().toString(36).substring(2, 5)}-${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 5)}`,
+        createdByBot: true,
+        botOnBehalfOf: {
+          id: currentUser._id.toString(),
+          name: userName,
+          email: userEmail
+        }
       };
 
       await db.collection('events').insertOne(eventData);
@@ -1378,7 +1384,15 @@ async function executeTool(name, args, db, currentUser) {
         return JSON.stringify({ error: "Forbidden: Only the host can update/modify this meeting." });
       }
 
-      const updateDoc = { updatedAt: new Date() };
+      const updateDoc = {
+        updatedAt: new Date(),
+        modifiedByBot: true,
+        botOnBehalfOf: {
+          id: currentUser._id.toString(),
+          name: userName,
+          email: userEmail
+        }
+      };
 
       if (title !== undefined) updateDoc.title = title.trim();
       if (description !== undefined) updateDoc.description = description ? description.trim() : '';

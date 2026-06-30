@@ -313,6 +313,19 @@ const EventDetailPage = () => {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">{event.title}</h1>
             <p className="text-md text-gray-600 mb-6">Hosted by <span className="font-semibold">{event.host}</span></p>
 
+            {event.createdByBot && (
+              <div className="mb-4 mr-2 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                <span className="mr-1.5">🤖</span>
+                Created by Upcheck Admin Bot on behalf of <span className="font-semibold ml-1">{event.botOnBehalfOf?.name || event.botOnBehalfOf?.email || 'Administrator'}</span>
+              </div>
+            )}
+            {event.modifiedByBot && (
+              <div className="mb-4 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="mr-1.5">🤖</span>
+                Updated/Postponed by Upcheck Admin Bot on behalf of <span className="font-semibold ml-1">{event.botOnBehalfOf?.name || event.botOnBehalfOf?.email || 'Administrator'}</span>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left Column: Details */}
               <div className="space-y-6">

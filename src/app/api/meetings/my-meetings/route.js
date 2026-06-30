@@ -161,5 +161,8 @@ function enrichMeeting(meeting) {
     reminderSettings: meeting.reminderSettings || [],
     createdAt: meeting.createdAt,
     updatedAt: meeting.updatedAt,
+    createdByBot: !!meeting.createdByBot,
+    modifiedByBot: !!meeting.modifiedByBot,
+    botOnBehalfOf: meeting.botOnBehalfOf || null,
   };
 }
