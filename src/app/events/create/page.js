@@ -13,7 +13,7 @@ import { useAuth } from '../../../hooks/useAuth';
 
 const InputField = memo(({ label, name, type = 'text', value, onChange, required = false, error, ...props }) => (
   <div className="space-y-2">
-    <label htmlFor={name} className="block text-sm font-semibold text-gray-700">
+    <label htmlFor={name} className="block text-sm font-semibold text-text-secondary">
       {label}
       {required && <span className="text-red-500 ml-1">*</span>}
     </label>
@@ -23,7 +23,7 @@ const InputField = memo(({ label, name, type = 'text', value, onChange, required
         name={name}
         value={value}
         onChange={onChange}
-        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors bg-surface text-text-primary ${error ? 'border-red-500/30 bg-red-500/5' : 'border-border-default'
           }`}
         {...props}
       />
@@ -34,13 +34,13 @@ const InputField = memo(({ label, name, type = 'text', value, onChange, required
         name={name}
         value={value}
         onChange={onChange}
-        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${error ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+        className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors bg-surface text-text-primary ${error ? 'border-red-500/30 bg-red-500/5' : 'border-border-default'
           }`}
         {...props}
       />
     )}
     {error && (
-      <div className="flex items-center mt-1 text-sm text-red-600">
+      <div className="flex items-center mt-1 text-sm text-red-500">
         <AlertCircle className="w-4 h-4 mr-1" />
         {error}
       </div>
@@ -334,27 +334,59 @@ const CreateEventPage = () => {
   const customSelectStyles = {
     control: (provided, state) => ({
       ...provided,
-      borderColor: fieldErrors.participants ? '#ef4444' : state.isFocused ? '#6366f1' : '#d1d5db',
-      boxShadow: state.isFocused ? '0 0 0 3px rgba(99, 102, 241, 0.1)' : 'none',
+      backgroundColor: 'var(--surface)',
+      borderColor: fieldErrors.participants ? '#ef4444' : state.isFocused ? '#3b82f6' : 'var(--border-default)',
+      boxShadow: state.isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
       '&:hover': {
-        borderColor: state.isFocused ? '#6366f1' : '#9ca3af',
+        borderColor: state.isFocused ? '#3b82f6' : 'var(--text-tertiary)',
+      },
+    }),
+    input: (provided) => ({
+      ...provided,
+      color: 'var(--text-primary)',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: 'var(--text-tertiary)',
+    }),
+    menu: (provided) => ({
+      ...provided,
+      backgroundColor: 'var(--surface)',
+      border: '1px solid var(--border-default)',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+      zIndex: 9999,
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected 
+        ? '#3b82f6' 
+        : state.isFocused 
+          ? 'var(--surface-variant)' 
+          : 'transparent',
+      color: state.isSelected 
+        ? '#ffffff' 
+        : 'var(--text-primary)',
+      cursor: 'pointer',
+      '&:active': {
+        backgroundColor: '#3b82f6',
       },
     }),
     multiValue: (provided) => ({
       ...provided,
-      backgroundColor: '#e0e7ff',
-      color: '#3730a3',
+      backgroundColor: 'var(--surface-variant)',
+      color: 'var(--text-primary)',
+      border: '1px solid var(--border-default)',
     }),
     multiValueLabel: (provided) => ({
       ...provided,
-      color: '#3730a3',
+      color: 'var(--text-primary)',
     }),
     multiValueRemove: (provided) => ({
       ...provided,
-      color: '#6366f1',
+      color: 'var(--text-secondary)',
       '&:hover': {
-        backgroundColor: '#c7d2fe',
-        color: '#4338ca',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        color: '#ef4444',
       },
     }),
   };
@@ -362,11 +394,11 @@ const CreateEventPage = () => {
   const Toggle = ({ label, name, checked, onChange, description }) => (
     <div className="flex items-start justify-between py-3">
       <div className="flex-1">
-        <label htmlFor={name} className="text-sm font-medium text-gray-900 cursor-pointer">
+        <label htmlFor={name} className="text-sm font-medium text-text-primary cursor-pointer">
           {label}
         </label>
         {description && (
-          <p className="text-xs text-gray-500 mt-1">{description}</p>
+          <p className="text-xs text-text-tertiary mt-1">{description}</p>
         )}
       </div>
       <div className="ml-4">
@@ -379,12 +411,12 @@ const CreateEventPage = () => {
           onChange={onChange}
         />
         <div
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${checked ? 'bg-indigo-600' : 'bg-gray-200'
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${checked ? 'bg-blue-600' : 'bg-surface-variant border border-border-default'
             }`}
           onClick={() => onChange({ target: { name, checked: !checked, type: 'checkbox' } })}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-6' : 'translate-x-1'
+            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${checked ? 'translate-x-6' : 'translate-x-1'
               }`}
           />
         </div>
@@ -395,35 +427,35 @@ const CreateEventPage = () => {
   // InputField component is now defined at the top of the file
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div className="bg-background min-h-screen text-text-primary">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
           onClick={() => router.push('/events')}
-          className="inline-flex items-center mb-8 text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors group"
+          className="inline-flex items-center mb-8 text-sm font-medium text-text-secondary hover:text-blue-500 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           Back to Dashboard
         </button>
 
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Schedule a New Meeting</h1>
-          <p className="text-gray-600">Create and configure your meeting. Choose Zoom or Google Meet as provider.</p>
+          <h1 className="text-4xl font-bold text-text-primary mb-2">Schedule a New Meeting</h1>
+          <p className="text-text-secondary">Create and configure your meeting. Choose Zoom or Google Meet as provider.</p>
         </div>
 
         {/* Provider Selection */}
         <div className="mb-8">
-          <div className="inline-flex rounded-lg border border-gray-200 bg-white p-1 shadow-sm">
+          <div className="inline-flex rounded-lg border border-border-default bg-surface p-1 shadow-sm">
             <button
               type="button"
               onClick={() => setProvider('zoom')}
-              className={`px-4 py-2 text-sm font-medium rounded-md ${provider === 'zoom' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${provider === 'zoom' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:bg-surface-variant'}`}
             >
               Zoom
             </button>
             <button
               type="button"
               onClick={() => setProvider('google_meet')}
-              className={`px-4 py-2 text-sm font-medium rounded-md ${provider === 'google_meet' ? 'bg-indigo-600 text-white' : 'text-gray-700 hover:bg-gray-50'}`}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${provider === 'google_meet' ? 'bg-blue-600 text-white' : 'text-text-secondary hover:bg-surface-variant'}`}
             >
               Google Meet
             </button>
@@ -434,12 +466,12 @@ const CreateEventPage = () => {
           {/* Left Column - Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Meeting Details */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Video className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Video className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Meeting Details</h2>
+                <h2 className="text-xl font-semibold text-text-primary">Meeting Details</h2>
               </div>
               <div className="space-y-6">
                 <InputField
@@ -515,17 +547,17 @@ const CreateEventPage = () => {
             </div>
 
             {/* Participants */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Users className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Users className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Participants</h2>
+                <h2 className="text-xl font-semibold text-text-primary">Participants</h2>
               </div>
               <div className="space-y-4">
                 {/* Select Teams */}
                 <div>
-                  <label htmlFor="teams" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                  <label htmlFor="teams" className="block text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
                     Add Members from Groups/Teams
                   </label>
                   <Select
@@ -545,8 +577,8 @@ const CreateEventPage = () => {
                   />
                 </div>
 
-                <div className="border-t border-gray-150 my-2 pt-2">
-                  <label htmlFor="participants" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                <div className="border-t border-border-default my-2 pt-2">
+                  <label htmlFor="participants" className="block text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
                     Individual Participants
                   </label>
                 </div>
@@ -581,9 +613,9 @@ const CreateEventPage = () => {
                     setSelectedParticipants(prev => [...prev, option]);
                   }}
                 />
-                <p className="text-xs text-gray-500">Type an email and press Enter to add as an external participant.</p>
+                <p className="text-xs text-text-tertiary">Type an email and press Enter to add as an external participant.</p>
                 {fieldErrors.participants && (
-                  <div className="flex items-center mt-1 text-sm text-red-600">
+                  <div className="flex items-center mt-1 text-sm text-red-500">
                     <AlertCircle className="w-4 h-4 mr-1" />
                     {fieldErrors.participants}
                   </div>
@@ -599,21 +631,21 @@ const CreateEventPage = () => {
           {/* Right Column - Settings */}
           <div className="lg:col-span-1 space-y-6">
             {/* Schedule */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Calendar className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Calendar className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Schedule</h2>
+                <h2 className="text-xl font-semibold text-text-primary">Schedule</h2>
               </div>
               <div className="space-y-6">
                 {/* Recurring Toggle */}
-                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center justify-between p-4 bg-surface-variant rounded-lg border border-border-default">
                   <div>
-                    <label htmlFor="isRecurring" className="text-sm font-medium text-gray-900 cursor-pointer">
+                    <label htmlFor="isRecurring" className="text-sm font-medium text-text-primary cursor-pointer">
                       Make this a recurring meeting
                     </label>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-text-tertiary mt-1">
                       Create a series of meetings that repeat on a schedule
                     </p>
                   </div>
@@ -627,8 +659,8 @@ const CreateEventPage = () => {
                       onChange={handleInputChange}
                     />
                     <div
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 cursor-pointer ${
-                        formData.isRecurring ? 'bg-indigo-600' : 'bg-gray-200'
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+                        formData.isRecurring ? 'bg-blue-600' : 'bg-surface-variant border border-border-default'
                       }`}
                       onClick={() => handleInputChange({ target: { name: 'isRecurring', checked: !formData.isRecurring, type: 'checkbox' } })}
                     >
@@ -642,7 +674,7 @@ const CreateEventPage = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="startTime" className="block text-sm font-semibold text-gray-700">
+                  <label htmlFor="startTime" className="block text-sm font-semibold text-text-secondary">
                     {formData.isRecurring ? 'First Meeting Time' : 'Start Time'} <span className="text-red-500">*</span>
                   </label>
                   <DatePicker
@@ -650,7 +682,7 @@ const CreateEventPage = () => {
                     onChange={handleDateChange}
                     showTimeSelect
                     dateFormat="MMMM d, yyyy h:mm aa"
-                    className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${fieldErrors.startTime ? 'border-red-300 bg-red-50' : 'border-gray-300 bg-white'
+                    className={`block w-full px-4 py-3 border rounded-lg shadow-sm placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors bg-surface text-text-primary ${fieldErrors.startTime ? 'border-red-500/30 bg-red-500/5' : 'border-border-default'
                       }`}
                     closeOnScroll={true}
                     placeholderText="Select date and time"
@@ -658,7 +690,7 @@ const CreateEventPage = () => {
                     required
                   />
                   {fieldErrors.startTime && (
-                    <div className="flex items-center mt-1 text-sm text-red-600">
+                    <div className="flex items-center mt-1 text-sm text-red-500">
                       <AlertCircle className="w-4 h-4 mr-1" />
                       {fieldErrors.startTime}
                     </div>
@@ -676,7 +708,7 @@ const CreateEventPage = () => {
                   required
                   error={fieldErrors.duration}
                 />
-                <div className="text-xs text-gray-500 flex items-center">
+                <div className="text-xs text-text-tertiary flex items-center">
                   <Clock className="w-4 h-4 mr-1" />
                   Duration in minutes (max 5 hours / 300 mins)
                 </div>
@@ -685,12 +717,12 @@ const CreateEventPage = () => {
 
             {/* Recurring Pattern - Only show if recurring is enabled */}
             {formData.isRecurring && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-center mb-6">
-                  <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                    <Repeat className="w-6 h-6 text-indigo-600" />
+                  <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                    <Repeat className="w-6 h-6 text-blue-500" />
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Recurrence Pattern</h2>
+                  <h2 className="text-xl font-semibold text-text-primary">Recurrence Pattern</h2>
                 </div>
                 <RecurrencePatternSelector
                   value={recurrencePattern}
@@ -703,12 +735,12 @@ const CreateEventPage = () => {
 
             {/* Series Notification Settings - Only show if recurring is enabled */}
             {formData.isRecurring && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-center mb-6">
-                  <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                    <Mail className="w-6 h-6 text-indigo-600" />
+                  <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                    <Mail className="w-6 h-6 text-blue-500" />
                   </div>
-                  <h2 className="text-xl font-semibold text-gray-900">Series Notification</h2>
+                  <h2 className="text-xl font-semibold text-text-primary">Series Notification</h2>
                 </div>
                 <SeriesNotificationSettings
                   value={seriesNotificationSettings}
@@ -718,14 +750,14 @@ const CreateEventPage = () => {
             )}
 
             {/* Meeting Options - Zoom */}
-            <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${provider !== 'zoom' ? 'hidden' : ''}`}>
+            <div className={`bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow ${provider !== 'zoom' ? 'hidden' : ''}`}>
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Settings className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Settings className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Meeting Options</h2>
+                <h2 className="text-xl font-semibold text-text-primary">Meeting Options</h2>
               </div>
-              <div className="space-y-1 divide-y divide-gray-100">
+              <div className="space-y-1 divide-y divide-border-default">
                 <Toggle
                   label="Waiting Room"
                   name="waiting_room"
@@ -763,12 +795,12 @@ const CreateEventPage = () => {
                 />
                 {zoomSettings.join_before_host && (
                   <div className="pl-4 pt-3 pb-1">
-                    <label htmlFor="jbh_time" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label htmlFor="jbh_time" className="block text-sm font-semibold text-text-secondary mb-2">
                       Join Before Host Time
                     </label>
                     <select
                       id="jbh_time"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                      className="w-full px-3 py-2 border border-border-default rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/25 bg-surface text-text-primary transition-colors"
                       value={zoomSettings.jbh_time}
                       onChange={(e) =>
                         setZoomSettings(prev => ({
@@ -784,12 +816,12 @@ const CreateEventPage = () => {
                   </div>
                 )}
                 <div className="pt-3">
-                  <label htmlFor="auto_recording" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label htmlFor="auto_recording" className="block text-sm font-semibold text-text-secondary mb-2">
                     Automatic Recording
                   </label>
                   <select
                     id="auto_recording"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                    className="w-full px-3 py-2 border border-border-default rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500/25 bg-surface text-text-primary transition-colors"
                     value={zoomSettings.auto_recording}
                     onChange={(e) =>
                       setZoomSettings(prev => ({
@@ -821,12 +853,12 @@ const CreateEventPage = () => {
             </div>
 
             {/* Notifications */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Mail className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Mail className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Notifications</h2>
+                <h2 className="text-xl font-semibold text-text-primary">Notifications</h2>
               </div>
               <Toggle
                 label="Send Email to Participants"
@@ -861,12 +893,12 @@ const CreateEventPage = () => {
             </div>
 
             {/* Join Experience */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Settings className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Settings className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Join Experience</h2>
+                <h2 className="text-xl font-semibold text-text-primary">Join Experience</h2>
               </div>
               <div className="space-y-2">
                 <Toggle
@@ -895,18 +927,18 @@ const CreateEventPage = () => {
                   onChange={handleInputChange}
                   description="Adds a visible fallback link in case the Join button cannot load"
                 />
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-text-tertiary">
                   The email Join button will point to our interstitial page when enabled; otherwise it will link directly to the meeting.
                 </div>
               </div>
             </div>
 
-            <div className={`bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${provider !== 'google_meet' ? 'hidden' : ''}`}>
+            <div className={`bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow ${provider !== 'google_meet' ? 'hidden' : ''}`}>
               <div className="flex items-center mb-6">
-                <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                  <Video className="w-6 h-6 text-indigo-600" />
+                <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                  <Video className="w-6 h-6 text-blue-500" />
                 </div>
-                <h2 className="text-xl font-semibold text-gray-900">Upcheck Bot <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-200 text-gray-700 align-middle">Locked beta</span></h2>
+                <h2 className="text-xl font-semibold text-text-primary">Upcheck Bot <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-surface-variant text-text-secondary align-middle border border-border-default">Locked beta</span></h2>
               </div>
               <div>
                 <Toggle
@@ -925,25 +957,25 @@ const CreateEventPage = () => {
           {/* Bottom Section */}
           <div className="lg:col-span-3">
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
                 <div className="flex items-center">
                   <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                  <p className="text-sm text-red-700 font-medium">Error: {error}</p>
+                  <p className="text-sm text-red-500 font-medium">Error: {error}</p>
                 </div>
               </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-center text-sm text-gray-500 mb-6">
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
+              <div className="flex items-center justify-center text-sm text-text-tertiary mb-6">
                 <span className="mr-2">Provider:</span>
-                <span className="font-medium">{provider === 'zoom' ? 'Zoom' : 'Google Meet'}</span>
+                <span className="font-medium text-text-primary">{provider === 'zoom' ? 'Zoom' : 'Google Meet'}</span>
               </div>
 
               <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-4">
                 <button
                   type="button"
                   onClick={() => router.back()}
-                  className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                  className="px-6 py-3 border border-border-default rounded-lg text-sm font-medium text-text-secondary bg-surface hover:bg-surface-variant focus:outline-none transition-colors"
                 >
                   Cancel
                 </button>
@@ -951,7 +983,7 @@ const CreateEventPage = () => {
                   type="button"
                   onClick={handleSubmit}
                   disabled={submitting || loadingUsers}
-                  className="px-6 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                  className="px-6 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
                 >
                   {submitting ? (
                     <>

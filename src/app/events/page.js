@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw, CheckCircle, RotateCwSquare, AlertCircle } from 'lucide-react';
+import { Plus, Calendar, Clock, Users, ChevronRight, Video, Search, Filter, CalendarDays, Zap, Settings, ArrowUpRight, RefreshCw, CheckCircle, RotateCwSquare, AlertCircle, ArrowLeft } from 'lucide-react';
 
 const EventsPage = () => {
   const [events, setEvents] = useState([]);
@@ -144,12 +144,12 @@ const EventsPage = () => {
 
     return (
       <Link href={linkHref}>
-        <div className={`bg-white rounded-xl shadow-sm border hover:shadow-lg transition-all duration-300 p-6 group relative overflow-hidden ${
+        <div className={`bg-surface rounded-xl shadow-sm border hover:shadow-lg transition-all duration-300 p-6 group relative overflow-hidden ${
           isRecurringSeries 
-            ? 'border-purple-200 bg-gradient-to-br from-purple-50 to-white'
+            ? 'border-purple-500/20 bg-gradient-to-br from-purple-500/5 to-surface hover:border-purple-500/40'
             : isToday 
-              ? 'border-indigo-200 bg-gradient-to-br from-indigo-50 to-white' 
-              : 'border-gray-200 hover:border-indigo-300'
+              ? 'border-indigo-500/20 bg-gradient-to-br from-indigo-500/5 to-surface hover:border-indigo-500/40' 
+              : 'border-border-default hover:border-blue-500/35 bg-surface'
         }`}>
           {/* Gradient overlay for today's events or recurring series */}
           {(isToday || isRecurringSeries) && (
@@ -270,14 +270,14 @@ const EventsPage = () => {
   };
 
   const StatCard = ({ icon: Icon, label, value, color = 'indigo' }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+    <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 hover:shadow-md transition-shadow">
       <div className="flex items-center">
-        <div className={`p-3 rounded-lg bg-${color}-100 mr-4`}>
-          <Icon className={`w-6 h-6 text-${color}-600`} />
+        <div className={`p-3 rounded-lg bg-${color}-500/10 mr-4`}>
+          <Icon className={`w-6 h-6 text-${color}-500`} />
         </div>
         <div>
-          <p className="text-sm font-medium text-gray-600">{label}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm font-medium text-text-secondary">{label}</p>
+          <p className="text-2xl font-bold text-text-primary">{value}</p>
         </div>
       </div>
     </div>
@@ -288,8 +288,8 @@ const EventsPage = () => {
       onClick={onClick}
       className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
         isActive
-          ? 'bg-indigo-100 text-indigo-700 shadow-sm'
-          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+          ? 'bg-blue-500/10 text-blue-500 shadow-sm border border-blue-500/20'
+          : 'text-text-secondary hover:text-text-primary hover:bg-surface-variant'
       }`}
     >
       {label}
@@ -314,55 +314,63 @@ const EventsPage = () => {
   const emptyState = getEmptyStateMessage();
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div className="bg-background min-h-screen text-text-primary">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Link
+          href="/console"
+          className="inline-flex items-center mb-6 text-sm font-medium text-text-secondary hover:text-blue-500 transition-colors group"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+          Back to Console
+        </Link>
+
         {/* Header */}
         <div className="flex flex-col lg:flex-row justify-between lg:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Meetings Dashboard</h1>
-            <p className="text-gray-600">Manage your scheduled meetings and video conferences</p>
+            <h1 className="text-4xl font-bold text-text-primary mb-2">Meetings Dashboard</h1>
+            <p className="text-text-secondary text-sm">Manage your scheduled meetings and video conferences</p>
           </div>
           <div className="flex items-center space-x-3">
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
+              className="inline-flex items-center px-4 py-2 border border-border-default rounded-lg text-sm font-medium text-text-secondary bg-surface hover:bg-surface-variant focus:outline-none transition-colors disabled:opacity-50"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh
             </button>
             <Link
               href="/events/recurring"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+              className="inline-flex items-center px-4 py-2 border border-border-default rounded-lg text-sm font-medium text-text-secondary bg-surface hover:bg-surface-variant focus:outline-none transition-colors"
             >
               <RotateCwSquare className="w-4 h-4 mr-2" />
               Recurring Meetings
             </Link>
             {/* --- Bug Fix #2.7: Dropdown uses React state, not raw DOM --- */}
             <div className="relative inline-block text-left" ref={dropdownRef}>
-              <div className="flex">
+              <div className="flex items-center">
                 <Link 
                   href="/events/create"
-                  className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-l-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                  className="h-10 inline-flex items-center px-6 border border-transparent text-sm font-medium rounded-l-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   New Meeting
                 </Link>
-                <div className="relative">
+                <div className="relative h-10">
                   <button
                     type="button"
-                    className="inline-flex items-center px-2 py-2 border border-l-0 border-transparent text-sm font-medium rounded-r-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                    className="h-10 inline-flex items-center px-3 border-y border-r border-l-0 border-transparent text-sm font-medium rounded-r-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors"
                     onClick={() => setDropdownOpen(prev => !prev)}
                   >
                     <ChevronRight className="w-4 h-4 rotate-90" />
                   </button>
                   {dropdownOpen && (
-                    <div className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                    <div className="absolute right-0 z-10 mt-2 w-56 origin-top-right rounded-lg bg-surface border border-border-default shadow-lg focus:outline-none text-text-primary">
                       <div className="py-1">
                         <Link
                           href="/events/create"
                           onClick={() => setDropdownOpen(false)}
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          className="flex items-center px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-variant transition-colors"
                         >
                           <Calendar className="w-4 h-4 mr-3" />
                           Single Meeting
@@ -370,7 +378,7 @@ const EventsPage = () => {
                         <Link
                           href="/events/recurring/create"
                           onClick={() => setDropdownOpen(false)}
-                          className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                          className="flex items-center px-4 py-2 text-sm text-text-secondary hover:text-text-primary hover:bg-surface-variant transition-colors"
                         >
                           <RefreshCw className="w-4 h-4 mr-3" />
                           Recurring Series
@@ -420,24 +428,24 @@ const EventsPage = () => {
         </div>
 
         {/* Search and Filter */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6 mb-8">
           <div className="flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
             <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-text-tertiary w-5 h-5" />
               <input
                 type="text"
                 placeholder="Search events..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                className="w-full pl-10 pr-4 py-2 border border-border-default bg-surface text-text-primary rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors"
               />
             </div>
             
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-gray-500 mr-2" />
+                <Filter className="w-4 h-4 text-text-secondary mr-2" />
                 {/* --- Bug Fix #3.13: Added "Today" filter tab --- */}
-                <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+                <div className="flex space-x-1 bg-surface-variant rounded-lg p-1 border border-border-default">
                   <FilterTab value="Upcoming" label="Upcoming" isActive={filter === 'Upcoming'} onClick={() => setFilter('Upcoming')} />
                   <FilterTab value="Today"    label="Today"    isActive={filter === 'Today'}    onClick={() => setFilter('Today')} />
                   <FilterTab value="Past"     label="Past"     isActive={filter === 'Past'}     onClick={() => setFilter('Past')} />
@@ -451,9 +459,9 @@ const EventsPage = () => {
                   id="showRecurring"
                   checked={showRecurring}
                   onChange={(e) => setShowRecurring(e.target.checked)}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className="rounded border-border-default text-blue-600 focus:ring-blue-500 bg-surface"
                 />
-                <label htmlFor="showRecurring" className="text-sm text-gray-700 cursor-pointer">
+                <label htmlFor="showRecurring" className="text-sm text-text-secondary cursor-pointer">
                   Show recurring series
                 </label>
               </div>
@@ -465,28 +473,28 @@ const EventsPage = () => {
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-              <p className="text-gray-600 font-medium">Loading events...</p>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-text-secondary font-medium">Loading events...</p>
             </div>
           </div>
         ) : filteredEvents.length === 0 ? (
           <div className="text-center py-20">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 max-w-md mx-auto">
-              <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-6">
-                <Calendar className="w-8 h-8 text-gray-400" />
+            <div className="bg-surface rounded-xl shadow-sm border border-border-default p-12 max-w-md mx-auto">
+              <div className="mx-auto w-16 h-16 bg-surface-variant rounded-full flex items-center justify-center mb-6 border border-border-default">
+                <Calendar className="w-8 h-8 text-text-tertiary" />
               </div>
               {/* --- Bug Fix #3.14: Contextual empty state messages --- */}
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              <h3 className="text-xl font-semibold text-text-primary mb-2">
                 {emptyState.title}
               </h3>
-              <p className="text-gray-500 mb-8">
+              <p className="text-text-secondary mb-8 text-sm">
                 {emptyState.body}
               </p>
               {/* Only show Schedule CTA when no search is active and filter isn't "Past" or "Today" */}
               {!searchTerm && filter !== 'Past' && filter !== 'Today' && (
                 <Link 
                   href="/events/create"
-                  className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors"
                 >
                   <Plus className="w-4 h-4 mr-2" />
                   Schedule Meeting

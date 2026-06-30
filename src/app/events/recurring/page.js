@@ -111,14 +111,14 @@ const RecurringMeetingsPage = () => {
   }, []);
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div className="bg-background min-h-screen text-text-primary">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center space-x-4">
             <Link
               href="/events"
-              className="inline-flex items-center text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors group"
+              className="inline-flex items-center text-sm font-medium text-text-secondary hover:text-blue-500 transition-colors group"
             >
               <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
               Back to Events
@@ -127,7 +127,7 @@ const RecurringMeetingsPage = () => {
           
           <Link
             href="/events/recurring/create"
-            className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+            className="inline-flex items-center px-6 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none transition-colors"
           >
             <Plus className="w-4 h-4 mr-2" />
             New Recurring Meeting
@@ -135,16 +135,16 @@ const RecurringMeetingsPage = () => {
         </div>
 
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Recurring Meetings</h1>
-          <p className="text-gray-600">Manage your recurring meeting series and individual instances</p>
+          <h1 className="text-4xl font-bold text-text-primary mb-2">Recurring Meetings</h1>
+          <p className="text-text-secondary">Manage your recurring meeting series and individual instances</p>
         </div>
 
         {/* Notification */}
         {notification && (
           <div className={`mb-6 p-4 rounded-lg border ${
             notification.type === 'error' 
-              ? 'bg-red-50 border-red-200 text-red-800' 
-              : 'bg-green-50 border-green-200 text-green-800'
+              ? 'bg-red-500/10 border-red-500/20 text-red-500' 
+              : 'bg-green-500/10 border-green-500/20 text-green-500'
           }`}>
             <div className="flex items-center">
               {notification.type === 'error' ? (
@@ -158,7 +158,7 @@ const RecurringMeetingsPage = () => {
         )}
 
         {/* Recurring Meeting Manager */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
           <RecurringMeetingManager
             onEdit={handleEdit}
             onDelete={handleDelete}

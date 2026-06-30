@@ -14,6 +14,66 @@ const EditEventPage = () => {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
 
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      backgroundColor: 'var(--surface)',
+      borderColor: state.isFocused ? '#3b82f6' : 'var(--border-default)',
+      boxShadow: state.isFocused ? '0 0 0 3px rgba(59, 130, 246, 0.1)' : 'none',
+      '&:hover': {
+        borderColor: state.isFocused ? '#3b82f6' : 'var(--text-tertiary)',
+      },
+    }),
+    input: (provided) => ({
+      ...provided,
+      color: 'var(--text-primary)',
+    }),
+    placeholder: (provided) => ({
+      ...provided,
+      color: 'var(--text-tertiary)',
+    }),
+    menu: (provided) => ({
+      ...provided,
+      backgroundColor: 'var(--surface)',
+      border: '1px solid var(--border-default)',
+      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+      zIndex: 9999,
+    }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected 
+        ? '#3b82f6' 
+        : state.isFocused 
+          ? 'var(--surface-variant)' 
+          : 'transparent',
+      color: state.isSelected 
+        ? '#ffffff' 
+        : 'var(--text-primary)',
+      cursor: 'pointer',
+      '&:active': {
+        backgroundColor: '#3b82f6',
+      },
+    }),
+    multiValue: (provided) => ({
+      ...provided,
+      backgroundColor: 'var(--surface-variant)',
+      color: 'var(--text-primary)',
+      border: '1px solid var(--border-default)',
+    }),
+    multiValueLabel: (provided) => ({
+      ...provided,
+      color: 'var(--text-primary)',
+    }),
+    multiValueRemove: (provided) => ({
+      ...provided,
+      color: 'var(--text-secondary)',
+      '&:hover': {
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        color: '#ef4444',
+      },
+    }),
+  };
+
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -236,61 +296,61 @@ const EditEventPage = () => {
   // --- Bug Fix #1.3 + #3.15: Styled loading state that handles auth loading too ---
   if (authLoading || eventLoading) {
     return (
-      <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen flex items-center justify-center">
+      <div className="bg-background min-h-screen flex items-center justify-center text-text-secondary">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading event details...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-text-secondary font-medium">Loading event details...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div className="bg-background min-h-screen text-text-primary">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <button
           onClick={() => router.push(`/events/${id}`)}
-          className="inline-flex items-center mb-8 text-sm font-medium text-gray-600 hover:text-indigo-600 transition-colors group"
+          className="inline-flex items-center mb-8 text-sm font-medium text-text-secondary hover:text-blue-500 transition-colors group"
         >
           <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
           Back to Event
         </button>
 
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Edit Meeting</h1>
-          <p className="text-gray-600">Update the details for this scheduled meeting.</p>
+          <h1 className="text-4xl font-bold text-text-primary mb-2">Edit Meeting</h1>
+          <p className="text-text-secondary">Update the details for this scheduled meeting.</p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
             <div className="flex items-center">
               <AlertCircle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0" />
-              <p className="text-sm text-red-700 font-medium">{error}</p>
+              <p className="text-sm text-red-500 font-medium">{error}</p>
             </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Provider Selection */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
             <div className="flex items-center mb-4">
-              <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                <Video className="w-5 h-5 text-indigo-600" />
+              <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                <Video className="w-5 h-5 text-blue-500" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900">Meeting Provider</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Meeting Provider</h2>
             </div>
-            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+            <div className="inline-flex rounded-lg border border-border-default bg-surface-variant p-1">
               <button
                 type="button"
                 onClick={() => setProvider('zoom')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${provider === 'zoom' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-white'}`}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${provider === 'zoom' ? 'bg-blue-600 text-white shadow-sm' : 'text-text-secondary hover:bg-surface'}`}
               >
                 Zoom
               </button>
               <button
                 type="button"
                 onClick={() => setProvider('google_meet')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${provider === 'google_meet' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-white'}`}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${provider === 'google_meet' ? 'bg-blue-600 text-white shadow-sm' : 'text-text-secondary hover:bg-surface'}`}
               >
                 Google Meet
               </button>
@@ -298,16 +358,16 @@ const EditEventPage = () => {
           </div>
 
           {/* Meeting Details */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
             <div className="flex items-center mb-6">
-              <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                <Video className="w-5 h-5 text-indigo-600" />
+              <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                <Video className="w-5 h-5 text-blue-500" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900">Meeting Details</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Meeting Details</h2>
             </div>
             <div className="space-y-5">
               <div>
-                <label htmlFor="title" className="block text-sm font-semibold text-gray-700 mb-1">
+                <label htmlFor="title" className="block text-sm font-semibold text-text-secondary mb-1">
                   Meeting Title <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -317,11 +377,11 @@ const EditEventPage = () => {
                   value={formData.title}
                   onChange={handleInputChange}
                   required
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-border-default rounded-lg shadow-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors"
                 />
               </div>
               <div>
-                <label htmlFor="description" className="block text-sm font-semibold text-gray-700 mb-1">
+                <label htmlFor="description" className="block text-sm font-semibold text-text-secondary mb-1">
                   Description / Agenda <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -331,26 +391,26 @@ const EditEventPage = () => {
                   onChange={handleInputChange}
                   rows={4}
                   required
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-border-default rounded-lg shadow-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors"
                 />
               </div>
 
               {/* --- Bug Fix #1.4: Show actual existing Zoom link instead of misleading placeholder --- */}
               <div className={provider === 'zoom' ? '' : 'hidden'}>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Meeting Link</label>
+                <label className="block text-sm font-semibold text-text-secondary mb-1">Meeting Link</label>
                 <input
                   type="text"
                   value={existingZoomUrl || 'Zoom link is preserved from original meeting'}
                   disabled
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-500 cursor-not-allowed"
+                  className="block w-full px-4 py-3 border border-border-default rounded-lg bg-surface-variant text-text-tertiary cursor-not-allowed"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-text-tertiary">
                   The existing Zoom meeting link is preserved. Zoom meetings cannot be re-generated on edit.
                 </p>
               </div>
 
               <div className={provider === 'google_meet' ? '' : 'hidden'}>
-                <label htmlFor="joinUrl" className="block text-sm font-semibold text-gray-700 mb-1">
+                <label htmlFor="joinUrl" className="block text-sm font-semibold text-text-secondary mb-1">
                   Google Meet Link <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -361,12 +421,12 @@ const EditEventPage = () => {
                   onChange={(e) => setJoinUrl(e.target.value)}
                   placeholder="https://meet.google.com/xyz-abcd-efg"
                   required={provider === 'google_meet'}
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-border-default rounded-lg shadow-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors"
                 />
-                <div className="mt-3 p-4 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
+                <div className="mt-3 p-4 rounded-lg bg-green-500/10 border border-green-500/20 text-sm text-green-500">
                   <p className="font-medium">How to get a Google Meet link:</p>
                   <ol className="list-decimal list-inside mt-2 space-y-1">
-                    <li>Click <a href="https://meet.google.com/landing?hs=1&source=upcheck_admin&ref=events_edit" target="_blank" rel="noopener noreferrer" className="underline font-medium">Create Meet</a> to open Google Meet in a new tab.</li>
+                    <li>Click <a href="https://meet.google.com/landing?hs=1&source=upcheck_admin&ref=events_edit" target="_blank" rel="noopener noreferrer" className="underline font-medium hover:text-green-400">Create Meet</a> to open Google Meet in a new tab.</li>
                     <li>Sign in and create a new meeting.</li>
                     <li>Copy the meeting link and paste it above.</li>
                   </ol>
@@ -376,17 +436,17 @@ const EditEventPage = () => {
           </div>
 
           {/* Participants */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
             <div className="flex items-center mb-6">
-              <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                <Users className="w-5 h-5 text-indigo-600" />
+              <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                <Users className="w-5 h-5 text-blue-500" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900">Participants</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Participants</h2>
             </div>
             <div className="space-y-4">
               {/* Select Teams */}
               <div>
-                <label htmlFor="teams" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                <label htmlFor="teams" className="block text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
                   Add Members from Groups/Teams
                 </label>
                 <Select
@@ -399,53 +459,53 @@ const EditEventPage = () => {
                   placeholder="Select teams..."
                   closeMenuOnSelect={false}
                   menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-                  styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
+                  styles={customSelectStyles}
                 />
               </div>
 
-              <div className="border-t border-gray-150 my-2 pt-2">
-                <label htmlFor="participants" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              <div className="border-t border-border-default my-2 pt-2">
+                <label htmlFor="participants" className="block text-xs font-semibold text-text-tertiary uppercase tracking-wider mb-2">
                   Individual Participants
                 </label>
               </div>
 
               <CreatableSelect
                 isMulti
-              options={allUsers}
-              value={selectedParticipants}
-              onChange={setSelectedParticipants}
-              placeholder="Search users or add external emails"
-              createOptionPosition="first"
-              menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
-              styles={{ menuPortal: (base) => ({ ...base, zIndex: 9999 }) }}
-              formatCreateLabel={(inputValue) => `Add external: ${inputValue}`}
-              isValidNewOption={(inputValue, selectValue, selectOptions) => {
-                const email = inputValue.trim();
-                const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                const notDuplicate = ![...selectOptions, ...selectValue].some(o => o.value.toLowerCase() === email.toLowerCase());
-                return emailRe.test(email) && notDuplicate;
-              }}
-              onCreateOption={(inputValue) => {
-                const email = inputValue.trim();
-                const option = { value: email, label: email };
-                setSelectedParticipants(prev => [...prev, option]);
-              }}
-            />
-            <p className="text-xs text-gray-500 mt-2">Type an email and press Enter to add as an external participant.</p>
+                options={allUsers}
+                value={selectedParticipants}
+                onChange={setSelectedParticipants}
+                placeholder="Search users or add external emails"
+                createOptionPosition="first"
+                menuPortalTarget={typeof window !== 'undefined' ? document.body : null}
+                styles={customSelectStyles}
+                formatCreateLabel={(inputValue) => `Add external: ${inputValue}`}
+                isValidNewOption={(inputValue, selectValue, selectOptions) => {
+                  const email = inputValue.trim();
+                  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  const notDuplicate = ![...selectOptions, ...selectValue].some(o => o.value.toLowerCase() === email.toLowerCase());
+                  return emailRe.test(email) && notDuplicate;
+                }}
+                onCreateOption={(inputValue) => {
+                  const email = inputValue.trim();
+                  const option = { value: email, label: email };
+                  setSelectedParticipants(prev => [...prev, option]);
+                }}
+              />
+              <p className="text-xs text-text-tertiary mt-2">Type an email and press Enter to add as an external participant.</p>
             </div>
           </div>
 
           {/* Schedule */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
             <div className="flex items-center mb-6">
-              <div className="p-2 bg-indigo-100 rounded-lg mr-3">
-                <Calendar className="w-5 h-5 text-indigo-600" />
+              <div className="p-2 bg-blue-500/10 rounded-lg mr-3">
+                <Calendar className="w-5 h-5 text-blue-500" />
               </div>
-              <h2 className="text-lg font-semibold text-gray-900">Schedule</h2>
+              <h2 className="text-lg font-semibold text-text-primary">Schedule</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label htmlFor="startTime" className="block text-sm font-semibold text-gray-700 mb-1">
+                <label htmlFor="startTime" className="block text-sm font-semibold text-text-secondary mb-1">
                   Start Time <span className="text-red-500">*</span>
                 </label>
                 <DatePicker
@@ -453,12 +513,12 @@ const EditEventPage = () => {
                   onChange={(date) => setFormData(p => ({ ...p, startTime: date }))}
                   showTimeSelect
                   dateFormat="MMMM d, yyyy h:mm aa"
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-border-default rounded-lg shadow-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors"
                   required
                 />
               </div>
               <div>
-                <label htmlFor="duration" className="block text-sm font-semibold text-gray-700 mb-1">
+                <label htmlFor="duration" className="block text-sm font-semibold text-text-secondary mb-1">
                   Duration (minutes) <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -470,9 +530,9 @@ const EditEventPage = () => {
                   min="1"
                   max="300"
                   required
-                  className="block w-full px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+                  className="block w-full px-4 py-3 border border-border-default rounded-lg shadow-sm bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500/25 transition-colors"
                 />
-                <p className="mt-1 text-xs text-gray-500 flex items-center">
+                <p className="mt-1 text-xs text-text-tertiary flex items-center">
                   <Clock className="w-3 h-3 mr-1" /> Max 300 minutes (5 hours)
                 </p>
               </div>
@@ -480,19 +540,19 @@ const EditEventPage = () => {
           </div>
 
           {/* Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="bg-surface rounded-xl shadow-sm border border-border-default p-6">
             <div className="flex flex-col sm:flex-row justify-end gap-3">
               <button
                 type="button"
                 onClick={() => router.push(`/events/${id}`)}
-                className="px-6 py-3 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors"
+                className="px-6 py-3 border border-border-default rounded-lg text-sm font-medium text-text-secondary bg-surface hover:bg-surface-variant focus:outline-none transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-6 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                className="px-6 py-3 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
               >
                 {submitting ? (
                   <>

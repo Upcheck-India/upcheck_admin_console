@@ -248,15 +248,15 @@ const EventDetailPage = () => {
   };
 
   if (loading || authLoading) {
-    return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p>Loading event details...</p></div>;
+    return <div className="flex justify-center items-center min-h-screen bg-background text-text-secondary"><p>Loading event details...</p></div>;
   }
 
   if (error) {
-    return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p className="text-red-500">Error: {error}</p></div>;
+    return <div className="flex justify-center items-center min-h-screen bg-background text-red-500"><p>Error: {error}</p></div>;
   }
 
   if (!event) {
-    return <div className="flex justify-center items-center min-h-screen bg-gray-50"><p>Event not found.</p></div>;
+    return <div className="flex justify-center items-center min-h-screen bg-background text-text-secondary"><p>Event not found.</p></div>;
   }
 
   const eventDate = new Date(event.startTime);
@@ -271,9 +271,9 @@ const EventDetailPage = () => {
   const ackCount = tracking.filter(t => t.ackAt).length;
 
   return (
-    <div className="bg-gray-50 min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="bg-background min-h-screen p-4 sm:p-6 lg:p-8 text-text-primary">
       <div className="max-w-4xl mx-auto">
-        <button onClick={() => router.push('/events')} className="inline-flex items-center mb-6 text-sm font-medium text-gray-600 hover:text-gray-900">
+        <button onClick={() => router.push('/events')} className="inline-flex items-center mb-6 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Dashboard
         </button>
