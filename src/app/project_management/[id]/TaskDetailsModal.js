@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { X } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import { X, Loader2 } from 'lucide-react';
 
 const UserAvatar = ({ user }) => (
   <div
@@ -12,7 +13,10 @@ const UserAvatar = ({ user }) => (
   </div>
 );
 
-const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [] }) => {
+const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [], onUpdateTask }) => {
+  const { id: projectId } = useParams();
+  const [togglingId, setTogglingId] = useState(null);
+
   const sprintName = useMemo(() => {
     if (!task?.sprintId) return 'Product Board';
     const sprint = sprints.find((s) => s._id === task.sprintId);
@@ -21,6 +25,40 @@ const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [] }) 
 
   const assigneeUsers = useMemo(() => task?.assignees?.map((id) => userMap.get(id)).filter(Boolean) || [], [task, userMap]);
   const reporterUser = useMemo(() => (task?.reporter ? userMap.get(task.reporter) : null), [task, userMap]);
+
+  const handleToggleSubtask = async (subtaskId) => {
+    if (!task?.subtasks) return;
+    setTogglingId(subtaskId);
+    const updatedSubtasks = task.subtasks.map(st => 
+      (st.id === subtaskId || st._id === subtaskId) ? { ...st, isCompleted: !st.isCompleted } : st
+    );
+
+    try {
+      const response = await fetch(`/api/projects/${projectId}/tasks/${task._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...task,
+          subtasks: updatedSubtasks
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update subtask');
+      }
+
+      const updatedTask = await response.json();
+      if (onUpdateTask) {
+        onUpdateTask(updatedTask);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update subtask. Please try again.');
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   return (
     <div
@@ -91,6 +129,55 @@ const TaskDetailsModal = ({ task, onClose, userMap = new Map(), sprints = [] }) 
               <div className="flex items-center space-x-2">
                 <UserAvatar user={reporterUser} />
                 <span className="text-sm text-text-primary">{reporterUser.username}</span>
+              </div>
+            </div>
+          )}
+
+          {task.subtasks && task.subtasks.length > 0 && (
+            <div className="pt-4 border-t border-border-default space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-text-secondary">Subtasks</h4>
+                <div className="flex items-center space-x-2 text-xs text-text-tertiary font-medium">
+                  <span>{task.subtasks.filter(st => st.isCompleted).length} completed</span>
+                  <span>•</span>
+                  <span>{task.subtasks.filter(st => !st.isCompleted).length} to be completed</span>
+                </div>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="h-1.5 w-full bg-surface-variant rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                  style={{ width: `${(task.subtasks.filter(st => st.isCompleted).length / task.subtasks.length) * 100}%` }}
+                />
+              </div>
+
+              <div className="pl-3 border-l-2 border-border-default space-y-2.5 mt-2">
+                {task.subtasks.map((st) => {
+                  const sId = st.id || st._id;
+                  const isToggling = togglingId === sId;
+                  return (
+                    <div key={sId} className="flex items-start space-x-3 py-0.5 group">
+                      <div className="relative flex items-center justify-center mt-0.5">
+                        <input
+                          type="checkbox"
+                          checked={!!st.isCompleted}
+                          disabled={isToggling}
+                          onChange={() => handleToggleSubtask(sId)}
+                          className="h-4 w-4 rounded border-border-default text-blue-600 focus:ring-blue-500 bg-surface/50 cursor-pointer disabled:opacity-50"
+                        />
+                        {isToggling && (
+                          <div className="absolute inset-0 bg-surface/80 flex items-center justify-center rounded">
+                            <Loader2 className="h-3 w-3 animate-spin text-blue-500" />
+                          </div>
+                        )}
+                      </div>
+                      <span className={`text-sm leading-relaxed text-text-primary ${st.isCompleted ? 'line-through text-text-tertiary' : ''}`}>
+                        {st.title}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -1229,7 +1229,16 @@ const TasksTab = ({ projectId, project, allUsers = [], allTeams = [] }) => {
       </DndContext>
 
       {detailsTask && (
-        <TaskDetailsModal task={detailsTask} onClose={handleCloseDetails} userMap={userMap} sprints={sprints} />
+        <TaskDetailsModal
+          task={detailsTask}
+          onClose={handleCloseDetails}
+          userMap={userMap}
+          sprints={sprints}
+          onUpdateTask={(updatedTask) => {
+            setTasks(prevTasks => prevTasks.map(t => t._id === updatedTask._id ? updatedTask : t));
+            setDetailsTask(updatedTask);
+          }}
+        />
       )}
 
       {isSprintModalOpen && (
