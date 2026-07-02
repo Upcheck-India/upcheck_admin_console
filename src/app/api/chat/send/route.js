@@ -76,14 +76,20 @@ export async function POST(request) {
     const now = new Date();
     const messageId = new ObjectId();
 
-    const messageType = body?.trim() ? 'text' : 'image';
+    const trimmedBody = body?.trim() || '';
+    const messageType = mediaUrl ? 'image' : 'text';
+    // Media messages with no caption used to persist body: '' which rendered
+    // as a totally blank bubble on the client. Always give media a readable
+    // fallback body so there's something to show even if the media fails to
+    // load or the client's type-based branching misses.
+    const persistedBody = trimmedBody || (mediaUrl ? '📷 Photo' : '');
 
     const message = {
       _id: messageId,
       conversationId,
       senderId: currentUser._id.toString(),
       recipientId,
-      body: body?.trim() || '',
+      body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
       status: 'sent',
@@ -127,7 +133,7 @@ export async function POST(request) {
         triggerBotAgent({
           chatType: 'dm',
           chatId: conversationId,
-          body: body?.trim() || '',
+          body: trimmedBody,
           currentUser,
           db
         }).catch(e => console.error('Bot Agent execution error:', e));
@@ -137,8 +143,8 @@ export async function POST(request) {
       await sendPushNotification(
         recipientId,
         `New message from ${currentUser.username || 'Someone'}`,
-        body?.trim() || '📷 Image',
-        { type: 'chat_message', conversationId }
+        persistedBody,
+        { type: 'chat_message', conversationId, messageId: messageId.toString() }
       );
     }
 

@@ -181,7 +181,12 @@ export async function POST(req, { params }) {
       }
     }
 
-    const messageType = body?.trim() ? 'text' : 'image';
+    const trimmedBody = body?.trim() || '';
+    const messageType = mediaUrl ? 'image' : 'text';
+    // Always give media-only messages a readable fallback body instead of ''
+    // so the chat bubble isn't left completely blank if the image fails to
+    // render on the client.
+    const persistedBody = trimmedBody || (mediaUrl ? '📷 Photo' : '');
 
     // Look up parent message to store reply snippet
     let replyToBody = null;
@@ -207,7 +212,7 @@ export async function POST(req, { params }) {
     const newMessage = {
       groupId,
       senderId: userId,
-      body: body?.trim() || '',
+      body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
       createdAt: new Date(),
@@ -236,10 +241,10 @@ export async function POST(req, { params }) {
     await db.collection('group_chats').updateOne(
       { _id: new ObjectId(groupId) },
       { 
-        $set: { 
-          lastMessagePreview: body?.trim() || '📷 Image',
+        $set: {
+          lastMessagePreview: persistedBody,
           updatedAt: new Date()
-        } 
+        }
       }
     );
 
@@ -322,8 +327,8 @@ export async function POST(req, { params }) {
           sendPushNotification(
             recipientId,
             title,
-            body?.trim() || '📷 Image',
-            { type: 'group_message', groupId, groupName: group.name }
+            persistedBody,
+            { type: 'group_message', groupId, groupName: group.name, messageId: result.insertedId.toString() }
           ).catch(err => console.error('[GroupChat Push Error]', err));
         }
       }

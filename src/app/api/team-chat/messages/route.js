@@ -182,7 +182,12 @@ export async function POST(request) {
       ? `${currentUser.firstName} ${currentUser.lastName}`.trim()
       : currentUser.username;
 
-    const messageType = body?.trim() ? 'text' : 'image';
+    const trimmedBody = body?.trim() || '';
+    const messageType = mediaUrl ? 'image' : 'text';
+    // Always give media-only messages a readable fallback body instead of ''
+    // so the chat bubble isn't left completely blank if the image fails to
+    // render on the client.
+    const persistedBody = trimmedBody || (mediaUrl ? '📷 Photo' : '');
 
     const now = new Date();
     const msgDoc = {
@@ -190,7 +195,7 @@ export async function POST(request) {
       senderId: currentUser._id.toString(),
       senderName,
       senderUsername: currentUser.username,
-      body: body?.trim() || '',
+      body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
       replyTo: replyToId && ObjectId.isValid(replyToId) ? new ObjectId(replyToId) : null,
@@ -222,7 +227,7 @@ export async function POST(request) {
     // Update team's lastMessageAt for unread counting
     await db.collection('teams').updateOne(
       { _id: new ObjectId(teamId) },
-      { $set: { lastMessageAt: now, lastMessagePreview: body?.trim()?.substring(0, 80) || '📷 Image' } }
+      { $set: { lastMessageAt: now, lastMessagePreview: persistedBody.substring(0, 80) } }
     );
 
     // Send push notifications to all team members except sender
@@ -284,8 +289,8 @@ export async function POST(request) {
       sendPushNotification(
         recipientId,
         title,
-        body?.trim() || '📷 Image',
-        { type: 'team_message', teamId, teamName: team.name }
+        persistedBody,
+        { type: 'team_message', teamId, teamName: team.name, messageId: result.insertedId.toString() }
       ).catch(err => console.error('[TeamChat Push Error]', err));
     }
 

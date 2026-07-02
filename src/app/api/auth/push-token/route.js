@@ -33,9 +33,15 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Support multiple concurrently logged-in devices: keep a de-duplicated
+    // array of tokens instead of overwriting a single scalar field (which
+    // used to silently drop the token of any other logged-in device).
     await db.collection('admin_users').updateOne(
       { _id: currentUser._id },
-      { $set: { expoPushToken: pushToken, updatedAt: new Date() } }
+      {
+        $set: { expoPushToken: pushToken, updatedAt: new Date() },
+        $addToSet: { expoPushTokens: pushToken },
+      }
     );
 
     return NextResponse.json({ success: true, message: 'Push token registered successfully' });
