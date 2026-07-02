@@ -6,6 +6,8 @@ import {
   FolderArchive, Upload, Download, Trash2, Loader2, FileText, Eye, X, ArrowLeft
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
+
 import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_LABELS, MAX_DOCUMENT_BYTES } from '../../../lib/hr/employee';
 
 const fmtSize = (b) => {
@@ -115,17 +117,18 @@ export default function DocumentsPage() {
     if (res.ok) setDocuments((d) => d.filter((x) => x._id !== doc._id));
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <Link
-          href="/console"
-          className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-          Back to Console
-        </Link>
-        <HRNav />
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
+        <div className="max-w-6xl mx-auto">
+          <Link
+            href="/console"
+            className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+            Back to Console
+          </Link>
+          <HRNav />
 
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
           <div className="flex items-center gap-3">
@@ -245,6 +248,8 @@ export default function DocumentsPage() {
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }

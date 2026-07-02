@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileText, Database, ArrowRight, Shield, Users, BarChart3, Loader2 } from 'lucide-react';
+import TopNav from '../components/TopNav';
 
 export default function DMSHomePage() {
   const router = useRouter();
@@ -99,30 +100,7 @@ export default function DMSHomePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                <Database className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">Document Management System</h1>
-                <p className="text-sm text-slate-500 mt-1">Centralized hub for all your document needs</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <button className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-                Settings
-              </button>
-              <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                Quick Access
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <TopNav />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Grid */}

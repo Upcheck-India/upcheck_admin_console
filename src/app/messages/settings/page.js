@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../hooks/useAuth';
+import TopNav from '../../components/TopNav';
+
 import {
   ArrowLeft, Trash2, Shield, Copy, CheckCircle, RefreshCw, AlertCircle
 } from 'lucide-react';
@@ -202,6 +204,7 @@ const MessagesSettings = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans overflow-x-hidden pb-12">
+      <TopNav />
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="bg-white border-b border-slate-200/80 px-6 py-5 shadow-sm sticky top-0 z-20">
@@ -519,6 +522,7 @@ const MessagesSettings = () => {
             </ul>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -3,12 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  Users, 
-  LayoutDashboard, 
-  FileText, 
-  Settings, 
-  Bell, 
+import {
+  Users,
+  LayoutDashboard,
+  FileText,
+  Settings,
+  Bell,
   BookOpen,
   Building2,
   ClipboardList,
@@ -221,7 +221,7 @@ const AdminLandingPage = () => {
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/api/auth/logout', { 
+      const res = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'include'
       });
@@ -265,15 +265,17 @@ const AdminLandingPage = () => {
         <nav className="bg-surface border-b border-border-default shadow-sm">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
-              <div className="flex items-center">
-                <div className="bg-gradient-to-r from-teal-500 to-blue-500 p-2 rounded-lg">
-                  <LayoutDashboard className="h-6 w-6 text-white" />
-                </div>
-                <span className="ml-2 text-xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent">
-                  Upcheck Console
-                </span>
-              </div>
-              
+              <Link href="/console" className="flex items-center hover:opacity-80 transition-opacity">
+                <Image
+                  src="/uploads/Upcheck Banner (480 x 144 px).png"
+                  alt="Upcheck Logo"
+                  width={480}
+                  height={144}
+                  className="w-48 sm:w-56 h-auto object-contain"
+                  priority
+                />
+              </Link>
+
               {/* Mail and Profile */}
               <div className="flex items-center space-x-4">
                 {/* Online Users Button */}
@@ -284,22 +286,22 @@ const AdminLandingPage = () => {
                     <div className="px-2 text-xs text-gray-500 hover:text-gray-700">No online</div>
                   ) : (
                     <>
-                      {onlineUsers.slice(0,2).map((u,i)=>(
-                        <div key={u._id} style={{zIndex:10-i}}>
+                      {onlineUsers.slice(0, 2).map((u, i) => (
+                        <div key={u._id} style={{ zIndex: 10 - i }}>
                           <AvatarWithStatus username={u.username} online className="h-6 w-6 text-xs ring-2 ring-white" />
                         </div>
-                        
+
                       ))}
-                      {onlineUsers.length>2 && (
-                        <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs border-2 border-white">+{onlineUsers.length-2}</div>
+                      {onlineUsers.length > 2 && (
+                        <div className="h-6 w-6 rounded-full bg-gray-200 flex items-center justify-center text-xs border-2 border-white">+{onlineUsers.length - 2}</div>
                       )}
                     </>
                   )}
                 </button>
 
                 {/* Admin Console Icon */}
-                <Link 
-                  href="/console-admin" 
+                <Link
+                  href="/console-admin"
                   className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
                   title="Console admin"
                 >
@@ -308,8 +310,8 @@ const AdminLandingPage = () => {
                 </Link>
 
                 {/* Mail Icon */}
-                <Link 
-                  href="/mail" 
+                <Link
+                  href="/mail"
                   className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
                   title="Mail"
                 >
@@ -317,15 +319,15 @@ const AdminLandingPage = () => {
                   <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"></span>
                 </Link>
 
-                <Link 
-                  href="/messages" 
+                <Link
+                  href="/messages"
                   className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full relative"
                   title="Chat"
                 >
                   <MessageCircle className="h-5 w-5" />
                   <span className="absolute top-0 right-0 block h-2 w-2 rounded-full bg-green-500 ring-2 ring-white"></span>
                 </Link>
-                
+
                 {/* Profile Dropdown */}
                 <div className="relative">
                   <button
@@ -375,9 +377,9 @@ const AdminLandingPage = () => {
         </nav>
 
         {/* FAB for Jovan Chat */}
-        <Link 
+        <Link
           href="/cms/dashboard/ai-panel/jovan-chat"
-          className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group z-50"
+          className="fixed bottom-6 right-6 p-4 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 group z-50"
         >
           <div className="relative">
             <Bot className="w-6 h-6 text-white" />
@@ -576,9 +578,9 @@ const AdminLandingPage = () => {
               <div className="mt-3">
                 <button
                   onClick={() => setShowJovanModal(true)}
-                  className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 rounded-full group hover:shadow-lg transition-all duration-300"
+                  className="inline-flex items-center px-3 py-1.5 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 rounded-full group hover:shadow-lg transition-all duration-300"
                 >
-                  <Bot className="w-4 h-4 text-white mr-2" />
+                  <Bot className="w-4 h-4 text-white mr-2 group-hover:scale-110 transition-transform duration-300" />
                   <span className="text-sm font-medium text-white">Powered by Jovan AI</span>
                 </button>
               </div>
@@ -594,13 +596,13 @@ const AdminLandingPage = () => {
               <Link href={module.link} key={index}>
                 <div className="group relative bg-white rounded-xl shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden">
                   <div className={`absolute inset-0 bg-gradient-to-br ${module.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
-                  
+
                   <div className="relative p-6 flex items-start space-x-4">
                     {/* Icon Container */}
                     <div className={`flex-shrink-0 rounded-lg bg-gradient-to-br ${module.gradient} p-3 shadow-lg`}>
                       {module.icon}
                     </div>
-                    
+
                     {/* Content */}
                     <div className="flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 group-hover:text-white transition-colors duration-300 flex items-center justify-between">
@@ -626,7 +628,7 @@ const AdminLandingPage = () => {
                         {module.description}
                       </p>
                     </div>
-                    
+
                     {/* Arrow indicator */}
                     <div className="flex-shrink-0 self-center">
                       <div className="w-8 h-8 rounded-full bg-gray-100 group-hover:bg-white/10 flex items-center justify-center transition-colors duration-300">
@@ -652,7 +654,7 @@ const AdminLandingPage = () => {
                 { icon: <Bell className="w-5 h-5" />, label: "Announcements", link: "/console/announcements" },
                 { icon: <HelpCircle className="w-5 h-5" />, label: "Support", link: "/coming-soon" }
               ].map((tool, index) => (
-                <Link 
+                <Link
                   key={index}
                   href={tool.link}
                   className="flex items-center space-x-2 px-4 py-2 rounded-md bg-surface-variant hover:bg-border-default text-text-secondary border border-border-default transition-colors duration-150"
@@ -692,7 +694,7 @@ const AdminLandingPage = () => {
             >
               <X className="w-5 h-5 md:w-6 md:h-6" />
             </button>
-            
+
             <div className="flex flex-col md:flex-row md:items-center mb-4 md:mb-6">
               <div className="relative w-12 h-12 md:w-16 md:h-16 mb-3 md:mb-0 md:mr-4 mx-auto md:mx-0">
                 <Image
@@ -702,30 +704,30 @@ const AdminLandingPage = () => {
                   className="object-contain"
                 />
               </div>
-              <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 bg-clip-text text-transparent text-center md:text-left">
+              <h2 className="text-xl md:text-2xl font-bold bg-gradient-to-r from-teal-600 to-blue-600 bg-clip-text text-transparent text-center md:text-left">
                 Meet Jovan AI
               </h2>
             </div>
-            
+
             <p className="text-gray-600 mb-4 text-sm md:text-base">
               Jovan AI is Upcheck&apos;s upcoming artificial intelligence assistant designed to enhance your workflow and productivity of our organization. Jovan will help us manage content, automate tasks throughout the organization, and provide intelligent insights.
             </p>
-            
-            <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-purple-100">
-              <h3 className="font-medium text-purple-800 flex items-center text-sm md:text-base">
+
+            <div className="bg-gradient-to-r from-teal-50 to-blue-50 rounded-lg p-3 md:p-4 mb-4 border border-teal-100">
+              <h3 className="font-medium text-teal-800 flex items-center text-sm md:text-base">
                 <Settings className="w-4 h-4 mr-2" />
                 Development Status
               </h3>
-              <p className="text-sm text-purple-700 mt-1">
+              <p className="text-sm text-teal-700 mt-1">
                 Jovan AI is currently in active development. Admins can now access the early preview version to explore upcoming features and provide feedback.
               </p>
             </div>
-            
+
             <div className="bg-gray-50 rounded-lg p-3 md:p-4 mb-4">
               <h3 className="font-medium text-gray-900 mb-2 text-sm md:text-base">Coming Features:</h3>
               <ul className="space-y-2">
                 <li className="flex items-center text-xs md:text-sm text-gray-600">
-                  <Sparkles className="w-4 h-4 text-purple-500 mr-2 flex-shrink-0" />
+                  <Sparkles className="w-4 h-4 text-teal-500 mr-2 flex-shrink-0" />
                   Smart CMS
                 </li>
                 <li className="flex items-center text-xs md:text-sm text-gray-600">
@@ -738,7 +740,7 @@ const AdminLandingPage = () => {
                 </li>
               </ul>
             </div>
-            
+
             <p className="text-xs md:text-sm text-gray-500 mb-4">
               We&apos;re working hard to bring Jovan to life. Stay tuned for updates!
             </p>
@@ -749,7 +751,7 @@ const AdminLandingPage = () => {
                   setShowJovanModal(false);
                   router.push('/cms/dashboard/ai-panel');
                 }}
-                className="inline-flex items-center px-3 py-2 md:px-4 md:py-2 bg-gradient-to-r from-blue-600 via-purple-600 to-teal-600 text-white rounded-lg hover:shadow-lg transition-all duration-300 text-sm md:text-base"
+                className="inline-flex items-center px-3 py-2 md:px-4 md:py-2 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-500 hover:to-blue-500 text-white rounded-lg hover:shadow-lg transition-all duration-300 text-sm md:text-base"
               >
                 <Bot className="w-4 h-4 md:w-5 md:h-5 mr-2" />
                 Try Early Access
@@ -766,7 +768,7 @@ const AdminLandingPage = () => {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold">Online Users ({onlineUsers.length})</h2>
               <button onClick={() => setShowOnlineModal(false)} className="text-text-secondary hover:text-text-primary">
-                <X className="h-5 w-5"/>
+                <X className="h-5 w-5" />
               </button>
             </div>
             {onlineUsers.length === 0 ? (

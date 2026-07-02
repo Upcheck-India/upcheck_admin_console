@@ -14,6 +14,7 @@ import HRNav from './_components/HRNav';
 import PeopleDatabaseTab from './components/PeopleDatabaseTab';
 import OffboardingModal from './components/OffboardingModal';
 import { toast } from 'react-hot-toast';
+import TopNav from '../components/TopNav';
 
 // Add this function outside of the component
 const preventFocusLoss = (e) => e.target.select();
@@ -1227,7 +1228,9 @@ const UserManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
       {/* Documentation Settings Modal */}
       <DocumentationSettingsModal
         isOpen={showDocSettings}
@@ -1475,6 +1478,7 @@ const UserManagement = () => {
         person={selectedPersonForOffboard}
         currentUser={currentUser}
       />
+      </div>
     </div>
   );
 };

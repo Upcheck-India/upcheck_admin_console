@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
 import LeaveApprovalsBoard from './LeaveApprovalsBoard';
+import TopNav from '../../components/TopNav';
 
 const STATUS_COLORS = {
   pending: 'bg-amber-100 text-amber-800',
@@ -166,16 +167,18 @@ export default function LeavePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        <Link
-          href="/console"
-          className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
-          Back to Console
-        </Link>
-        <HRNav />
+    <div className="min-h-screen bg-gray-50">
+      <TopNav />
+      <div className="p-6">
+        <div className="max-w-7xl mx-auto">
+          <Link
+            href="/console"
+            className="inline-flex items-center mb-6 text-sm font-medium text-gray-500 hover:text-blue-600 transition-colors group"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2 group-hover:-translate-x-1 transition-transform" />
+            Back to Console
+          </Link>
+          <HRNav />
         <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div className="flex items-center">
             <Plane className="h-8 w-8 text-blue-600 mr-3" />
@@ -328,6 +331,7 @@ export default function LeavePage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
@@ -479,6 +483,7 @@ function LeaveTypesManager({ leaveTypes, onChange }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

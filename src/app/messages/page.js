@@ -251,9 +251,11 @@ const MessagesHome = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      {/* Left Sidebar - Conversations List */}
-      <div className="w-full md:w-96 border-r border-slate-200/80 bg-white flex flex-col shadow-sm z-10">
+    <div className="flex flex-col h-screen bg-slate-50 overflow-hidden font-sans">
+      <TopNav />
+      <div className="flex flex-1 min-h-0">
+        {/* Left Sidebar - Conversations List */}
+        <div className="w-full md:w-96 border-r border-slate-200/80 bg-white flex flex-col shadow-sm z-10">
         {/* Header */}
         <div className="p-5 border-b border-slate-100">
           <div className="flex items-center justify-between mb-4">
@@ -674,6 +676,7 @@ const MessagesHome = () => {
             Select a direct teammate or a team from the sidebar to chat.
           </p>
         </div>
+      </div>
       </div>
     </div>
   );
