@@ -35,7 +35,12 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
-    // Mark messages as read for this user in this conversation
+    // Mark messages as read for this user in this conversation. updatedAt
+    // must be bumped here too — the sender's poll for this conversation
+    // (chat/poll route) only picks up messages with createdAt/updatedAt
+    // past its last-seen cursor, so without this the blue "read" tick
+    // never reaches a sender who is no longer inside the initial poll
+    // window.
     await db.collection('chat_messages').updateMany(
       {
         conversationId,
@@ -43,7 +48,7 @@ export async function GET(request) {
         status: { $ne: 'read' }
       },
       {
-        $set: { status: 'read' }
+        $set: { status: 'read', updatedAt: new Date() }
       }
     );
 

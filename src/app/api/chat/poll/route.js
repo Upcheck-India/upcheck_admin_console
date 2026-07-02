@@ -19,6 +19,7 @@ export async function GET(request) {
       newMessages: [],
       pendingRequests: [],
       connectionUpdates: [],
+      typingUsers: [],
       serverTimestamp
     };
 
@@ -38,7 +39,12 @@ export async function GET(request) {
         return NextResponse.json({ error: 'Conversation not found or access denied' }, { status: 403 });
       }
 
-      // Mark messages as read for this user in this conversation since they have it open
+      // Mark messages as read for this user in this conversation since they
+      // have it open. updatedAt must be bumped so the sender's own poll of
+      // this same conversation (which filters on createdAt/updatedAt > its
+      // last-seen cursor) actually observes the status flip to 'read' and
+      // turns the tick blue, instead of only ever seeing it if the message
+      // is still newer than their poll cursor.
       await db.collection('chat_messages').updateMany(
         {
           conversationId,
@@ -46,7 +52,7 @@ export async function GET(request) {
           status: { $nin: ['read', 'streaming'] }
         },
         {
-          $set: { status: 'read' }
+          $set: { status: 'read', updatedAt: new Date() }
         }
       );
 
@@ -66,6 +72,22 @@ export async function GET(request) {
       updates.newMessages = newMessages.map(m => ({
         ...m,
         _id: m._id.toString()
+      }));
+
+      // Peer's typing status for this conversation (short-lived, like group/team typing).
+      const typingSince = new Date(Date.now() - 5000);
+      const typingDocs = await db.collection('dm_typing')
+        .find({
+          conversationId,
+          userId: { $ne: currentUser._id.toString() },
+          updatedAt: { $gt: typingSince }
+        })
+        .toArray();
+
+      updates.typingUsers = typingDocs.map(d => ({
+        userId: d.userId,
+        username: d.username,
+        name: d.name
       }));
     } else {
       // Poll all conversations

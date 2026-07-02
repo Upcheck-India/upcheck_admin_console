@@ -13,6 +13,16 @@ function channelIdForType(type) {
   return 'default';
 }
 
+// Chat notifications get a "Reply" quick action (client registers a matching
+// notification category with a text-input action under this id) so a
+// message can be answered directly from the tray without opening the app.
+function categoryIdForType(type) {
+  if (type === 'chat_message' || type === 'team_message' || type === 'group_message') {
+    return 'chat_reply';
+  }
+  return undefined;
+}
+
 async function removeStaleToken(db, userId, token) {
   await db.collection('admin_users').updateOne(
     { _id: new ObjectId(userId) },
@@ -51,11 +61,13 @@ export async function sendPushNotification(userId, title, body, data = {}) {
     }
 
     const channelId = channelIdForType(data?.type);
+    const categoryId = categoryIdForType(data?.type);
     const messages = tokens.map((token) => ({
       to: token,
       sound: 'default',
       priority: 'high',
       channelId,
+      ...(categoryId ? { categoryId } : {}),
       title,
       body,
       data,
