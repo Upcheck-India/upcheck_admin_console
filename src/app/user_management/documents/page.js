@@ -6,6 +6,7 @@ import {
   FolderArchive, Upload, Download, Trash2, Loader2, FileText, Eye, X, ArrowLeft
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
 import { DOCUMENT_CATEGORIES, DOCUMENT_CATEGORY_LABELS, MAX_DOCUMENT_BYTES } from '../../../lib/hr/employee';
 
 const fmtSize = (b) => {

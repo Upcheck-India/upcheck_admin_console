@@ -8,6 +8,7 @@ import {
   List, LayoutGrid, ArrowLeft
 } from 'lucide-react';
 import HRNav from '../_components/HRNav';
+import TopNav from '../../components/TopNav';
 import { HOLIDAY_TYPES } from '../../../lib/hr/leave';
 
 const TYPE_META = {
