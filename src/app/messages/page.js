@@ -7,6 +7,7 @@ import {
   MessageCircle, Search, Settings, Plus, X, Check,
   AlertCircle, UserPlus, Copy, CheckCircle, Hash, Users, Loader
 } from 'lucide-react';
+import TopNav from '../components/TopNav';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 
