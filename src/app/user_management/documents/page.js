@@ -117,6 +117,7 @@ export default function DocumentsPage() {
     if (res.ok) setDocuments((d) => d.filter((x) => x._id !== doc._id));
   };
 
+  return (
     <div className="min-h-screen bg-gray-50">
       <TopNav />
       <div className="p-6">

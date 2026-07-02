@@ -523,7 +523,6 @@ const MessagesSettings = () => {
           </div>
         </div>
       </div>
-      </div>
     </div>
   );
 };

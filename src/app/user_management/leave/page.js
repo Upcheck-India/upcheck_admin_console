@@ -483,7 +483,6 @@ function LeaveTypesManager({ leaveTypes, onChange }) {
           </div>
         </div>
       )}
-      </div>
     </div>
   );
 }

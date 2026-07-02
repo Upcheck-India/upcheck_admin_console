@@ -183,6 +183,7 @@ export default function HolidaysPage() {
     { id: 'company', label: 'Company', count: counts.company },
   ];
 
+  return (
     <div className="min-h-screen bg-gray-50">
       <TopNav />
       <div className="p-6">
