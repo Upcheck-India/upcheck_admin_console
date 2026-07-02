@@ -9,6 +9,7 @@ import {
   Archive, Tag, Filter, RefreshCw, Settings, Plus, X, Check, AlertCircle,
   Clock, Paperclip, Flag, Users, Calendar
 } from 'lucide-react';
+import TopNav from '../components/TopNav';
 
 // Constants
 const EMAILS_PER_PAGE = 25;
@@ -777,8 +778,10 @@ const MailPage = () => {
   }, [sending, composeData, fetchEmails]);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      <Sidebar 
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <TopNav />
+      <div className="flex flex-1 min-h-0">
+        <Sidebar 
         activeFolder={activeFolder}
         setActiveFolder={setActiveFolder}
         onCompose={handleCompose}
@@ -1002,6 +1005,7 @@ const MailPage = () => {
         onDelete={() => { if (selectedEmail) { const id = selectedEmail.id; setSelectedEmail(null); performMailAction([id], 'delete'); } }}
         onToggleStar={(checked) => { if (selectedEmail) { const id = selectedEmail.id; performMailAction([id], 'star', checked); } }}
       />
+      </div>
     </div>
   );
 };
