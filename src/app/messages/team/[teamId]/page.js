@@ -17,6 +17,7 @@ import PluginMessage from '../../../components/messages/PluginMessage';
 import { PLUGIN_SENDER_ID } from '../../../utils/pluginSender';
 import { useTaskMentionAutocomplete } from '../../../utils/useTaskMentionAutocomplete';
 import { useSlashCommandAutocomplete } from '../../../utils/useSlashCommandAutocomplete';
+import { useRealtimeChat } from '../../../../hooks/useRealtimeChat';
 import SlashCommandDropdown from '../../../components/messages/SlashCommandDropdown';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../../utils/timeFormat';
@@ -183,6 +184,48 @@ const TeamChatThread = () => {
     }
   }, [teamId, user]);
 
+  const applyIncoming = useCallback((msg, isUpdate) => {
+    if (!msg || !msg._id) return;
+    setMessages(prev => {
+      const idx = prev.findIndex(
+        m => m._id === msg._id || (msg.clientId && m.clientId && m.clientId === msg.clientId)
+      );
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], ...msg };
+        return copy;
+      }
+      if (isUpdate) return prev;
+      const myId = user?._id || user?.id;
+      if (isNearBottomRef.current) {
+        setTimeout(() => scrollToBottom(true), 100);
+      } else if (msg.senderId !== myId) {
+        setUnseenCount(c => c + 1);
+      }
+      return [...prev, msg];
+    });
+  }, [user]);
+
+  const readTriggerRef = useRef(null);
+  const { messagingRealtime, typingRealtime, emitTyping, typingUsers: rtTypingUsers } =
+    useRealtimeChat('team', teamId, {
+      onMessageNew: (m) => {
+        applyIncoming(m, false);
+        const myId = user?._id || user?.id;
+        if (m.senderId && m.senderId !== myId && !readTriggerRef.current) {
+          readTriggerRef.current = setTimeout(() => {
+            readTriggerRef.current = null;
+            poll();
+          }, 400);
+        }
+      },
+      onMessageUpdated: (m) => applyIncoming(m, true),
+    });
+
+  useEffect(() => {
+    if (typingRealtime) setTypingUsers(rtTypingUsers);
+  }, [typingRealtime, rtTypingUsers]);
+
   useEffect(() => {
     if (!teamId) return;
     fetchTeam();
@@ -190,9 +233,10 @@ const TeamChatThread = () => {
   }, [teamId, fetchTeam, fetchMessages]);
 
   useEffect(() => {
+    if (messagingRealtime) return;
     const interval = setInterval(poll, POLL_INTERVAL);
     return () => clearInterval(interval);
-  }, [poll]);
+  }, [poll, messagingRealtime]);
 
   const typingTimeoutRef = useRef(null);
   const handleTyping = (e) => {
@@ -200,12 +244,16 @@ const TeamChatThread = () => {
     taskMention.handleComposerChange(e.target.value, e.target.selectionStart);
     slashCommand.handleComposerChange(e.target.value);
     if (e.target.value.trim().length > 0 && !typingTimeoutRef.current) {
-      fetch('/api/team-chat/typing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ teamId })
-      }).catch(() => {});
+      if (typingRealtime) {
+        emitTyping();
+      } else {
+        fetch('/api/team-chat/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ teamId })
+        }).catch(() => {});
+      }
       typingTimeoutRef.current = setTimeout(() => {
         typingTimeoutRef.current = null;
       }, 2000);

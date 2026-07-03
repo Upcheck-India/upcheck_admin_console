@@ -17,6 +17,7 @@ import PluginMessage from '../../components/messages/PluginMessage';
 import { PLUGIN_SENDER_ID } from '../../utils/pluginSender';
 import { useTaskMentionAutocomplete } from '../../utils/useTaskMentionAutocomplete';
 import { useSlashCommandAutocomplete } from '../../utils/useSlashCommandAutocomplete';
+import { useRealtimeChat } from '../../../hooks/useRealtimeChat';
 import SlashCommandDropdown from '../../components/messages/SlashCommandDropdown';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../utils/timeFormat';
@@ -267,6 +268,52 @@ const ChatThread = () => {
     }
   }, [conversationId, lastPoll, user]);
 
+  // Merge a socket-delivered message into the ascending list, reusing the
+  // poll path's _id/clientId reconcile.
+  const applyIncoming = useCallback((msg, isUpdate) => {
+    if (!msg || !msg._id) return;
+    setMessages(prev => {
+      const idx = prev.findIndex(
+        m => m._id === msg._id || (msg.clientId && m.clientId && m.clientId === msg.clientId)
+      );
+      if (idx >= 0) {
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], ...msg };
+        return copy;
+      }
+      if (isUpdate) return prev;
+      const myId = user?.id || user?._id;
+      if (isNearBottomRef.current) {
+        setTimeout(() => scrollToBottom(true), 100);
+      } else if (msg.senderId !== myId) {
+        setUnseenCount(c => c + 1);
+      }
+      return [...prev, msg];
+    });
+  }, [user]);
+
+  const readTriggerRef = useRef(null);
+  const { messagingRealtime, typingRealtime, emitTyping, typingUsers: rtTypingUsers } =
+    useRealtimeChat('dm', conversationId, {
+      onMessageNew: (m) => {
+        applyIncoming(m, false);
+        const myId = user?.id || user?._id;
+        if (m.senderId && m.senderId !== myId && !readTriggerRef.current) {
+          // Realtime skips the read-marking poll GET; nudge it once so the
+          // peer's read receipt still updates.
+          readTriggerRef.current = setTimeout(() => {
+            readTriggerRef.current = null;
+            poll();
+          }, 400);
+        }
+      },
+      onMessageUpdated: (m) => applyIncoming(m, true),
+    });
+
+  useEffect(() => {
+    if (typingRealtime) setTypingUsers(rtTypingUsers);
+  }, [typingRealtime, rtTypingUsers]);
+
   useEffect(() => {
     if (!conversationId) return;
     fetchMessages();
@@ -274,9 +321,10 @@ const ChatThread = () => {
   }, [conversationId, fetchMessages, fetchConnection]);
 
   useEffect(() => {
+    if (messagingRealtime) return; // realtime delivers; skip polling
     const interval = setInterval(poll, POLL_INTERVAL);
     return () => clearInterval(interval);
-  }, [poll]);
+  }, [poll, messagingRealtime]);
 
   const retryMessage = async (msg) => {
     if (!msg.clientId) return;
@@ -332,12 +380,16 @@ const ChatThread = () => {
   const handleTyping = (e) => {
     setMessageText(e.target.value);
     if (e.target.value.trim().length > 0 && !typingTimeoutRef.current) {
-      fetch('/api/chat/typing', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ conversationId })
-      }).catch(() => {});
+      if (typingRealtime) {
+        emitTyping();
+      } else {
+        fetch('/api/chat/typing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ conversationId })
+        }).catch(() => {});
+      }
       typingTimeoutRef.current = setTimeout(() => {
         typingTimeoutRef.current = null;
       }, 2000);
