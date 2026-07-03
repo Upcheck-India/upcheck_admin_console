@@ -1,16 +1,36 @@
 import clientPromise from './mongodb.js';
 import { ObjectId } from 'mongodb';
 
-// Android notification channel to route this push to. The client creates
-// dedicated channels ('messages' vs 'meetings') so that a burst of meeting
-// notifications can no longer collapse/throttle messaging notifications (and
-// vice versa) the way they did when everything shared the single 'default'
-// channel.
-function channelIdForType(type) {
-  if (!type) return 'default';
+// Falls back to these when a user hasn't picked a custom sound yet —
+// matches the bundled asset filenames (without extension) registered via
+// the expo-notifications config plugin's `sounds` array.
+const DEFAULT_SOUND_KEY = { meetings: 'meeting_notif', messages: 'message_notif' };
+export const SYSTEM_DEFAULT_SOUND_KEY = 'system_default';
+
+// Which notification category a given `data.type` belongs to, for both
+// channel routing and sound selection. Mirrors the client's own type
+// conventions (meeting*, *_message/chat_message).
+function categoryForType(type) {
+  if (!type) return null;
   if (type.startsWith('meeting')) return 'meetings';
   if (type.endsWith('_message') || type === 'chat_message') return 'messages';
-  return 'default';
+  return null;
+}
+
+// Android's notification sound is fixed to a channel at creation time and
+// can't be changed after — so each (category, soundKey) combination a user
+// might pick gets its own deterministic channel id, and the client ensures
+// that channel actually exists locally before this could ever be targeted.
+// iOS instead reads the `sound` field directly from the push payload.
+function resolveNotificationRouting(user, type) {
+  const category = categoryForType(type);
+  if (!category) return { channelId: 'default', sound: 'default' };
+
+  const soundKey = user?.notificationSounds?.[category] || DEFAULT_SOUND_KEY[category];
+  if (soundKey === SYSTEM_DEFAULT_SOUND_KEY) {
+    return { channelId: `${category}-${SYSTEM_DEFAULT_SOUND_KEY}`, sound: 'default' };
+  }
+  return { channelId: `${category}-${soundKey}`, sound: `${soundKey}.mp3` };
 }
 
 // Chat notifications get a "Reply" quick action (client registers a matching
@@ -60,11 +80,11 @@ export async function sendPushNotification(userId, title, body, data = {}) {
       return;
     }
 
-    const channelId = channelIdForType(data?.type);
+    const { channelId, sound } = resolveNotificationRouting(user, data?.type);
     const categoryId = categoryIdForType(data?.type);
     const messages = tokens.map((token) => ({
       to: token,
-      sound: 'default',
+      sound,
       priority: 'high',
       channelId,
       ...(categoryId ? { categoryId } : {}),
@@ -106,14 +126,14 @@ export async function sendPushNotification(userId, title, body, data = {}) {
 /**
  * Helper to send notifications to an entire team (except sender)
  * (Actually, we handled team push logic inside the team-chat POST route,
- * so we can just export this for future use or omit it. Since I already 
+ * so we can just export this for future use or omit it. Since I already
  * implemented the team iteration in the route, I'll just leave this as is
  * but ensure exports are clean.)
  */
 
 /**
  * Sends an Expo push notification to all registered users.
- * 
+ *
  * @param {string} title - The notification title
  * @param {string} body - The notification body text
  * @param {object} data - Optional extra data payload
@@ -135,21 +155,24 @@ export async function sendPushNotificationToAll(title, body, data = {}) {
       return;
     }
 
-    const channelId = channelIdForType(data?.type);
-    const allTokens = users.flatMap(user => Array.from(new Set([
-      ...(Array.isArray(user.expoPushTokens) ? user.expoPushTokens : []),
-      ...(user.expoPushToken ? [user.expoPushToken] : []),
-    ].filter(Boolean))));
-
-    const messages = allTokens.map(token => ({
-      to: token,
-      sound: 'default',
-      priority: 'high',
-      channelId,
-      title,
-      body,
-      data,
-    }));
+    // Each user may have picked a different sound, so routing is computed
+    // per-user (not once globally) before flattening into the token list.
+    const messages = users.flatMap(user => {
+      const tokens = Array.from(new Set([
+        ...(Array.isArray(user.expoPushTokens) ? user.expoPushTokens : []),
+        ...(user.expoPushToken ? [user.expoPushToken] : []),
+      ].filter(Boolean)));
+      const { channelId, sound } = resolveNotificationRouting(user, data?.type);
+      return tokens.map(token => ({
+        to: token,
+        sound,
+        priority: 'high',
+        channelId,
+        title,
+        body,
+        data,
+      }));
+    });
 
     // Expo push notifications endpoint allows batching up to 100 messages per request
     const chunkSize = 100;
