@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import {
@@ -8,12 +8,15 @@ import {
   AlertCircle, UserPlus, Copy, CheckCircle, Hash, Users, Loader
 } from 'lucide-react';
 import TopNav from '../components/TopNav';
+import useOnlineUsers from '../../hooks/useOnlineUsers';
 
 const POLL_INTERVAL = 5000; // 5 seconds
 
 const MessagesHome = () => {
   const { user, isLoading: authLoading } = useAuth(false);
   const router = useRouter();
+  const onlineUsers = useOnlineUsers();
+  const onlineUsernames = useMemo(() => new Set(onlineUsers.map(u => u.username)), [onlineUsers]);
   const [connections, setConnections] = useState([]);
   const [teams, setTeams] = useState([]);
   const [groupChats, setGroupChats] = useState([]);
@@ -416,7 +419,9 @@ const MessagesHome = () => {
                         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-xs">
                           {chat.peer?.username?.[0]?.toUpperCase() || '?'}
                         </div>
-                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                        {chat.peer?.username && onlineUsernames.has(chat.peer.username) && (
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+                        )}
                       </div>
                       
                       <div className="flex-1 min-w-0">

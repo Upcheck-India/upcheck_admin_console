@@ -9,11 +9,13 @@ import MessageActionMenu from '../../components/messages/MessageActionMenu';
 import NewMessagesButton from '../../components/messages/NewMessagesButton';
 import MessageImage from '../../components/messages/MessageImage';
 import ForwardModal from '../../components/messages/ForwardModal';
+import PluginsPanel from '../../components/messages/PluginsPanel';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../utils/timeFormat';
 import { formatTypingText } from '../../utils/typingText';
 import { uploadChatImage, getPastedImageFile } from '../../utils/chatMedia';
 import { sendToTarget } from '../../utils/chatSend';
+import useOnlineUsers from '../../../hooks/useOnlineUsers';
 
 import {
   ArrowLeft, Send, AlertCircle, Loader, Copy, RotateCcw, Check, CheckCheck, Smile,
@@ -29,6 +31,7 @@ const ChatThread = () => {
   const params = useParams();
   const conversationId = params?.conversationId;
   const timeFormat = useTimeFormat();
+  const onlineUsers = useOnlineUsers();
 
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +39,7 @@ const ChatThread = () => {
   const [messageText, setMessageText] = useState('');
   const [error, setError] = useState('');
   const [peer, setPeer] = useState(null);
+  const isPeerOnline = !!peer?.username && onlineUsers.some(u => u.username === peer.username);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [lastPoll, setLastPoll] = useState('');
@@ -546,7 +550,9 @@ const ChatThread = () => {
             <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md text-sm border-2 border-white">
               {peer?.username?.[0]?.toUpperCase() || '?'}
             </div>
-            <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
+            {isPeerOnline && (
+              <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></div>
+            )}
           </div>
 
           <div>
@@ -872,6 +878,7 @@ const ChatThread = () => {
         currentThemeId={theme.id}
         onSelectTheme={handleSelectTheme}
         muteState={{ isMuted, mutedUntil, onSetMute: handleSetMute }}
+        extra={<PluginsPanel chatType="dm" chatId={conversationId} />}
         dangerActions={[{ label: 'Block User', icon: ShieldAlert, onClick: handleBlockUser }]}
       />
 

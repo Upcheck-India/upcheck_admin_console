@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 import { sendPushNotification } from '../../../../lib/pushNotifications';
+import { tryDispatchSlashCommand, postPluginResponse } from '../../../../lib/plugins/dispatch.js';
 
 export async function POST(request) {
   try {
@@ -146,6 +147,18 @@ export async function POST(request) {
         persistedBody,
         { type: 'chat_message', conversationId, messageId: messageId.toString() }
       );
+    }
+
+    // Deterministic slash-command plugins (no AI/LLM) — a no-op unless the
+    // Project Management plugin (or another) is installed in this
+    // conversation and the message matched one of its commands.
+    try {
+      const dispatched = await tryDispatchSlashCommand({ db, chatType: 'dm', chatId: conversationId, body: trimmedBody, currentUser });
+      if (dispatched) {
+        await postPluginResponse({ db, chatType: 'dm', chatId: conversationId, currentUser, responseText: dispatched.responseText });
+      }
+    } catch (e) {
+      console.error('Plugin dispatch error:', e);
     }
 
     return NextResponse.json({

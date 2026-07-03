@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
+import { isGroupAdmin, canManageGroup } from '../../../../lib/groupPermissions';
 
 async function getAuthUser(req) {
   const authHeader = req.headers.get('authorization');
@@ -81,7 +82,9 @@ export async function GET(req, { params }) {
         avatar: u.avatar || '',
         isDirectMember,
         inheritedFromTeams: inheritedTeams,
-        isExcluded
+        isExcluded,
+        isAdmin: isGroupAdmin(group, uId),
+        isCreator: group.createdBy?.toString() === uId
       };
     });
 
@@ -89,9 +92,11 @@ export async function GET(req, { params }) {
       group: {
         ...group,
         _id: group._id.toString(),
-        createdBy: group.createdBy?.toString()
+        createdBy: group.createdBy?.toString(),
+        admins: (group.admins || []).map(a => a.toString())
       },
-      participants
+      participants,
+      currentUserIsAdmin: isGroupAdmin(group, userId)
     });
   } catch (error) {
     console.error('Error fetching group info:', error);
@@ -115,6 +120,13 @@ export async function PUT(req, { params }) {
     const group = await db.collection('group_chats').findOne({ _id: new ObjectId(groupId) });
     if (!group) {
       return NextResponse.json({ error: 'Group chat not found' }, { status: 404 });
+    }
+
+    // Previously unchecked — any authenticated user who knew a groupId
+    // could rename/rewrite membership for any group. Only group admins
+    // (or platform Admin/Console admin) may edit a group now.
+    if (!canManageGroup(group, authUser)) {
+      return NextResponse.json({ error: 'Forbidden: Only group admins can edit this group' }, { status: 403 });
     }
 
     const data = await req.json();
@@ -171,12 +183,10 @@ export async function DELETE(req, { params }) {
       return NextResponse.json({ error: 'Group chat not found' }, { status: 404 });
     }
 
-    // Verify creator or admin permissions
-    const isCreator = group.createdBy?.toString() === authUser._id.toString();
-    const isAdmin = authUser.role === 'Admin' || authUser.role === 'Console admin';
-
-    if (!isCreator && !isAdmin) {
-      return NextResponse.json({ error: 'Forbidden: Only group creator or Admin can delete group' }, { status: 403 });
+    // Any group admin (not just the original creator) may delete the group,
+    // as can a platform Admin/Console admin.
+    if (!canManageGroup(group, authUser)) {
+      return NextResponse.json({ error: 'Forbidden: Only group admins can delete this group' }, { status: 403 });
     }
 
     // Delete group document

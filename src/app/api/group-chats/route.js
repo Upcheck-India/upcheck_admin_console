@@ -181,6 +181,11 @@ export async function POST(req) {
       members,
       teams,
       createdBy: creatorObjId,
+      // The creator is automatically the first group admin. Stored as its
+      // own array (rather than reusing `members`, which is broader — team
+      // members can be inherited members without being admins) so multiple
+      // people can hold admin rights, unlike `teams.lead` which is singular.
+      admins: [creatorObjId],
       createdAt: new Date(),
       updatedAt: new Date(),
       lastMessagePreview: 'Group created'

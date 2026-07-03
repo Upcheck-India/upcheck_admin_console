@@ -9,6 +9,7 @@ import MessageActionMenu from '../../../components/messages/MessageActionMenu';
 import NewMessagesButton from '../../../components/messages/NewMessagesButton';
 import MessageImage from '../../../components/messages/MessageImage';
 import ForwardModal from '../../../components/messages/ForwardModal';
+import PluginsPanel from '../../../components/messages/PluginsPanel';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../../utils/timeFormat';
 import { formatTypingText } from '../../../utils/typingText';
@@ -609,6 +610,7 @@ const TeamChatThread = () => {
         currentThemeId={theme.id}
         onSelectTheme={handleSelectTheme}
         muteState={{ isMuted, mutedUntil, onSetMute: handleSetMute }}
+        extra={<PluginsPanel chatType="team" chatId={teamId} />}
       />
 
       <ForwardModal

@@ -9,6 +9,7 @@ import MessageActionMenu from '../../../components/messages/MessageActionMenu';
 import NewMessagesButton from '../../../components/messages/NewMessagesButton';
 import MessageImage from '../../../components/messages/MessageImage';
 import ForwardModal from '../../../components/messages/ForwardModal';
+import PluginsPanel from '../../../components/messages/PluginsPanel';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../../utils/timeFormat';
 import { formatTypingText } from '../../../utils/typingText';
@@ -16,7 +17,7 @@ import { uploadChatImage, getPastedImageFile } from '../../../utils/chatMedia';
 import { sendToTarget } from '../../../utils/chatSend';
 import {
   ArrowLeft, Send, Loader, Copy, Check, CheckCheck, Users, Trash, AlertCircle,
-  Settings as SettingsIcon, ImageIcon, Reply, Forward, Trash2, X
+  Settings as SettingsIcon, ImageIcon, Reply, Forward, Trash2, X, Shield, ShieldOff
 } from 'lucide-react';
 
 const POLL_INTERVAL = 4000;
@@ -45,6 +46,7 @@ const GroupChatThread = () => {
   const [messages, setMessages] = useState([]);
   const [group, setGroup] = useState(null);
   const [participants, setParticipants] = useState([]);
+  const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -107,6 +109,7 @@ const GroupChatThread = () => {
       const data = await res.json();
       setGroup(data.group);
       setParticipants(data.participants || []);
+      setCurrentUserIsAdmin(!!data.currentUserIsAdmin);
     } catch (e) {
       console.error(e);
       setError('Failed to load group');
@@ -252,6 +255,28 @@ const GroupChatThread = () => {
       });
     } catch (e) {
       alert('Failed to delete message');
+    }
+  };
+
+  const handleToggleAdmin = async (participant) => {
+    const action = participant.isAdmin ? 'demote' : 'promote';
+    if (!confirm(participant.isAdmin
+      ? `Remove admin rights from ${participant.name}?`
+      : `Give ${participant.name} admin rights? They'll be able to manage members and settings for this group.`)) return;
+    try {
+      const res = await fetch(`/api/group-chats/${groupId}/admins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId: participant.id, action }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update admin status');
+      }
+      await fetchGroup();
+    } catch (e) {
+      alert(e.message || 'Failed to update admin status');
     }
   };
 
@@ -605,15 +630,33 @@ const GroupChatThread = () => {
         extra={
           <div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Members ({totalMembers})</h3>
-            <div className="space-y-2 max-h-48 overflow-y-auto">
+            <div className="space-y-2 max-h-56 overflow-y-auto">
               {activeParticipants.map(p => (
                 <div key={p.id} className="flex items-center gap-2.5">
                   <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-[10px] flex-shrink-0">
                     {p.name?.[0]?.toUpperCase()}
                   </div>
-                  <span className="text-xs font-medium text-slate-700 truncate">{p.name}</span>
+                  <span className="text-xs font-medium text-slate-700 truncate flex-1">{p.name}</span>
+                  {p.isAdmin && (
+                    <span className="flex items-center gap-1 text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                      <Shield className="w-2.5 h-2.5" /> Admin
+                    </span>
+                  )}
+                  {currentUserIsAdmin && p.id !== (user?._id || user?.id) && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAdmin(p)}
+                      className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded transition-colors"
+                      title={p.isAdmin ? 'Remove admin' : 'Make admin'}
+                    >
+                      {p.isAdmin ? <ShieldOff className="w-3.5 h-3.5 text-orange-500" /> : <Shield className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
                 </div>
               ))}
+            </div>
+            <div className="mt-6 pt-6 border-t border-slate-100">
+              <PluginsPanel chatType="group" chatId={groupId} />
             </div>
           </div>
         }

@@ -3,6 +3,7 @@ import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 import { sendPushNotification } from '../../../../../lib/pushNotifications';
+import { tryDispatchSlashCommand, postPluginResponse } from '../../../../../lib/plugins/dispatch.js';
 
 async function getAuthUser(req) {
   const authHeader = req.headers.get('authorization');
@@ -358,6 +359,15 @@ export async function POST(req, { params }) {
           db
         }).catch(e => console.error('Group Bot execution error:', e));
       });
+    }
+
+    try {
+      const dispatched = await tryDispatchSlashCommand({ db, chatType: 'group', chatId: groupId, body: trimmedBody, currentUser: user });
+      if (dispatched) {
+        await postPluginResponse({ db, chatType: 'group', chatId: groupId, currentUser: user, responseText: dispatched.responseText });
+      }
+    } catch (e) {
+      console.error('Plugin dispatch error:', e);
     }
 
     return NextResponse.json({

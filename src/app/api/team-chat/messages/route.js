@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { sendPushNotification } from '../../../../lib/pushNotifications';
+import { tryDispatchSlashCommand, postPluginResponse } from '../../../../lib/plugins/dispatch.js';
 
 import { getAuthUser } from '../../../../lib/auth';
 
@@ -304,6 +305,15 @@ export async function POST(request) {
           db
         }).catch(e => console.error('Team Bot execution error:', e));
       });
+    }
+
+    try {
+      const dispatched = await tryDispatchSlashCommand({ db, chatType: 'team', chatId: teamId, body: trimmedBody, currentUser });
+      if (dispatched) {
+        await postPluginResponse({ db, chatType: 'team', chatId: teamId, currentUser, responseText: dispatched.responseText });
+      }
+    } catch (e) {
+      console.error('Plugin dispatch error:', e);
     }
 
     return NextResponse.json({
