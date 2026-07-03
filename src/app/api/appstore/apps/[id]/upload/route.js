@@ -4,6 +4,9 @@ import { GridFSBucket, ObjectId } from 'mongodb';
 import { Readable } from 'stream';
 import { sendPushNotification } from '../../../../../../lib/pushNotifications';
 
+const VERSION_RE = /^\d{1,4}(\.\d{1,4}){1,3}(-[a-zA-Z0-9.]+)?$/;
+const MAX_APK_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
+
 export async function POST(request, { params }) {
   try {
     const { id } = await params;
@@ -32,6 +35,21 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Forbidden: Only admins or the original publisher can upload updates' }, { status: 403 });
     }
 
+    const versions = app.versions || [];
+    const isUpdate = versions.length > 0;
+
+    // Global kill switches: uploads gate the very first version of an app,
+    // updates gate every subsequent version. Admins always retain access.
+    const settings = await db.collection('appstore_settings').findOne({});
+    if (!isAdmin) {
+      if (!isUpdate && settings?.uploadsDisabled) {
+        return NextResponse.json({ error: 'App uploads are currently disabled by an administrator' }, { status: 403 });
+      }
+      if (isUpdate && settings?.updatesDisabled) {
+        return NextResponse.json({ error: 'App updates are currently disabled by an administrator' }, { status: 403 });
+      }
+    }
+
     // 3. Parse upload
     const formData = await request.formData();
     const file = formData.get('file');
@@ -41,12 +59,20 @@ export async function POST(request, { params }) {
     if (!file || typeof file === 'string') {
       return NextResponse.json({ error: 'File is required' }, { status: 400 });
     }
-    if (!version) {
+    if (!version || !version.trim()) {
       return NextResponse.json({ error: 'Version is required' }, { status: 400 });
+    }
+    if (!VERSION_RE.test(version.trim())) {
+      return NextResponse.json({ error: 'Version must look like 1.0 or 1.0.0 (numeric segments, optional -suffix)' }, { status: 400 });
+    }
+    if (file.size > MAX_APK_SIZE_BYTES) {
+      return NextResponse.json({ error: `File is too large. Maximum size is ${MAX_APK_SIZE_BYTES / (1024 * 1024)}MB` }, { status: 400 });
+    }
+    if (changelog && changelog.length > 2000) {
+      return NextResponse.json({ error: 'Release notes must be 2000 characters or fewer' }, { status: 400 });
     }
 
     // Validate version uniqueness
-    const versions = app.versions || [];
     const versionExists = versions.some(v => v.version === version.trim());
     if (versionExists) {
       return NextResponse.json({ error: `Version ${version} already exists` }, { status: 400 });
@@ -56,7 +82,7 @@ export async function POST(request, { params }) {
     const bytes = await file.arrayBuffer();
     const uint8View = new Uint8Array(bytes.slice(0, 4));
     const isZip = uint8View[0] === 0x50 && uint8View[1] === 0x4B && uint8View[2] === 0x03 && uint8View[3] === 0x04;
-    
+
     if (!isZip) {
       return NextResponse.json({ error: 'Invalid file format. Please upload a valid Android APK file.' }, { status: 400 });
     }

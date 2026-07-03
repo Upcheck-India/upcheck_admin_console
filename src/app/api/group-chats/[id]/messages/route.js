@@ -3,7 +3,10 @@ import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 import { sendPushNotification } from '../../../../../lib/pushNotifications';
-import { tryDispatchSlashCommand, postPluginResponse } from '../../../../../lib/plugins/dispatch.js';
+import { tryDispatchSlashCommand, postPluginResponse, PLUGIN_SENDER_ID, PLUGIN_SENDER_NAME } from '../../../../../lib/plugins/dispatch.js';
+
+const BOT_ID = '600000000000000000000001';
+const BOT_NAME = 'Upcheck Admin Bot';
 
 async function getAuthUser(req) {
   const authHeader = req.headers.get('authorization');
@@ -95,10 +98,18 @@ export async function GET(req, { params }) {
 
     const serialized = messages.map(m => {
       const sender = userMap[m.senderId];
+      let senderName;
+      if (m.senderId === PLUGIN_SENDER_ID) {
+        senderName = PLUGIN_SENDER_NAME;
+      } else if (m.senderId === BOT_ID) {
+        senderName = BOT_NAME;
+      } else {
+        senderName = sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown';
+      }
       return {
         ...m,
         _id: m._id.toString(),
-        senderName: sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown',
+        senderName,
         replyToId: m.replyToId ? m.replyToId.toString() : null,
         replyToBody: m.replyToBody || null,
         replyToName: m.replyToName || null,

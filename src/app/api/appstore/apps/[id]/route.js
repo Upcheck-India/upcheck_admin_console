@@ -26,18 +26,27 @@ export async function GET(request, { params }) {
     // Verify view rights
     if (!isAdmin && app.distributorId !== user._id.toString()) {
       const access = app.accessSettings;
-      if (access && !access.availableToAll) {
+      if (access) {
         const userTeams = await db.collection('teams').find({
           members: user._id.toString()
         }).toArray();
         const teamIds = userTeams.map(t => t._id.toString());
 
-        const roleMatch = (access.allowedRoles || []).includes(userRole);
-        const userMatch = (access.allowedUsers || []).includes(user._id.toString());
-        const teamMatch = (access.allowedTeams || []).some(tId => teamIds.includes(tId.toString()));
-
-        if (!roleMatch && !userMatch && !teamMatch) {
+        const isExcluded = (access.excludedRoles || []).includes(userRole)
+          || (access.excludedUsers || []).includes(user._id.toString())
+          || (access.excludedTeams || []).some(tId => teamIds.includes(tId.toString()));
+        if (isExcluded) {
           return NextResponse.json({ error: 'Forbidden: You do not have access to view this app' }, { status: 403 });
+        }
+
+        if (!access.availableToAll) {
+          const roleMatch = (access.allowedRoles || []).includes(userRole);
+          const userMatch = (access.allowedUsers || []).includes(user._id.toString());
+          const teamMatch = (access.allowedTeams || []).some(tId => teamIds.includes(tId.toString()));
+
+          if (!roleMatch && !userMatch && !teamMatch) {
+            return NextResponse.json({ error: 'Forbidden: You do not have access to view this app' }, { status: 403 });
+          }
         }
       }
     }
@@ -46,12 +55,18 @@ export async function GET(request, { params }) {
     let canDownload = true;
     if (!isAdmin && app.distributorId !== user._id.toString()) {
       const downloadPerms = app.accessSettings?.downloadPermissions;
-      if (downloadPerms?.restricted) {
-        const userTeams = await db.collection('teams').find({
-          members: user._id.toString()
-        }).toArray();
-        const teamIds = userTeams.map(t => t._id.toString());
+      const userTeams = await db.collection('teams').find({
+        members: user._id.toString()
+      }).toArray();
+      const teamIds = userTeams.map(t => t._id.toString());
 
+      const isDownloadExcluded = (downloadPerms?.excludedRoles || []).includes(userRole)
+        || (downloadPerms?.excludedUsers || []).includes(user._id.toString())
+        || (downloadPerms?.excludedTeams || []).some(tId => teamIds.includes(tId.toString()));
+
+      if (isDownloadExcluded) {
+        canDownload = false;
+      } else if (downloadPerms?.restricted) {
         const roleMatch = (downloadPerms.allowedRoles || []).includes(userRole);
         const userMatch = (downloadPerms.allowedUsers || []).includes(user._id.toString());
         const teamMatch = (downloadPerms.allowedTeams || []).some(tId => teamIds.includes(tId.toString()));
@@ -119,20 +134,30 @@ export async function PUT(request, { params }) {
       status
     } = body;
 
+    if (name !== undefined && !name.trim()) {
+      return NextResponse.json({ error: 'Name cannot be empty' }, { status: 400 });
+    }
+    if (description !== undefined && !description.trim()) {
+      return NextResponse.json({ error: 'Description cannot be empty' }, { status: 400 });
+    }
+    if (category !== undefined && !category.trim()) {
+      return NextResponse.json({ error: 'Category cannot be empty' }, { status: 400 });
+    }
+
     const updateDoc = {};
     if (status !== undefined) {
       if (['active', 'decommissioned', 'hidden'].includes(status)) {
         updateDoc.status = status;
       }
     }
-    if (name) updateDoc.name = name.trim();
-    if (projectId !== undefined) updateDoc.projectId = projectId ? projectId.toString() : null;
-    if (author) updateDoc.author = author.trim();
-    if (description) updateDoc.description = description.trim();
+    if (name) updateDoc.name = name.trim().slice(0, 100);
+    if (projectId !== undefined) updateDoc.projectId = (projectId && ObjectId.isValid(projectId)) ? projectId.toString() : null;
+    if (author) updateDoc.author = author.trim().slice(0, 100);
+    if (description) updateDoc.description = description.trim().slice(0, 2000);
     if (icon) updateDoc.icon = icon;
-    if (category) updateDoc.category = category.trim();
-    if (tags) updateDoc.tags = Array.isArray(tags) ? tags.map(t => t.trim().toLowerCase()) : [];
-    if (teamId !== undefined) updateDoc.teamId = teamId ? teamId.toString() : null;
+    if (category) updateDoc.category = category.trim().slice(0, 50);
+    if (tags) updateDoc.tags = Array.isArray(tags) ? tags.map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 10) : [];
+    if (teamId !== undefined) updateDoc.teamId = (teamId && ObjectId.isValid(teamId)) ? teamId.toString() : null;
 
     if (accessSettings) {
       updateDoc.accessSettings = {
@@ -140,11 +165,17 @@ export async function PUT(request, { params }) {
         allowedRoles: accessSettings.allowedRoles || [],
         allowedTeams: (accessSettings.allowedTeams || []).map(id => id.toString()),
         allowedUsers: (accessSettings.allowedUsers || []).map(id => id.toString()),
+        excludedRoles: accessSettings.excludedRoles || [],
+        excludedTeams: (accessSettings.excludedTeams || []).map(id => id.toString()),
+        excludedUsers: (accessSettings.excludedUsers || []).map(id => id.toString()),
         downloadPermissions: {
           restricted: !!accessSettings.downloadPermissions?.restricted,
           allowedRoles: accessSettings.downloadPermissions?.allowedRoles || [],
           allowedTeams: (accessSettings.downloadPermissions?.allowedTeams || []).map(id => id.toString()),
-          allowedUsers: (accessSettings.downloadPermissions?.allowedUsers || []).map(id => id.toString())
+          allowedUsers: (accessSettings.downloadPermissions?.allowedUsers || []).map(id => id.toString()),
+          excludedRoles: accessSettings.downloadPermissions?.excludedRoles || [],
+          excludedTeams: (accessSettings.downloadPermissions?.excludedTeams || []).map(id => id.toString()),
+          excludedUsers: (accessSettings.downloadPermissions?.excludedUsers || []).map(id => id.toString())
         }
       };
     }

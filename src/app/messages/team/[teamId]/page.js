@@ -13,7 +13,11 @@ import PluginsPanel from '../../../components/messages/PluginsPanel';
 import MessageBody from '../../../components/messages/MessageBody';
 import TaskMentionDropdown from '../../../components/messages/TaskMentionDropdown';
 import TaskInfoModal from '../../../components/messages/TaskInfoModal';
+import PluginMessage from '../../../components/messages/PluginMessage';
+import { PLUGIN_SENDER_ID } from '../../../utils/pluginSender';
 import { useTaskMentionAutocomplete } from '../../../utils/useTaskMentionAutocomplete';
+import { useSlashCommandAutocomplete } from '../../../utils/useSlashCommandAutocomplete';
+import SlashCommandDropdown from '../../../components/messages/SlashCommandDropdown';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../../utils/timeFormat';
 import { formatTypingText } from '../../../utils/typingText';
@@ -60,6 +64,7 @@ const TeamChatThread = () => {
   const [forwardMessage, setForwardMessage] = useState(null);
   const [viewingTaskId, setViewingTaskId] = useState(null);
   const taskMention = useTaskMentionAutocomplete({ chatType: 'team', chatId: teamId });
+  const slashCommand = useSlashCommandAutocomplete({ chatType: 'team', chatId: teamId });
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -193,6 +198,7 @@ const TeamChatThread = () => {
   const handleTyping = (e) => {
     setMessageText(e.target.value);
     taskMention.handleComposerChange(e.target.value, e.target.selectionStart);
+    slashCommand.handleComposerChange(e.target.value);
     if (e.target.value.trim().length > 0 && !typingTimeoutRef.current) {
       fetch('/api/team-chat/typing', {
         method: 'POST',
@@ -299,7 +305,7 @@ const TeamChatThread = () => {
   const handleSend = () => sendMessage({ body: messageText });
 
   const handleKeyDown = (e) => {
-    if (taskMention.query !== null) return;
+    if (taskMention.query !== null || slashCommand.query !== null) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -427,6 +433,18 @@ const TeamChatThread = () => {
         <div ref={messagesContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto px-4 py-6">
           <div className="max-w-3xl mx-auto space-y-4">
             {messages.map((msg) => {
+              if (msg.senderId === PLUGIN_SENDER_ID) {
+                return (
+                  <PluginMessage
+                    key={msg._id}
+                    text={msg.body}
+                    createdAt={msg.createdAt}
+                    timeFormat={timeFormat}
+                    onTaskClick={setViewingTaskId}
+                  />
+                );
+              }
+
               const isMe = msg.senderId === (user?._id || user?.id);
               const isDeleted = msg.body === '[Message deleted]';
               const readByOthersCount = (msg.readBy || []).filter(r => r.userId !== msg.senderId).length;
@@ -569,6 +587,13 @@ const TeamChatThread = () => {
                 loading={taskMention.loading}
                 tasks={taskMention.results}
                 onSelect={(task) => setMessageText(prev => taskMention.selectTask(task, prev))}
+              />
+            )}
+            {slashCommand.query !== null && (
+              <SlashCommandDropdown
+                loading={slashCommand.loading}
+                commands={slashCommand.results}
+                onSelect={(cmd) => { setMessageText(`/${cmd.name} `); slashCommand.close(); }}
               />
             )}
             <textarea

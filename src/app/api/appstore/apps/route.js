@@ -5,10 +5,26 @@ import { ObjectId } from 'mongodb';
 // Check if user has permission to distribute apps
 async function canUserDistribute(user, db) {
   const userRole = (user.role || 'member').toLowerCase();
-  if (userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin') return true;
+  const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
 
   const settings = await db.collection('appstore_settings').findOne({});
-  if (!settings) return false; // Default to admins only
+  if (!settings) return isAdmin; // Default to admins only
+
+  // The global kill switch always wins, even over the role/team/user whitelist —
+  // admins retain access so they can flip it back off if flipped by mistake.
+  if (settings.uploadsDisabled && !isAdmin) return false;
+
+  if (isAdmin) return true;
+
+  const userTeams = await db.collection('teams').find({
+    members: user._id.toString()
+  }).toArray();
+  const teamIds = userTeams.map(t => t._id.toString());
+
+  // Exclusions override any whitelist/allow-anyone match below.
+  if (settings.excludedDistributionRoles?.includes(userRole)) return false;
+  if (settings.excludedDistributionUsers?.includes(user._id.toString())) return false;
+  if (settings.excludedDistributionTeams?.some(id => teamIds.includes(id))) return false;
 
   if (settings.allowAnyoneToDistribute) return true;
 
@@ -20,10 +36,6 @@ async function canUserDistribute(user, db) {
 
   // Check teams whitelist
   if (settings.distributionTeams && settings.distributionTeams.length > 0) {
-    const userTeams = await db.collection('teams').find({
-      members: user._id.toString()
-    }).toArray();
-    const teamIds = userTeams.map(t => t._id.toString());
     const hasMatchingTeam = teamIds.some(id => settings.distributionTeams.includes(id));
     if (hasMatchingTeam) return true;
   }
@@ -43,11 +55,12 @@ export async function GET(request) {
     // Check global download settings
     const settings = await db.collection('appstore_settings').findOne({});
     const isGlobalDownloadAllowed = settings ? settings.allowAnyoneToDownload : true;
-    
+    const isDownloadsKillSwitchOn = !!settings?.downloadsDisabled;
+
     const userRole = (user.role || 'member').toLowerCase();
     const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
 
-    if (!isGlobalDownloadAllowed && !isAdmin) {
+    if (!isAdmin && (!isGlobalDownloadAllowed || isDownloadsKillSwitchOn)) {
       // Forbidden by global settings
       return NextResponse.json({ success: true, apps: [], canDistribute: false });
     }
@@ -75,17 +88,28 @@ export async function GET(request) {
       if (app.distributorId === user._id.toString()) return true;
 
       const access = app.accessSettings;
-      if (access && !access.availableToAll) {
-        const allowedRoles = access.allowedRoles || [];
-        const allowedUsers = access.allowedUsers || [];
-        const allowedTeams = access.allowedTeams || [];
+      if (access) {
+        // Exclusions always win, even when the app is otherwise available to all.
+        const excludedRoles = access.excludedRoles || [];
+        const excludedUsers = access.excludedUsers || [];
+        const excludedTeams = access.excludedTeams || [];
+        const isExcluded = excludedRoles.includes(userRole)
+          || excludedUsers.includes(user._id.toString())
+          || excludedTeams.some(id => teamIds.includes(id.toString()));
+        if (isExcluded) return false;
 
-        const roleMatch = allowedRoles.includes(userRole);
-        const userMatch = allowedUsers.includes(user._id.toString());
-        const teamMatch = allowedTeams.some(id => teamIds.includes(id.toString()));
+        if (!access.availableToAll) {
+          const allowedRoles = access.allowedRoles || [];
+          const allowedUsers = access.allowedUsers || [];
+          const allowedTeams = access.allowedTeams || [];
 
-        if (!roleMatch && !userMatch && !teamMatch) {
-          return false; // No view access
+          const roleMatch = allowedRoles.includes(userRole);
+          const userMatch = allowedUsers.includes(user._id.toString());
+          const teamMatch = allowedTeams.some(id => teamIds.includes(id.toString()));
+
+          if (!roleMatch && !userMatch && !teamMatch) {
+            return false; // No view access
+          }
         }
       }
       return true;
@@ -96,7 +120,16 @@ export async function GET(request) {
         canDownload = false;
       } else if (!isAdmin && app.distributorId !== user._id.toString()) {
         const downloadPerms = app.accessSettings?.downloadPermissions;
-        if (downloadPerms?.restricted) {
+        const excludedRoles = downloadPerms?.excludedRoles || [];
+        const excludedUsers = downloadPerms?.excludedUsers || [];
+        const excludedTeams = downloadPerms?.excludedTeams || [];
+        const isDownloadExcluded = excludedRoles.includes(userRole)
+          || excludedUsers.includes(user._id.toString())
+          || excludedTeams.some(id => teamIds.includes(id.toString()));
+
+        if (isDownloadExcluded) {
+          canDownload = false;
+        } else if (downloadPerms?.restricted) {
           const allowedRoles = downloadPerms.allowedRoles || [];
           const allowedUsers = downloadPerms.allowedUsers || [];
           const allowedTeams = downloadPerms.allowedTeams || [];
@@ -161,8 +194,20 @@ export async function POST(request) {
       accessSettings
     } = body;
 
-    if (!name || !description || !category) {
+    if (!name?.trim() || !description?.trim() || !category?.trim()) {
       return NextResponse.json({ error: 'Name, description, and category are required' }, { status: 400 });
+    }
+    if (name.trim().length > 100) {
+      return NextResponse.json({ error: 'Name must be 100 characters or fewer' }, { status: 400 });
+    }
+    if (description.trim().length > 2000) {
+      return NextResponse.json({ error: 'Description must be 2000 characters or fewer' }, { status: 400 });
+    }
+    if (projectId && !ObjectId.isValid(projectId)) {
+      return NextResponse.json({ error: 'Invalid project selected' }, { status: 400 });
+    }
+    if (teamId && !ObjectId.isValid(teamId)) {
+      return NextResponse.json({ error: 'Invalid team selected' }, { status: 400 });
     }
 
     const distributorName = user.firstName && user.lastName
@@ -170,15 +215,15 @@ export async function POST(request) {
       : user.username;
 
     const newApp = {
-      name: name.trim(),
+      name: name.trim().slice(0, 100),
       projectId: projectId ? projectId.toString() : null,
-      author: (author || distributorName).trim(),
+      author: (author || distributorName).trim().slice(0, 100),
       distributor: distributorName,
       distributorId: user._id.toString(),
-      description: description.trim(),
+      description: description.trim().slice(0, 2000),
       icon: icon || 'Smartphone',
-      category: category.trim(),
-      tags: Array.isArray(tags) ? tags.map(t => t.trim().toLowerCase()) : [],
+      category: category.trim().slice(0, 50),
+      tags: Array.isArray(tags) ? tags.map(t => t.trim().toLowerCase()).filter(Boolean).slice(0, 10) : [],
       teamId: teamId ? teamId.toString() : null,
       subscribers: [],
       ratings: [],
@@ -191,11 +236,17 @@ export async function POST(request) {
         allowedRoles: accessSettings?.allowedRoles || [],
         allowedTeams: (accessSettings?.allowedTeams || []).map(id => id.toString()),
         allowedUsers: (accessSettings?.allowedUsers || []).map(id => id.toString()),
+        excludedRoles: accessSettings?.excludedRoles || [],
+        excludedTeams: (accessSettings?.excludedTeams || []).map(id => id.toString()),
+        excludedUsers: (accessSettings?.excludedUsers || []).map(id => id.toString()),
         downloadPermissions: {
           restricted: !!accessSettings?.downloadPermissions?.restricted,
           allowedRoles: accessSettings?.downloadPermissions?.allowedRoles || [],
           allowedTeams: (accessSettings?.downloadPermissions?.allowedTeams || []).map(id => id.toString()),
-          allowedUsers: (accessSettings?.downloadPermissions?.allowedUsers || []).map(id => id.toString())
+          allowedUsers: (accessSettings?.downloadPermissions?.allowedUsers || []).map(id => id.toString()),
+          excludedRoles: accessSettings?.downloadPermissions?.excludedRoles || [],
+          excludedTeams: (accessSettings?.downloadPermissions?.excludedTeams || []).map(id => id.toString()),
+          excludedUsers: (accessSettings?.downloadPermissions?.excludedUsers || []).map(id => id.toString())
         }
       },
       createdAt: new Date(),

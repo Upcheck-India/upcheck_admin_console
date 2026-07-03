@@ -15,12 +15,28 @@ export async function GET(request) {
         distributionRoles: ['admin', 'console_admin'],
         distributionTeams: [],
         distributionUsers: [],
+        excludedDistributionRoles: [],
+        excludedDistributionTeams: [],
+        excludedDistributionUsers: [],
         allowAnyoneToDistribute: false,
         allowAnyoneToDownload: true,
+        uploadsDisabled: false,
+        downloadsDisabled: false,
+        updatesDisabled: false,
         updatedAt: new Date()
       };
       await db.collection('appstore_settings').insertOne(settings);
     }
+    // Backfill defaults for settings docs created before these fields existed.
+    settings = {
+      excludedDistributionRoles: [],
+      excludedDistributionTeams: [],
+      excludedDistributionUsers: [],
+      uploadsDisabled: false,
+      downloadsDisabled: false,
+      updatesDisabled: false,
+      ...settings,
+    };
 
     return NextResponse.json({ success: true, settings });
   } catch (error) {
@@ -48,16 +64,28 @@ export async function PUT(request) {
       distributionRoles,
       distributionTeams,
       distributionUsers,
+      excludedDistributionRoles,
+      excludedDistributionTeams,
+      excludedDistributionUsers,
       allowAnyoneToDistribute,
-      allowAnyoneToDownload
+      allowAnyoneToDownload,
+      uploadsDisabled,
+      downloadsDisabled,
+      updatesDisabled,
     } = body;
 
     const updateDoc = {
       distributionRoles: distributionRoles || ['admin', 'console_admin'],
       distributionTeams: (distributionTeams || []).map(id => id.toString()),
       distributionUsers: (distributionUsers || []).map(id => id.toString()),
+      excludedDistributionRoles: excludedDistributionRoles || [],
+      excludedDistributionTeams: (excludedDistributionTeams || []).map(id => id.toString()),
+      excludedDistributionUsers: (excludedDistributionUsers || []).map(id => id.toString()),
       allowAnyoneToDistribute: !!allowAnyoneToDistribute,
       allowAnyoneToDownload: allowAnyoneToDownload !== false,
+      uploadsDisabled: !!uploadsDisabled,
+      downloadsDisabled: !!downloadsDisabled,
+      updatesDisabled: !!updatesDisabled,
       updatedAt: new Date()
     };
 

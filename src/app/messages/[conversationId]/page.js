@@ -13,7 +13,11 @@ import PluginsPanel from '../../components/messages/PluginsPanel';
 import MessageBody from '../../components/messages/MessageBody';
 import TaskMentionDropdown from '../../components/messages/TaskMentionDropdown';
 import TaskInfoModal from '../../components/messages/TaskInfoModal';
+import PluginMessage from '../../components/messages/PluginMessage';
+import { PLUGIN_SENDER_ID } from '../../utils/pluginSender';
 import { useTaskMentionAutocomplete } from '../../utils/useTaskMentionAutocomplete';
+import { useSlashCommandAutocomplete } from '../../utils/useSlashCommandAutocomplete';
+import SlashCommandDropdown from '../../components/messages/SlashCommandDropdown';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../utils/timeFormat';
 import { formatTypingText } from '../../utils/typingText';
@@ -74,6 +78,7 @@ const ChatThread = () => {
   const [infoMessage, setInfoMessage] = useState(null);
   const [viewingTaskId, setViewingTaskId] = useState(null);
   const taskMention = useTaskMentionAutocomplete({ chatType: 'dm', chatId: conversationId });
+  const slashCommand = useSlashCommandAutocomplete({ chatType: 'dm', chatId: conversationId });
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -657,6 +662,18 @@ const ChatThread = () => {
                   (nextMsg && (new Date(nextMsg.createdAt) - new Date(msg.createdAt)) > 60000);
                 const repliedTo = msg.replyTo ? findMessageById(msg.replyTo) : null;
 
+                if (msg.senderId === PLUGIN_SENDER_ID) {
+                  return (
+                    <PluginMessage
+                      key={msg._id}
+                      text={msg.body}
+                      createdAt={msg.createdAt}
+                      timeFormat={timeFormat}
+                      onTaskClick={setViewingTaskId}
+                    />
+                  );
+                }
+
                 const actions = !isDeleted ? [
                   { icon: Reply, label: 'Reply', onClick: () => setReplyToMessage(msg) },
                   { icon: Forward, label: 'Forward', onClick: () => setForwardMessage(msg) },
@@ -809,6 +826,13 @@ const ChatThread = () => {
               onSelect={(task) => setMessageText(prev => taskMention.selectTask(task, prev))}
             />
           )}
+          {slashCommand.query !== null && (
+            <SlashCommandDropdown
+              loading={slashCommand.loading}
+              commands={slashCommand.results}
+              onSelect={(cmd) => { setMessageText(`/${cmd.name} `); slashCommand.close(); }}
+            />
+          )}
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
           <button
             type="button"
@@ -823,11 +847,15 @@ const ChatThread = () => {
           <textarea
             ref={textareaRef}
             value={messageText}
-            onChange={(e) => { handleTyping(e); taskMention.handleComposerChange(e.target.value, e.target.selectionStart); }}
+            onChange={(e) => {
+              handleTyping(e);
+              taskMention.handleComposerChange(e.target.value, e.target.selectionStart);
+              slashCommand.handleComposerChange(e.target.value);
+            }}
             onPaste={handlePaste}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
-                if (taskMention.query !== null) return;
+                if (taskMention.query !== null || slashCommand.query !== null) return;
                 e.preventDefault();
                 if (connectionStatus === 'accepted' && messageText.trim()) handleSend();
               }

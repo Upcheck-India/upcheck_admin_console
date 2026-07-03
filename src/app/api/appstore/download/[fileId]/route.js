@@ -30,32 +30,52 @@ export async function GET(request, { params }) {
     const isAdmin = userRole === 'admin' || userRole === 'console admin' || userRole === 'console_admin';
     const isDistributor = app.distributorId === user._id.toString();
 
-    // 2. Enforce download visibility permissions check
+    // 2. Global downloads kill switch — admins/distributor always retain access.
+    if (!isAdmin && !isDistributor) {
+      const settings = await db.collection('appstore_settings').findOne({});
+      if (settings?.downloadsDisabled) {
+        return NextResponse.json({ error: 'Downloads are currently disabled by an administrator' }, { status: 403 });
+      }
+    }
+
+    // 3. Enforce download visibility permissions check
     if (!isAdmin && !isDistributor) {
       const access = app.accessSettings;
-      if (access && !access.availableToAll) {
-        const userTeams = await db.collection('teams').find({
-          members: user._id.toString()
-        }).toArray();
-        const teamIds = userTeams.map(t => t._id.toString());
+      const userTeams = await db.collection('teams').find({
+        members: user._id.toString()
+      }).toArray();
+      const teamIds = userTeams.map(t => t._id.toString());
 
-        const roleMatch = (access.allowedRoles || []).includes(userRole);
-        const userMatch = (access.allowedUsers || []).includes(user._id.toString());
-        const teamMatch = (access.allowedTeams || []).some(tId => teamIds.includes(tId.toString()));
-
-        if (!roleMatch && !userMatch && !teamMatch) {
+      if (access) {
+        const isExcluded = (access.excludedRoles || []).includes(userRole)
+          || (access.excludedUsers || []).includes(user._id.toString())
+          || (access.excludedTeams || []).some(tId => teamIds.includes(tId.toString()));
+        if (isExcluded) {
           return NextResponse.json({ error: 'Forbidden: You do not have access to view this app' }, { status: 403 });
+        }
+
+        if (!access.availableToAll) {
+          const roleMatch = (access.allowedRoles || []).includes(userRole);
+          const userMatch = (access.allowedUsers || []).includes(user._id.toString());
+          const teamMatch = (access.allowedTeams || []).some(tId => teamIds.includes(tId.toString()));
+
+          if (!roleMatch && !userMatch && !teamMatch) {
+            return NextResponse.json({ error: 'Forbidden: You do not have access to view this app' }, { status: 403 });
+          }
         }
       }
 
       // Enforce download permissions check (restricted field)
       const downloadPerms = app.accessSettings?.downloadPermissions;
-      if (downloadPerms?.restricted) {
-        const userTeams = await db.collection('teams').find({
-          members: user._id.toString()
-        }).toArray();
-        const teamIds = userTeams.map(t => t._id.toString());
+      const isDownloadExcluded = (downloadPerms?.excludedRoles || []).includes(userRole)
+        || (downloadPerms?.excludedUsers || []).includes(user._id.toString())
+        || (downloadPerms?.excludedTeams || []).some(tId => teamIds.includes(tId.toString()));
 
+      if (isDownloadExcluded) {
+        return NextResponse.json({ error: 'Forbidden: You do not have permission to download this app' }, { status: 403 });
+      }
+
+      if (downloadPerms?.restricted) {
         const roleMatch = (downloadPerms.allowedRoles || []).includes(userRole);
         const userMatch = (downloadPerms.allowedUsers || []).includes(user._id.toString());
         const teamMatch = (downloadPerms.allowedTeams || []).some(tId => teamIds.includes(tId.toString()));
