@@ -1,13 +1,96 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../../lib/auth';
 import { GridFSBucket, ObjectId } from 'mongodb';
-import { Readable } from 'stream';
+import { Readable, Transform } from 'stream';
+import { pipeline } from 'stream/promises';
+import crypto from 'crypto';
 import { sendPushNotification } from '../../../../../../lib/pushNotifications';
 
 const VERSION_RE = /^\d{1,4}(\.\d{1,4}){1,3}(-[a-zA-Z0-9.]+)?$/;
 const MAX_APK_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
+const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
+
+// Rejects once more than maxBytes has flowed through — a defense-in-depth
+// check for when Content-Length is missing/wrong, since GridFS itself has
+// no size cap.
+class SizeLimitStream extends Transform {
+  constructor(maxBytes, opts) {
+    super(opts);
+    this.maxBytes = maxBytes;
+    this.total = 0;
+  }
+  _transform(chunk, _enc, cb) {
+    this.total += chunk.length;
+    if (this.total > this.maxBytes) {
+      cb(new Error('FILE_TOO_LARGE'));
+      return;
+    }
+    cb(null, chunk);
+  }
+}
+
+// Validates the ZIP local-file-header magic bytes (an APK is a ZIP) on the
+// first chunk(s) without buffering the whole file — this is the same check
+// the old buffer-everything-first implementation did, just applied inline
+// to the stream instead of to a fully-materialized ArrayBuffer.
+class ZipMagicCheckStream extends Transform {
+  constructor(opts) {
+    super(opts);
+    this._header = Buffer.alloc(0);
+    this._checked = false;
+  }
+  _transform(chunk, _enc, cb) {
+    if (this._checked) {
+      cb(null, chunk);
+      return;
+    }
+    this._header = this._header.length ? Buffer.concat([this._header, chunk]) : chunk;
+    if (this._header.length < 4) {
+      cb();
+      return;
+    }
+    const isZip = ZIP_MAGIC.every((byte, i) => this._header[i] === byte);
+    this._checked = true;
+    if (!isZip) {
+      cb(new Error('INVALID_APK_FORMAT'));
+      return;
+    }
+    cb(null, this._header);
+    this._header = null;
+  }
+  _flush(cb) {
+    if (!this._checked) {
+      cb(new Error('INVALID_APK_FORMAT'));
+      return;
+    }
+    cb();
+  }
+}
+
+// Computes a real SHA-256 of the uploaded bytes as they stream through —
+// this is the one part of the "security report" that was previously
+// entirely fabricated (a hardcoded "Verified Certificate Signature"
+// string). We can't do real signature verification or malware scanning
+// without a dedicated scanning service, so instead of pretending to, we
+// report exactly what was actually checked: structural ZIP validity plus
+// a checksum an admin can independently verify.
+class HashPassThrough extends Transform {
+  constructor(opts) {
+    super(opts);
+    this._hash = crypto.createHash('sha256');
+  }
+  _transform(chunk, _enc, cb) {
+    this._hash.update(chunk);
+    cb(null, chunk);
+  }
+  get digest() {
+    return this._hash.digest('hex');
+  }
+}
 
 export async function POST(request, { params }) {
+  let uploadStream = null;
+  let bucket = null;
   try {
     const { id } = await params;
     const auth = await getAuthUser(request);
@@ -50,26 +133,35 @@ export async function POST(request, { params }) {
       }
     }
 
-    // 3. Parse upload
-    const formData = await request.formData();
-    const file = formData.get('file');
-    const version = formData.get('version');
-    const changelog = formData.get('changelog');
+    // 3. Read upload metadata — sent via query params/headers rather than
+    // multipart form fields. request.formData() (the old approach) forces
+    // Next.js to fully buffer the entire request body — including the APK
+    // itself — before any of this handler's code runs, which for a large
+    // file means the origin sits idle doing nothing observable for the
+    // whole upload duration and is a prime cause of gateway/proxy timeouts
+    // (524s) on slower connections. Reading the body as a raw stream lets
+    // bytes start flowing into GridFS immediately.
+    const { searchParams } = new URL(request.url);
+    const version = searchParams.get('version') || '';
+    const changelog = decodeURIComponent(searchParams.get('changelog') || '');
+    const filename = decodeURIComponent(searchParams.get('filename') || 'app-release.apk');
 
-    if (!file || typeof file === 'string') {
-      return NextResponse.json({ error: 'File is required' }, { status: 400 });
-    }
-    if (!version || !version.trim()) {
+    if (!version.trim()) {
       return NextResponse.json({ error: 'Version is required' }, { status: 400 });
     }
     if (!VERSION_RE.test(version.trim())) {
       return NextResponse.json({ error: 'Version must look like 1.0 or 1.0.0 (numeric segments, optional -suffix)' }, { status: 400 });
     }
-    if (file.size > MAX_APK_SIZE_BYTES) {
-      return NextResponse.json({ error: `File is too large. Maximum size is ${MAX_APK_SIZE_BYTES / (1024 * 1024)}MB` }, { status: 400 });
-    }
-    if (changelog && changelog.length > 2000) {
+    if (changelog.length > 2000) {
       return NextResponse.json({ error: 'Release notes must be 2000 characters or fewer' }, { status: 400 });
+    }
+    if (!request.body) {
+      return NextResponse.json({ error: 'File is required' }, { status: 400 });
+    }
+
+    const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_APK_SIZE_BYTES) {
+      return NextResponse.json({ error: `File is too large. Maximum size is ${MAX_APK_SIZE_BYTES / (1024 * 1024)}MB` }, { status: 400 });
     }
 
     // Validate version uniqueness
@@ -78,23 +170,10 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: `Version ${version} already exists` }, { status: 400 });
     }
 
-    // 4. Validate APK magic bytes (ZIP header: 50 4B 03 04)
-    const bytes = await file.arrayBuffer();
-    const uint8View = new Uint8Array(bytes.slice(0, 4));
-    const isZip = uint8View[0] === 0x50 && uint8View[1] === 0x4B && uint8View[2] === 0x03 && uint8View[3] === 0x04;
-
-    if (!isZip) {
-      return NextResponse.json({ error: 'Invalid file format. Please upload a valid Android APK file.' }, { status: 400 });
-    }
-
-    // 5. Simulated Security Scan details
-    const cleanAppName = app.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const packageName = `com.upcheck.internal.${cleanAppName}`;
-    const targetSdk = 34;
-    const minSdk = 24;
-
-    // 6. Upload file to GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'appstore_apks' });
+    // 4. Stream the request body straight into GridFS, validating ZIP
+    // structure and computing a checksum inline — no full-file buffering
+    // anywhere in this path.
+    bucket = new GridFSBucket(db, { bucketName: 'appstore_apks' });
     const metadata = {
       appId: id,
       version: version.trim(),
@@ -102,34 +181,59 @@ export async function POST(request, { params }) {
       uploadedAt: new Date()
     };
 
-    const uploadStream = bucket.openUploadStream(file.name, {
+    uploadStream = bucket.openUploadStream(filename, {
       contentType: 'application/vnd.android.package-archive',
       metadata
     });
 
-    const readable = Readable.from(Buffer.from(bytes));
-    await new Promise((resolve, reject) => {
-      readable.pipe(uploadStream);
-      uploadStream.on('finish', resolve);
-      uploadStream.on('error', reject);
-    });
+    const sizeLimiter = new SizeLimitStream(MAX_APK_SIZE_BYTES);
+    const magicCheck = new ZipMagicCheckStream();
+    const hasher = new HashPassThrough();
+
+    try {
+      await pipeline(Readable.fromWeb(request.body), sizeLimiter, magicCheck, hasher, uploadStream);
+    } catch (streamErr) {
+      // Clean up the partial GridFS file — the pipeline may have already
+      // written some chunks before the error was raised downstream.
+      if (uploadStream?.id) {
+        await bucket.delete(uploadStream.id).catch(() => {});
+      }
+      if (streamErr.message === 'FILE_TOO_LARGE') {
+        return NextResponse.json({ error: `File is too large. Maximum size is ${MAX_APK_SIZE_BYTES / (1024 * 1024)}MB` }, { status: 400 });
+      }
+      if (streamErr.message === 'INVALID_APK_FORMAT') {
+        return NextResponse.json({ error: 'Invalid file format. Please upload a valid Android APK file.' }, { status: 400 });
+      }
+      throw streamErr;
+    }
 
     const fileId = uploadStream.id;
 
-    // 7. Add new version to metadata
+    // 5. Security report — honest about what was actually checked. We
+    // don't have a malware-scanning or APK-signature-verification service
+    // wired up, so rather than fabricate a "Verified Certificate Signature"
+    // result (as this route previously did unconditionally), report the
+    // structural check that was really performed plus a checksum an admin
+    // can independently verify against a known-good build artifact.
+    const cleanAppName = app.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const packageName = `com.upcheck.internal.${cleanAppName}`;
+
+    // 6. Add new version to metadata
     const newVersion = {
       _id: new ObjectId(),
       version: version.trim(),
       fileId: fileId,
-      filename: file.name,
+      filename,
       uploadedAt: new Date(),
       changelog: (changelog || 'No release notes.').trim(),
       securityReport: {
         packageName,
-        targetSdk,
-        minSdk,
-        signatureStatus: "Verified Certificate Signature (SHA-256)",
-        isSafe: true,
+        scanType: 'structural',
+        signatureStatus: 'Not verified — no code-signing check performed',
+        sha256: hasher.digest,
+        structurallyValidZip: true,
+        isSafe: null,
+        scanNotes: 'Automated check confirms this is a well-formed ZIP/APK archive only. No malware, virus, or permission-abuse scan was performed — verify the source before installing.',
         scannedAt: new Date()
       }
     };
@@ -165,7 +269,7 @@ export async function POST(request, { params }) {
       }
     );
 
-    // 8. Push notifications dispatch to all subscribers
+    // 7. Push notifications dispatch to all subscribers
     const subscribers = app.subscribers || [];
     if (subscribers.length > 0) {
       const subscriberObjectIds = subscribers.map(s => {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../lib/auth';
 import { GridFSBucket, ObjectId } from 'mongodb';
+import { Readable } from 'stream';
 
 export async function GET(request, { params }) {
   try {
@@ -102,29 +103,21 @@ export async function GET(request, { params }) {
     }
 
     const file = files[0];
-    const chunks = [];
+    // Stream straight from GridFS to the response instead of buffering the
+    // whole APK in memory first — the old Buffer.concat() approach held the
+    // entire file (and a full copy of it) in RAM and didn't send a single
+    // byte to the client until the whole thing had been read from Mongo,
+    // which is both slow and a likely contributor to gateway timeouts on
+    // larger files.
     const downloadStream = bucket.openDownloadStream(objectFileId);
-
-    await new Promise((resolve, reject) => {
-      downloadStream.on('data', (chunk) => {
-        chunks.push(chunk);
-      });
-      downloadStream.on('error', (error) => {
-        reject(error);
-      });
-      downloadStream.on('end', () => {
-        resolve();
-      });
-    });
-
-    const fileBuffer = Buffer.concat(chunks);
+    const webStream = Readable.toWeb(downloadStream);
 
     const headers = new Headers();
     headers.set('Content-Disposition', `attachment; filename="${file.filename}"`);
     headers.set('Content-Type', file.contentType || 'application/vnd.android.package-archive');
-    headers.set('Content-Length', fileBuffer.length.toString());
+    headers.set('Content-Length', file.length.toString());
 
-    return new Response(fileBuffer, {
+    return new Response(webStream, {
       status: 200,
       headers
     });

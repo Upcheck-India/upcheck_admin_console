@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { canAccessProject } from '../../../lib/projectPermissions';
+import { getAuthUser } from '../../../lib/auth';
 
 // Helper to fetch user's teams for permission checking
 async function getUserTeams(db, user) {
@@ -37,18 +38,15 @@ function sanitizeTags(tags) {
 // GET - Fetch projects
 export async function GET(req) {
   try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
+    // getAuthUser checks the admin_token cookie (web dashboard) and the
+    // Authorization: Bearer header (mobile app) — this route previously
+    // only checked the cookie, so every mobile-app request silently 401'd
+    // and the App Store's project picker always rendered empty.
+    const auth = await getAuthUser(req);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db } = auth;
 
     // Fetch user teams for team-based permission checking
     const userTeams = await getUserTeams(db, user);
