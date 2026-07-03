@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthUser } from '../../../../lib/auth';
+import { getAuthUserResult } from '../../../../lib/auth';
 import { signRealtimeToken, TOKEN_TTL_SECONDS } from '../../../../lib/realtimeToken';
 
 // POST /api/realtime/token
@@ -9,11 +9,16 @@ import { signRealtimeToken, TOKEN_TTL_SECONDS } from '../../../../lib/realtimeTo
 // (e.g. every ~8 min) and on reconnect.
 export async function POST(request) {
   try {
-    const auth = await getAuthUser(request);
-    if (!auth) {
+    const authResult = await getAuthUserResult(request);
+    if (authResult.status === 'db_unavailable') {
+      // Transient DB issue — NOT an auth failure. 503 so the client retries
+      // without treating it as an invalid session (no logout).
+      return NextResponse.json({ error: 'Auth temporarily unavailable' }, { status: 503 });
+    }
+    if (authResult.status !== 'ok') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const { user } = auth;
+    const { user } = authResult;
 
     let token;
     try {
