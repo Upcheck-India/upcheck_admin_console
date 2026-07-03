@@ -1,10 +1,19 @@
 import clientPromise from './mongodb.js';
 import { ObjectId } from 'mongodb';
 
-// Falls back to these when a user hasn't picked a custom sound yet —
-// matches the bundled asset filenames (without extension) registered via
-// the expo-notifications config plugin's `sounds` array.
-const DEFAULT_SOUND_KEY = { meetings: 'meeting_notif', messages: 'message_notif' };
+// Two different namespaces that look similar but must not be conflated:
+// - preference storage keys are singular ('meeting' / 'message') — matches
+//   what the client saves via POST /api/auth/notification-prefs and reads
+//   via user.notificationSounds.<category>.
+// - Android channel-id prefixes are plural ('meetings' / 'messages') —
+//   matches the channel ids the client actually creates on-device (a
+//   pre-existing convention from before per-sound channels existed).
+// Previously this file used the plural form for BOTH, so the preference
+// lookup (user.notificationSounds.meetings) always missed the real field
+// (notificationSounds.meeting) and silently fell back to the default sound
+// no matter what the user had picked.
+const DEFAULT_SOUND_KEY = { meeting: 'meeting_notif', message: 'message_notif' };
+const CHANNEL_PREFIX = { meeting: 'meetings', message: 'messages' };
 export const SYSTEM_DEFAULT_SOUND_KEY = 'system_default';
 
 // Which notification category a given `data.type` belongs to, for both
@@ -12,8 +21,8 @@ export const SYSTEM_DEFAULT_SOUND_KEY = 'system_default';
 // conventions (meeting*, *_message/chat_message).
 function categoryForType(type) {
   if (!type) return null;
-  if (type.startsWith('meeting')) return 'meetings';
-  if (type.endsWith('_message') || type === 'chat_message') return 'messages';
+  if (type.startsWith('meeting')) return 'meeting';
+  if (type.endsWith('_message') || type === 'chat_message') return 'message';
   return null;
 }
 
@@ -27,10 +36,11 @@ function resolveNotificationRouting(user, type) {
   if (!category) return { channelId: 'default', sound: 'default' };
 
   const soundKey = user?.notificationSounds?.[category] || DEFAULT_SOUND_KEY[category];
+  const channelPrefix = CHANNEL_PREFIX[category];
   if (soundKey === SYSTEM_DEFAULT_SOUND_KEY) {
-    return { channelId: `${category}-${SYSTEM_DEFAULT_SOUND_KEY}`, sound: 'default' };
+    return { channelId: `${channelPrefix}-${SYSTEM_DEFAULT_SOUND_KEY}`, sound: 'default' };
   }
-  return { channelId: `${category}-${soundKey}`, sound: `${soundKey}.mp3` };
+  return { channelId: `${channelPrefix}-${soundKey}`, sound: `${soundKey}.mp3` };
 }
 
 // Chat notifications get a "Reply" quick action (client registers a matching
