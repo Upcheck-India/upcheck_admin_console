@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.upcheck.upcheckerp",
+      "sha256_cert_fingerprints": [
+        "CC:4A:21:73:39:23:46:8E:63:65:FD:B0:07:74:26:96:7E:BC:56:90:A6:05:42:5F:5F:61:7A:9F:8D:5B:C9:CE"
+      ]
+    }
+  }
+]

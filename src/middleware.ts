@@ -9,6 +9,7 @@ const isPublicRoute = createRouteMatcher([
   '/register(.*)',
   '/api/auth(.*)',
   '/api/clerk/webhook(.*)', // Clerk webhook endpoint
+  '/.well-known(.*)', // Digital Asset Links / Apple App Site Association — must be servable unauthenticated
 ])
 
 // Routes protected by Clerk (external user routes)
