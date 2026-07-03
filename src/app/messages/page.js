@@ -16,6 +16,7 @@ const MessagesHome = () => {
   const router = useRouter();
   const [connections, setConnections] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [groupChats, setGroupChats] = useState([]);
   const [visibleCount, setVisibleCount] = useState(20);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +58,12 @@ const MessagesHome = () => {
       if (teamRes.ok) {
         const teamData = await teamRes.json();
         setTeams(teamData.teams || []);
+      }
+
+      const groupRes = await fetch('/api/group-chats', { credentials: 'include' });
+      if (groupRes.ok) {
+        const groupData = await groupRes.json();
+        setGroupChats(groupData.groupChats || []);
       }
     } catch (e) {
       console.error('Fetch connections error:', e);
@@ -469,6 +476,34 @@ const MessagesHome = () => {
                     {team.unreadCount > 0 && (
                       <span className="px-1.5 py-0.5 bg-blue-600 text-white text-[9px] font-bold rounded-full flex-shrink-0 shadow-sm animate-pulse">
                         {team.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Group Chats */}
+          <div className="pt-2">
+            <div className="px-4.5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
+              <span>Group Chats</span>
+            </div>
+            <div className="space-y-0.5 pb-4">
+              {groupChats.length === 0 ? (
+                <div className="px-4.5 py-2 text-[10px] text-slate-400">No group chats yet</div>
+              ) : (
+                groupChats.map((group) => (
+                  <div
+                    key={group._id}
+                    onClick={() => router.push(`/messages/group/${group._id}`)}
+                    className="flex items-center gap-2.5 px-4.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer border-l-2 border-transparent hover:border-purple-500 group transition-all"
+                  >
+                    <Users className="w-3.5 h-3.5 text-slate-400 group-hover:text-purple-500 flex-shrink-0" />
+                    <span className="truncate flex-1 group-hover:text-purple-600">{group.name}</span>
+                    {group.unreadCount > 0 && (
+                      <span className="px-1.5 py-0.5 bg-purple-600 text-white text-[9px] font-bold rounded-full flex-shrink-0 shadow-sm animate-pulse">
+                        {group.unreadCount}
                       </span>
                     )}
                   </div>

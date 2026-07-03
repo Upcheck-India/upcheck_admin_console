@@ -6,8 +6,9 @@ import { useAuth } from '../../../hooks/useAuth';
 import TopNav from '../../components/TopNav';
 
 import {
-  ArrowLeft, Trash2, Shield, Copy, CheckCircle, RefreshCw, AlertCircle
+  ArrowLeft, Trash2, Shield, Copy, CheckCircle, RefreshCw, AlertCircle, Clock
 } from 'lucide-react';
+import { useTimeFormat, setTimeFormatPreference } from '../../utils/timeFormat';
 
 const MessagesSettings = () => {
   const { user } = useAuth(false);
@@ -24,6 +25,7 @@ const MessagesSettings = () => {
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(user?.messageNotificationsEnabled !== false);
   const [savingNotifications, setSavingNotifications] = useState(false);
+  const timeFormat = useTimeFormat();
 
   useEffect(() => {
     if (user) {
@@ -338,6 +340,37 @@ const MessagesSettings = () => {
                     </span>
                   </label>
                   {savingNotifications && <RefreshCw className="w-4 h-4 animate-spin text-slate-400" />}
+                </div>
+              </div>
+            </div>
+
+            {/* Clock Format Toggle */}
+            <div className="border-t border-slate-100 pt-6 flex items-start gap-4">
+              <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 flex-shrink-0">
+                <Clock className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-md font-bold text-slate-800 tracking-tight mb-1">Clock Format</h2>
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                  Choose how message timestamps are displayed across Direct Messages, Teams, and Group Chats.
+                </p>
+                <div className="flex bg-slate-100 rounded-xl p-1 max-w-xs">
+                  <button
+                    onClick={() => setTimeFormatPreference('12h')}
+                    className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all ${
+                      timeFormat === '12h' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    12-hour (2:30 PM)
+                  </button>
+                  <button
+                    onClick={() => setTimeFormatPreference('24h')}
+                    className={`flex-1 text-xs font-semibold py-2 rounded-lg transition-all ${
+                      timeFormat === '24h' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    24-hour (14:30)
+                  </button>
                 </div>
               </div>
             </div>

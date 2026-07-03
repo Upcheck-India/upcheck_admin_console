@@ -15,44 +15,36 @@ import { formatTypingText } from '../../../utils/typingText';
 import { uploadChatImage, getPastedImageFile } from '../../../utils/chatMedia';
 import { sendToTarget } from '../../../utils/chatSend';
 import {
-  ArrowLeft, Send, Loader, Copy, Check, CheckCheck, Users, Trash,
-  AlertCircle, Settings as SettingsIcon, ImageIcon, Reply, Forward, Trash2, X
+  ArrowLeft, Send, Loader, Copy, Check, CheckCheck, Users, Trash, AlertCircle,
+  Settings as SettingsIcon, ImageIcon, Reply, Forward, Trash2, X
 } from 'lucide-react';
 
 const POLL_INTERVAL = 4000;
 const MESSAGES_LIMIT = 50;
 
-// Format text with bold/italic/code/mentions
 const formatText = (text) => {
   if (!text) return null;
   const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|@[a-zA-Z0-9_]+)/g;
   const parts = text.split(regex);
   return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={index}>{part.slice(1, -1)}</em>;
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={index} className="bg-slate-100 px-1 rounded font-mono text-sm">{part.slice(1, -1)}</code>;
-    }
-    if (part.startsWith('@')) {
-      return <span key={index} className="text-blue-500 font-bold">{part}</span>;
-    }
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={index} className="bg-slate-100 px-1 rounded font-mono text-sm">{part.slice(1, -1)}</code>;
+    if (part.startsWith('@')) return <span key={index} className="text-blue-500 font-bold">{part}</span>;
     return part;
   });
 };
 
-const TeamChatThread = () => {
+const GroupChatThread = () => {
   const { user } = useAuth(false);
   const router = useRouter();
   const params = useParams();
-  const teamId = params?.teamId;
+  const groupId = params?.groupId;
   const timeFormat = useTimeFormat();
 
   const [messages, setMessages] = useState([]);
-  const [team, setTeam] = useState(null);
+  const [group, setGroup] = useState(null);
+  const [participants, setParticipants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -64,6 +56,7 @@ const TeamChatThread = () => {
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const lastPollRef = useRef(new Date().toISOString());
 
   const [theme, setTheme] = useState(getChatThemeById('default'));
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -89,8 +82,8 @@ const TeamChatThread = () => {
   };
 
   useEffect(() => {
-    if (teamId) setTheme(getChatTheme(`team-${teamId}`));
-  }, [teamId]);
+    if (groupId) setTheme(getChatTheme(`group-${groupId}`));
+  }, [groupId]);
 
   const handleSelectTheme = (chatId, themeId) => {
     persistChatTheme(chatId, themeId);
@@ -104,56 +97,65 @@ const TeamChatThread = () => {
     }
   }, [messageText]);
 
-  const fetchTeam = useCallback(async () => {
+  const fetchGroup = useCallback(async () => {
     try {
-      const res = await fetch(`/api/teams`, { credentials: 'include' });
-      if (res.ok) {
-        const data = await res.json();
-        const t = data.teams?.find(x => x._id === teamId);
-        if (t) {
-          setTeam(t);
-          setIsMuted(!!t.isMuted);
-          setMutedUntil(t.mutedUntil || null);
-        } else setError('Team not found');
+      const res = await fetch(`/api/group-chats/${groupId}`, { credentials: 'include' });
+      if (!res.ok) {
+        setError('Group not found');
+        return;
       }
+      const data = await res.json();
+      setGroup(data.group);
+      setParticipants(data.participants || []);
     } catch (e) {
       console.error(e);
+      setError('Failed to load group');
     }
-  }, [teamId]);
+  }, [groupId]);
+
+  const fetchMuteState = useCallback(async () => {
+    try {
+      const res = await fetch('/api/group-chats', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const g = (data.groupChats || []).find(x => x._id === groupId);
+        if (g) {
+          setIsMuted(!!g.isMuted);
+          setMutedUntil(g.mutedUntil || null);
+        }
+      }
+    } catch (e) {
+      // non-critical
+    }
+  }, [groupId]);
 
   const fetchMessages = useCallback(async () => {
     try {
       setLoading(true);
-      const url = `/api/team-chat/messages?teamId=${teamId}&limit=${MESSAGES_LIMIT}`;
-      const res = await fetch(url, { credentials: 'include' });
-
+      const res = await fetch(`/api/group-chats/${groupId}/messages?limit=${MESSAGES_LIMIT}`, { credentials: 'include' });
       if (!res.ok) throw new Error('Failed to load messages');
-
       const data = await res.json();
       setMessages(data.messages.reverse());
+      lastPollRef.current = new Date().toISOString();
       setTimeout(scrollToBottom, 100);
-
     } catch (e) {
       console.error('Fetch messages error:', e);
       setError('Failed to load messages');
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [groupId]);
 
   const poll = useCallback(async () => {
     try {
-      const res = await fetch(`/api/team-chat/poll?teamId=${teamId}`, { credentials: 'include' });
+      const res = await fetch(`/api/group-chats/poll?groupId=${groupId}&since=${encodeURIComponent(lastPollRef.current)}`, { credentials: 'include' });
       if (!res.ok) return;
-
       const data = await res.json();
+
+      if (data.serverTimestamp) lastPollRef.current = data.serverTimestamp;
 
       if (data.newMessages?.length > 0) {
         setMessages(prev => {
-          // Reconcile by _id AND clientId — a poll tick can race ahead of
-          // this tab's own send() response and observe the server message
-          // before the optimistic placeholder is replaced, which previously
-          // showed the same message twice.
           const byId = new Map(data.newMessages.map(m => [m._id, m]));
           const byClientId = new Map(data.newMessages.filter(m => m.clientId).map(m => [m.clientId, m]));
           const updated = prev.map(m => {
@@ -185,19 +187,18 @@ const TeamChatThread = () => {
         });
       }
 
-      if (data.typingUsers) {
-        setTypingUsers(data.typingUsers);
-      }
+      if (data.typingUsers) setTypingUsers(data.typingUsers);
     } catch (e) {
       console.error('Poll error:', e);
     }
-  }, [teamId, user]);
+  }, [groupId, user]);
 
   useEffect(() => {
-    if (!teamId) return;
-    fetchTeam();
+    if (!groupId) return;
+    fetchGroup();
+    fetchMuteState();
     fetchMessages();
-  }, [teamId, fetchTeam, fetchMessages]);
+  }, [groupId, fetchGroup, fetchMuteState, fetchMessages]);
 
   useEffect(() => {
     const interval = setInterval(poll, POLL_INTERVAL);
@@ -208,11 +209,11 @@ const TeamChatThread = () => {
   const handleTyping = (e) => {
     setMessageText(e.target.value);
     if (e.target.value.trim().length > 0 && !typingTimeoutRef.current) {
-      fetch('/api/team-chat/typing', {
+      fetch('/api/group-chats/typing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ teamId })
+        body: JSON.stringify({ groupId })
       }).catch(() => {});
       typingTimeoutRef.current = setTimeout(() => {
         typingTimeoutRef.current = null;
@@ -236,22 +237,19 @@ const TeamChatThread = () => {
     }
   };
 
-  const deleteMessage = async (messageId, type) => {
-    if (!confirm(`Delete message for ${type === 'me' ? 'me' : 'everyone'}?`)) return;
+  const deleteMessage = async (messageId, forEveryone) => {
+    if (!confirm(`Delete message for ${forEveryone ? 'everyone' : 'me'}?`)) return;
     try {
-      await fetch('/api/team-chat/delete', {
+      await fetch(`/api/group-chats/${groupId}/messages/${messageId}/delete?forEveryone=${forEveryone}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ teamId, messageId, type })
       });
-      setMessages(prev => prev.map(m => {
-        if (m._id === messageId) {
-          if (type === 'everyone') return { ...m, body: '[Message deleted]', mediaUrl: undefined };
-          return null;
+      setMessages(prev => {
+        if (forEveryone) {
+          return prev.map(m => m._id === messageId ? { ...m, body: '[Message deleted]', mediaUrl: undefined } : m);
         }
-        return m;
-      }).filter(Boolean));
+        return prev.filter(m => m._id !== messageId);
+      });
     } catch (e) {
       alert('Failed to delete message');
     }
@@ -266,7 +264,7 @@ const TeamChatThread = () => {
     const optimisticMessage = {
       _id: clientId,
       clientId,
-      teamId,
+      groupId,
       senderId: user._id || user.id,
       senderName: user.name || user.username,
       body: text || (mediaUrl ? '📷 Photo' : ''),
@@ -287,18 +285,18 @@ const TeamChatThread = () => {
     setTimeout(scrollToBottom, 50);
 
     try {
-      const res = await fetch('/api/team-chat/messages', {
+      const res = await fetch(`/api/group-chats/${groupId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ teamId, body: text, mediaUrl, clientId, replyToId: optimisticMessage.replyToId })
+        body: JSON.stringify({ body: text, mediaUrl, replyToId: optimisticMessage.replyToId, clientId })
       });
 
       if (!res.ok) throw new Error('Failed to send');
 
       const data = await res.json();
       setMessages(prev => prev.map(m =>
-        m._id === clientId ? { ...data.message, status: 'sent' } : m
+        m._id === clientId ? { ...data.message, clientId, status: 'sent' } : m
       ));
     } catch (e) {
       console.error('Send error:', e);
@@ -327,7 +325,7 @@ const TeamChatThread = () => {
     if (!file) return;
     setUploadingImage(true);
     try {
-      const mediaUrl = await uploadChatImage(file, 'team', teamId);
+      const mediaUrl = await uploadChatImage(file, 'group', groupId);
       await sendMessage({ body: messageText, mediaUrl });
       setMessageText('');
     } catch (err) {
@@ -343,7 +341,7 @@ const TeamChatThread = () => {
     e.preventDefault();
     setUploadingImage(true);
     try {
-      const mediaUrl = await uploadChatImage(file, 'team', teamId);
+      const mediaUrl = await uploadChatImage(file, 'group', groupId);
       await sendMessage({ body: messageText, mediaUrl });
       setMessageText('');
     } catch (err) {
@@ -359,7 +357,7 @@ const TeamChatThread = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ chatId: teamId, chatType: 'team', muteOption: option }),
+        body: JSON.stringify({ chatId: groupId, chatType: 'group', muteOption: option }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -392,7 +390,7 @@ const TeamChatThread = () => {
     );
   }
 
-  if (loading && !team) {
+  if (loading && !group) {
     return (
       <div className="flex-1 flex items-center justify-center bg-slate-50 h-screen">
         <Loader className="w-8 h-8 text-blue-500 animate-spin" />
@@ -400,13 +398,13 @@ const TeamChatThread = () => {
     );
   }
 
-  const isLead = team?.lead?.toString() === (user?._id || user?.id);
-  const totalMembers = team?.memberCount || 0;
+  const activeParticipants = participants.filter(p => !p.isExcluded);
+  const totalMembers = activeParticipants.length;
+  const currentUserId = user?._id || user?.id;
 
   return (
     <div className="flex flex-col h-screen relative overflow-hidden font-sans" style={{ background: theme.pageBg }}>
       <TopNav />
-      {/* Header */}
       <header style={{ background: theme.headerBg }} className="flex items-center justify-between px-5 py-4 border-b border-slate-200/80 shadow-sm z-20">
         <div className="flex items-center gap-3 w-full">
           <button
@@ -417,30 +415,27 @@ const TeamChatThread = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
 
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center text-white font-bold shadow-md flex-shrink-0 relative">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-fuchsia-600 flex items-center justify-center text-white font-bold shadow-md flex-shrink-0">
             <Users className="w-5 h-5 text-white" />
           </div>
 
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-bold text-slate-900 truncate flex items-center gap-2">
-              {team?.name || 'Loading...'}
-            </h2>
+            <h2 className="text-sm font-bold text-slate-900 truncate">{group?.name || 'Loading...'}</h2>
             <p className="text-xs text-slate-500 font-medium truncate">
-              {typingUsers.length > 0 ? formatTypingText(typingUsers) : `${team?.memberCount} members`}
+              {typingUsers.length > 0 ? formatTypingText(typingUsers) : `${totalMembers} members`}
             </p>
           </div>
-          <button onClick={() => setSettingsOpen(true)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all" title="Chat Settings">
+          <button onClick={() => setSettingsOpen(true)} className="p-2 text-slate-400 hover:bg-slate-100 rounded-xl transition-all" title="Group Settings">
             <SettingsIcon className="w-5 h-5" />
           </button>
         </div>
       </header>
 
-      {/* Messages Area */}
       <div className="flex-1 relative min-h-0">
         <div ref={messagesContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto px-4 py-6">
           <div className="max-w-3xl mx-auto space-y-4">
             {messages.map((msg) => {
-              const isMe = msg.senderId === (user?._id || user?.id);
+              const isMe = msg.senderId === currentUserId;
               const isDeleted = msg.body === '[Message deleted]';
               const readByOthersCount = (msg.readBy || []).filter(r => r.userId !== msg.senderId).length;
               const readByAll = totalMembers > 1 && readByOthersCount >= (totalMembers - 1);
@@ -448,16 +443,16 @@ const TeamChatThread = () => {
               const actions = !isDeleted ? [
                 { icon: Reply, label: 'Reply', onClick: () => setReplyToMessage(msg) },
                 { icon: Forward, label: 'Forward', onClick: () => setForwardMessage(msg) },
-                { icon: Trash, label: 'Delete for Me', onClick: () => deleteMessage(msg._id, 'me') },
-                (isMe || isLead) && { icon: Trash2, label: 'Delete for Everyone', danger: true, onClick: () => deleteMessage(msg._id, 'everyone') },
+                { icon: Trash, label: 'Delete for Me', onClick: () => deleteMessage(msg._id, false) },
+                isMe && { icon: Trash2, label: 'Delete for Everyone', danger: true, onClick: () => deleteMessage(msg._id, true) },
               ].filter(Boolean) : [
-                { icon: Trash, label: 'Delete for Me', onClick: () => deleteMessage(msg._id, 'me') },
+                { icon: Trash, label: 'Delete for Me', onClick: () => deleteMessage(msg._id, false) },
               ];
 
               return (
                 <div key={msg._id} className={`flex w-full group ${isMe ? 'justify-end' : 'justify-start'}`}>
                   {!isMe && (
-                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs mr-3 flex-shrink-0 mt-1 shadow-sm">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-bold text-xs mr-3 flex-shrink-0 mt-1 shadow-sm">
                       {msg.senderName?.[0]?.toUpperCase()}
                     </div>
                   )}
@@ -547,7 +542,6 @@ const TeamChatThread = () => {
         <NewMessagesButton count={unseenCount} onClick={() => { scrollToBottom(true); setUnseenCount(0); }} />
       </div>
 
-      {/* Reply Preview Bar */}
       {replyToMessage && (
         <div className="bg-white border-t border-slate-100 px-4 py-2 flex items-center gap-3 max-w-3xl mx-auto w-full">
           <div className="w-1 self-stretch bg-blue-500 rounded-full" />
@@ -561,7 +555,6 @@ const TeamChatThread = () => {
         </div>
       )}
 
-      {/* Input Area */}
       <div className="bg-white border-t border-slate-200/80 px-4 py-4 z-20">
         <div className="max-w-3xl mx-auto flex items-end gap-3">
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
@@ -581,7 +574,7 @@ const TeamChatThread = () => {
               onChange={handleTyping}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder="Type a team message... (Use **bold**, *italic*, `code`, @mention)"
+              placeholder="Type a message... (Use **bold**, *italic*, `code`, @mention)"
               className="w-full bg-transparent px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none max-h-32 focus:outline-none scrollbar-hide font-medium"
               rows={1}
             />
@@ -599,16 +592,31 @@ const TeamChatThread = () => {
       <ChatSettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        title="Team Chat Settings"
+        title="Group Chat Settings"
         profile={{
-          avatarLabel: team?.name?.[0]?.toUpperCase() || 'T',
-          name: team?.name || 'Team',
-          subtitleLines: [`${team?.memberCount || 0} members`],
+          avatarLabel: group?.name?.[0]?.toUpperCase() || 'G',
+          name: group?.name || 'Group',
+          subtitleLines: [group?.description, `${totalMembers} members`].filter(Boolean),
         }}
-        chatId={`team-${teamId}`}
+        chatId={`group-${groupId}`}
         currentThemeId={theme.id}
         onSelectTheme={handleSelectTheme}
         muteState={{ isMuted, mutedUntil, onSetMute: handleSetMute }}
+        extra={
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Members ({totalMembers})</h3>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {activeParticipants.map(p => (
+                <div key={p.id} className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-[10px] flex-shrink-0">
+                    {p.name?.[0]?.toUpperCase()}
+                  </div>
+                  <span className="text-xs font-medium text-slate-700 truncate">{p.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        }
       />
 
       <ForwardModal
@@ -620,4 +628,4 @@ const TeamChatThread = () => {
   );
 };
 
-export default TeamChatThread;
+export default GroupChatThread;

@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { 
-  Trophy, Award, Plus, Sparkles, User, Settings, Info, Loader2, 
+import {
+  Trophy, Award, Plus, Sparkles, User, Settings, Info, Loader2,
   Trash2, ShieldCheck, CheckSquare, MessageSquare, Flame, Star, Check,
-  Edit, X, HelpCircle
+  Edit, X, HelpCircle, Coins
 } from 'lucide-react';
 import AvatarWithStatus from '../../../components/AvatarWithStatus';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
@@ -16,6 +16,8 @@ export default function LeaderboardTab({ project, projectId }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [customBadges, setCustomBadges] = useState([]);
   const [isManager, setIsManager] = useState(false);
+  const [isConsoleAdmin, setIsConsoleAdmin] = useState(false);
+  const [allowManagerPointsAdjustment, setAllowManagerPointsAdjustment] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -34,6 +36,8 @@ export default function LeaderboardTab({ project, projectId }) {
   const [showGuide, setShowGuide] = useState(false);
   const [editingCustomBadge, setEditingCustomBadge] = useState(null);
   const [selectedUserForBadges, setSelectedUserForBadges] = useState(null);
+  const [selectedUserForPoints, setSelectedUserForPoints] = useState(null);
+  const canAdjustPoints = isConsoleAdmin || (isManager && allowManagerPointsAdjustment);
 
   const colors = [
     { value: '#3b82f6', label: 'Blue' },
@@ -57,7 +61,9 @@ export default function LeaderboardTab({ project, projectId }) {
       setLeaderboard(data.leaderboard || []);
       setCustomBadges(data.customBadges || []);
       setIsManager(data.isManager || false);
-      
+      setIsConsoleAdmin(data.isConsoleAdmin || false);
+      setAllowManagerPointsAdjustment(data.allowManagerPointsAdjustment !== false);
+
       // Select defaults for grant form if lists are populated
       if (data.leaderboard?.length > 0 && !grantUsername) {
         setGrantUsername(data.leaderboard[0].username);
@@ -259,6 +265,48 @@ export default function LeaderboardTab({ project, projectId }) {
     }
   };
 
+  const handleAdjustPoints = async (username, delta, reason) => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/leaderboard/adjust-points`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, delta, reason }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to adjust points');
+      }
+      await fetchLeaderboard();
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const fetchPointsHistory = async (username) => {
+    const res = await fetch(`/api/projects/${projectId}/leaderboard/adjust-points?username=${encodeURIComponent(username)}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.history || [];
+  };
+
+  const handleTogglePointsPermission = async () => {
+    const next = !allowManagerPointsAdjustment;
+    try {
+      const res = await fetch(`/api/projects/${projectId}/leaderboard/points-permission`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allowManagerPointsAdjustment: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to update setting');
+      }
+      setAllowManagerPointsAdjustment(next);
+    } catch (err) {
+      alert(`Error updating setting: ${err.message}`);
+    }
+  };
+
   // Calculate top 3 for podium
   const podium = useMemo(() => {
     const top3 = [];
@@ -341,7 +389,7 @@ export default function LeaderboardTab({ project, projectId }) {
             <HelpCircle className="w-4 h-4" />
             Rules Guide
           </button>
-          {isManager && (
+          {(isManager || isConsoleAdmin) && (
             <button
               onClick={() => setShowAdminConsole(!showAdminConsole)}
               className="flex items-center gap-1.5 px-4 py-2 bg-surface hover:bg-surface-variant text-text-primary border border-border-default rounded-xl text-sm font-semibold shadow-sm transition-all"
@@ -354,12 +402,31 @@ export default function LeaderboardTab({ project, projectId }) {
       </div>
 
       {/* Admin Panel (Custom Badges creation & granting) */}
-      {isManager && showAdminConsole && (
+      {(isManager || isConsoleAdmin) && showAdminConsole && (
         <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-md transition-all animate-fadeIn">
           <h3 className="font-bold text-gray-900 text-base border-b pb-2.5 mb-5 flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-blue-600" /> Manager Gamification Center
           </h3>
-          
+
+          {isConsoleAdmin && (
+            <div className="flex items-center justify-between gap-4 mb-6 p-4 bg-amber-50/60 border border-amber-200/60 rounded-xl">
+              <div>
+                <p className="text-sm font-bold text-amber-900 flex items-center gap-1.5">
+                  <Coins className="h-4 w-4" /> Project Manager Points Access
+                </p>
+                <p className="text-xs text-amber-700/80 mt-0.5">
+                  Console admins/Admins only. When disabled, Project Managers can no longer manually adjust leaderboard points for this project.
+                </p>
+              </div>
+              <button
+                onClick={handleTogglePointsPermission}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${allowManagerPointsAdjustment ? 'bg-amber-600' : 'bg-gray-300'}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${allowManagerPointsAdjustment ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 divide-y md:divide-y-0 md:divide-x divide-gray-150">
             
             {/* Form 1: Create Badge */}
@@ -633,6 +700,15 @@ export default function LeaderboardTab({ project, projectId }) {
                             <Award className="h-3.5 w-3.5 text-gray-500 hover:text-blue-600" />
                           </button>
                         )}
+                        {canAdjustPoints && (
+                          <button
+                            onClick={() => setSelectedUserForPoints(row.username)}
+                            className="p-1 hover:bg-gray-100 rounded-md transition-colors"
+                            title="Adjust Points"
+                          >
+                            <Coins className="h-3.5 w-3.5 text-gray-500 hover:text-amber-600" />
+                          </button>
+                        )}
                       </div>
                     </td>
 
@@ -641,6 +717,14 @@ export default function LeaderboardTab({ project, projectId }) {
                       <div className="flex items-center justify-center gap-1">
                         <Flame className="w-3.5 h-3.5 fill-current text-orange-500" />
                         <span>{row.points}</span>
+                        {!!row.pointsAdjustment && (
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${row.pointsAdjustment > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}
+                            title="Manual adjustment applied by a manager/admin"
+                          >
+                            {row.pointsAdjustment > 0 ? '+' : ''}{row.pointsAdjustment}
+                          </span>
+                        )}
                       </div>
                     </td>
 
@@ -989,6 +1073,16 @@ export default function LeaderboardTab({ project, projectId }) {
           onGrant={handleDirectGrantBadge}
           onRevoke={handleDirectRevokeBadge}
           onClose={() => setSelectedUserForBadges(null)}
+        />
+      )}
+
+      {selectedUserForPoints && (
+        <AdjustPointsModal
+          username={selectedUserForPoints}
+          currentPoints={leaderboard.find(u => u.username === selectedUserForPoints)?.points || 0}
+          onAdjust={handleAdjustPoints}
+          onFetchHistory={fetchPointsHistory}
+          onClose={() => setSelectedUserForPoints(null)}
         />
       )}
 
@@ -1435,6 +1529,142 @@ const ManageBadgesModal = ({ username, customBadges, userBadges, onGrant, onRevo
         </div>
 
         {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const AdjustPointsModal = ({ username, currentPoints, onAdjust, onFetchHistory, onClose }) => {
+  const [delta, setDelta] = useState('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingHistory(true);
+    onFetchHistory(username).then(h => { if (active) setHistory(h); }).finally(() => { if (active) setLoadingHistory(false); });
+    return () => { active = false; };
+  }, [username, onFetchHistory]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const numericDelta = Number(delta);
+    if (!Number.isFinite(numericDelta) || numericDelta === 0) {
+      setError('Enter a non-zero number of points (positive or negative).');
+      return;
+    }
+    if (!reason.trim()) {
+      setError('A reason is required.');
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onAdjust(username, numericDelta, reason.trim());
+      setDelta('');
+      setReason('');
+      const h = await onFetchHistory(username);
+      setHistory(h);
+    } catch (err) {
+      setError(err.message || 'Failed to adjust points');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-150 animate-in fade-in zoom-in duration-200">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+          <div>
+            <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+              <Coins className="h-5 w-5 text-amber-600" />
+              Adjust Points
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">@{username} — currently {currentPoints} points</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 rounded-lg p-1.5 hover:bg-gray-100 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-150 rounded-lg text-xs text-red-700 font-medium">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Point Delta</label>
+              <input
+                type="number"
+                value={delta}
+                onChange={(e) => setDelta(e.target.value)}
+                placeholder="e.g. 10 or -5"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                disabled={submitting}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1.5">Reason</label>
+              <input
+                type="text"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Why are you adjusting this member's points?"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-amber-500 outline-none"
+                disabled={submitting}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={submitting || !delta || !reason.trim()}
+              className="w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+            >
+              {submitting ? 'Applying...' : 'Apply Adjustment'}
+            </button>
+          </form>
+
+          <div className="pt-5 border-t border-gray-150">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Adjustment History</h4>
+            {loadingHistory ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-gray-400" /></div>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-gray-400 italic bg-gray-50 p-4 rounded-xl text-center border border-dashed border-gray-200">
+                No manual adjustments yet.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {history.map((h) => (
+                  <div key={h._id} className="p-2.5 bg-gray-50 rounded-lg border border-gray-150">
+                    <div className="flex items-center justify-between">
+                      <span className={`text-sm font-bold ${h.delta > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {h.delta > 0 ? '+' : ''}{h.delta} points
+                      </span>
+                      <span className="text-[10px] text-gray-400">{new Date(h.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-0.5">{h.reason}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">by @{h.adjustedByName || h.adjustedBy}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex justify-end">
           <button
             onClick={onClose}

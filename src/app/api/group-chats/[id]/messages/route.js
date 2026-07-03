@@ -143,10 +143,21 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { body, replyToId, mediaUrl, isForwarded } = await req.json();
+    const { body, replyToId, mediaUrl, isForwarded, clientId } = await req.json();
 
     if (!body?.trim() && !mediaUrl) {
       return NextResponse.json({ error: 'Message body or mediaUrl is required' }, { status: 400 });
+    }
+
+    // Idempotency check — mirrors chat/send and team-chat/messages. Without
+    // this, a duplicate POST (e.g. a client retry) creates a second message,
+    // and the web client's optimistic-send/poll dedupe (keyed on clientId)
+    // has nothing to reconcile against.
+    if (clientId) {
+      const existing = await db.collection('group_chat_messages').findOne({ clientId });
+      if (existing) {
+        return NextResponse.json({ message: { ...existing, _id: existing._id.toString() } });
+      }
     }
 
     const group = await db.collection('group_chats').findOne({ _id: new ObjectId(groupId) });
@@ -215,6 +226,7 @@ export async function POST(req, { params }) {
       body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
+      clientId: clientId || null,
       createdAt: new Date(),
       readBy: [{ userId, readAt: new Date() }],
       deletedFor: [],

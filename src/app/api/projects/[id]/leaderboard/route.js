@@ -59,6 +59,17 @@ export async function GET(req, { params }) {
     }).toArray();
     const grantedBadges = await db.collection('project_member_badges').find({ projectId: new ObjectId(id) }).toArray();
 
+    // Manual point adjustments made by a project manager (see the
+    // adjust-points endpoint). Points here are fully recomputed on every
+    // request from task/comment data, so a manual adjustment can't be
+    // stored as a simple field update — instead we sum the deltas in here
+    // every time, the same way granted badges are merged in below.
+    const pointAdjustments = await db.collection('project_points_adjustments').find({ projectId: new ObjectId(id) }).toArray();
+    const adjustmentTotals = {};
+    pointAdjustments.forEach(adj => {
+      adjustmentTotals[adj.username] = (adjustmentTotals[adj.username] || 0) + adj.delta;
+    });
+
     // 2. Build list of potential members
     const membersSet = new Set();
     if (project.superManager) membersSet.add(project.superManager);
@@ -312,6 +323,15 @@ export async function GET(req, { params }) {
         userStats.points = 0;
       }
 
+      // 4.4b Manual manager adjustments (can push points up or down, but
+      // the final total is still floored at 0 like every other penalty).
+      const adjustment = adjustmentTotals[userStats.username] || 0;
+      userStats.pointsAdjustment = adjustment;
+      userStats.points += adjustment;
+      if (userStats.points < 0) {
+        userStats.points = 0;
+      }
+
       // 4.5 Unlocking automatic badges
       // 🚀 Early Bird (Completed 3+ tasks early)
       if (userStats.tasksCompletedEarly >= 3) {
@@ -444,7 +464,9 @@ export async function GET(req, { params }) {
         projectExclusive: cb.projectExclusive === true,
         projectId: cb.projectId?.toString()
       })),
-      isManager: isProjectManager(user, project)
+      isManager: isProjectManager(user, project),
+      isConsoleAdmin: user.role === 'Console admin' || user.role === 'Admin',
+      allowManagerPointsAdjustment: project.leaderboardSettings?.allowManagerPointsAdjustment !== false,
     });
 
   } catch (error) {
