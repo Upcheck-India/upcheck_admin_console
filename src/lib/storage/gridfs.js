@@ -31,13 +31,32 @@ export function startUpload(db, { filename, contentType, appId, version, uploade
   };
 }
 
-export async function getDownloadStream(db, version) {
+/** `range`, if given, is `{ start, end }` byte offsets (both inclusive,
+ * HTTP Range header convention) — used to support resumable downloads via
+ * expo-file-system's createDownloadResumable, which retries a dropped
+ * download by requesting only the remaining bytes instead of starting
+ * over. GridFS supports this precisely via openDownloadStream's own
+ * start/end options. */
+export async function getDownloadStream(db, version, range) {
   if (!version.fileId || !ObjectId.isValid(version.fileId)) return null;
   const bucket = getBucket(db);
   const files = await bucket.find({ _id: new ObjectId(version.fileId) }).toArray();
   if (files.length === 0) return null;
+  const totalSize = files[0].length;
+
+  if (range) {
+    const end = Math.min(range.end, totalSize - 1);
+    const nodeStream = bucket.openDownloadStream(new ObjectId(version.fileId), { start: range.start, end: end + 1 });
+    return {
+      webStream: Readable.toWeb(nodeStream),
+      size: end - range.start + 1,
+      contentType: files[0].contentType,
+      range: { start: range.start, end, total: totalSize },
+    };
+  }
+
   const nodeStream = bucket.openDownloadStream(new ObjectId(version.fileId));
-  return { webStream: Readable.toWeb(nodeStream), size: files[0].length, contentType: files[0].contentType };
+  return { webStream: Readable.toWeb(nodeStream), size: totalSize, contentType: files[0].contentType, range: null };
 }
 
 export async function deleteFile(db, version) {

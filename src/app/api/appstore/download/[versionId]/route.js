@@ -95,17 +95,37 @@ export async function GET(request, { params }) {
       }
     }
 
-    // 4. Increment download counter
-    await db.collection('appstore_apps').updateOne(
-      { _id: app._id },
-      { $inc: { downloadCount: 1 } }
-    );
+    // 4. Parse an incoming Range header (expo-file-system's
+    // createDownloadResumable sends this when resuming a dropped
+    // download) so a retry only re-fetches the missing tail instead of
+    // starting over from byte 0.
+    const rangeHeader = request.headers.get('range');
+    let range = null;
+    if (rangeHeader) {
+      const match = rangeHeader.match(/^bytes=(\d+)-(\d*)$/);
+      if (match) {
+        const start = parseInt(match[1], 10);
+        const end = match[2] ? parseInt(match[2], 10) : (version.sizeBytes ? version.sizeBytes - 1 : undefined);
+        if (end !== undefined && start <= end) {
+          range = { start, end };
+        }
+      }
+    }
+
+    // Only count a fresh download (not every resumed chunk) toward the
+    // app's download counter.
+    if (!range || range.start === 0) {
+      await db.collection('appstore_apps').updateOne(
+        { _id: app._id },
+        { $inc: { downloadCount: 1 } }
+      );
+    }
 
     // 5. Stream from whichever backend this version was actually stored
     // with — the app's globally active provider may have changed since
     // this version was uploaded, so we branch on the version's own record.
     const provider = getProviderForVersion(version);
-    const download = await provider.getDownloadStream(db, version);
+    const download = await provider.getDownloadStream(db, version, range);
     if (!download) {
       return NextResponse.json({ error: 'Binary file not found in storage' }, { status: 404 });
     }
@@ -113,7 +133,13 @@ export async function GET(request, { params }) {
     const headers = new Headers();
     headers.set('Content-Disposition', `attachment; filename="${version.filename || 'app.apk'}"`);
     headers.set('Content-Type', download.contentType || 'application/vnd.android.package-archive');
+    headers.set('Accept-Ranges', 'bytes');
     if (download.size) headers.set('Content-Length', download.size.toString());
+
+    if (download.range) {
+      headers.set('Content-Range', `bytes ${download.range.start}-${download.range.end}/${download.range.total ?? '*'}`);
+      return new Response(download.webStream, { status: 206, headers });
+    }
 
     return new Response(download.webStream, {
       status: 200,

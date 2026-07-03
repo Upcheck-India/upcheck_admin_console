@@ -49,11 +49,30 @@ export function startUpload(_db, { filename, contentType, appId, version }) {
   };
 }
 
-export async function getDownloadStream(_db, version) {
+/** `range`, if given, is `{ start, end }` byte offsets (both inclusive).
+ * Forwarded as a plain Range header to the underlying fetch — the SDK
+ * doesn't have first-class range support (its GetBlobResult type only
+ * documents 200/304), so this is best-effort: if the backend honors it we
+ * report a real partial range, otherwise we detect the fallback (returned
+ * size equals the full file) and just serve the whole thing as a normal
+ * 200 response, which is a safe, spec-correct thing for a resumable
+ * downloader to see. */
+export async function getDownloadStream(_db, version, range) {
   if (!version.blobUrl && !version.blobPathname) return null;
-  const result = await get(version.blobUrl || version.blobPathname, { access: 'private', token: TOKEN });
+  const headers = range ? { Range: `bytes=${range.start}-${range.end}` } : undefined;
+  const result = await get(version.blobUrl || version.blobPathname, { access: 'private', token: TOKEN, headers });
   if (!result || result.statusCode !== 200) return null;
-  return { webStream: result.stream, size: result.blob.size, contentType: result.blob.contentType };
+
+  const total = result.blob.size;
+  const contentRange = result.headers?.get?.('content-range');
+  if (range && contentRange) {
+    // The backend actually honored the Range request.
+    return { webStream: result.stream, size: range.end - range.start + 1, contentType: result.blob.contentType, range: { start: range.start, end: range.end, total } };
+  }
+  // No partial response — either no range was requested, or the backend
+  // ignored ours and returned the whole file; either way, serve it as a
+  // normal full 200 response (safe, spec-correct for the client to see).
+  return { webStream: result.stream, size: total, contentType: result.blob.contentType, range: null };
 }
 
 export async function deleteFile(_db, version) {

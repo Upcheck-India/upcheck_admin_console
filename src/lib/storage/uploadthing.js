@@ -50,15 +50,29 @@ export function startUpload(_db, { filename, contentType, appId, version }) {
   };
 }
 
-export async function getDownloadStream(_db, version) {
+/** `range`, if given, is `{ start, end }` byte offsets (both inclusive) —
+ * forwarded verbatim as a Range header. UploadThing's files live on S3,
+ * which reliably honors range GETs (a standard, publicly documented S3
+ * feature, unlike the other providers' range support), so a 206 response
+ * here is trustworthy rather than best-effort. */
+export async function getDownloadStream(_db, version, range) {
   if (!version.blobUrl) return null;
-  const res = await fetch(version.blobUrl);
+  const headers = range ? { Range: `bytes=${range.start}-${range.end}` } : undefined;
+  const res = await fetch(version.blobUrl, { headers });
   if (!res.ok || !res.body) return null;
-  return {
-    webStream: res.body,
-    size: Number(res.headers.get('content-length')) || null,
-    contentType: res.headers.get('content-type') || 'application/vnd.android.package-archive',
-  };
+
+  const contentType = res.headers.get('content-type') || 'application/vnd.android.package-archive';
+  if (res.status === 206) {
+    const contentRange = res.headers.get('content-range'); // "bytes start-end/total"
+    const total = contentRange ? Number(contentRange.split('/')[1]) : null;
+    return {
+      webStream: res.body,
+      size: Number(res.headers.get('content-length')) || (range.end - range.start + 1),
+      contentType,
+      range: { start: range.start, end: range.end, total },
+    };
+  }
+  return { webStream: res.body, size: Number(res.headers.get('content-length')) || null, contentType, range: null };
 }
 
 export async function deleteFile(_db, version) {
