@@ -228,6 +228,7 @@ export async function POST(request, { params }) {
       version: version.trim(),
       fileId: fileId,
       filename,
+      sizeBytes: sizeLimiter.total,
       uploadedAt: new Date(),
       changelog: (changelog || 'No release notes.').trim(),
       securityReport: {
