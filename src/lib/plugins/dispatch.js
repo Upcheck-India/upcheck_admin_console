@@ -3,7 +3,11 @@ import { getPlugin } from './index.js';
 
 // Distinct pseudo-sender for deterministic plugin output, kept separate from
 // the AI assistant's BOT_ID ("...0001") so plugin responses are never
-// confused with (or routed through) the LLM-backed bot.
+// confused with (or routed through) the LLM-backed bot. This ID identifies
+// *any* plugin's message at the schema level; which plugin actually spoke
+// is carried per-message via pluginId/pluginName/pluginIcon so the UI can
+// show "Project Management" / "Meetings" / "Moderation" instead of a
+// generic "Upcheck Plugins" label for everything.
 export const PLUGIN_SENDER_ID = '600000000000000000000002';
 export const PLUGIN_SENDER_NAME = 'Upcheck Plugins';
 export const PLUGIN_SENDER_USERNAME = 'upcheck_plugins';
@@ -58,10 +62,10 @@ export async function tryDispatchSlashCommand({ db, chatType, chatId, body, curr
         chatId,
         config: install.config || {},
       });
-      return { pluginId: plugin.id, command: command.name, responseText };
+      return { pluginId: plugin.id, pluginName: plugin.name, pluginIcon: plugin.icon, command: command.name, responseText };
     } catch (err) {
       console.error(`Plugin command /${parsed.command} (${plugin.id}) failed:`, err);
-      return { pluginId: plugin.id, command: command.name, responseText: `⚠️ /${parsed.command} failed: ${err.message}` };
+      return { pluginId: plugin.id, pluginName: plugin.name, pluginIcon: plugin.icon, command: command.name, responseText: `⚠️ /${parsed.command} failed: ${err.message}` };
     }
   }
 
@@ -70,11 +74,12 @@ export async function tryDispatchSlashCommand({ db, chatType, chatId, body, curr
 
 /**
  * Posts a plugin's response as a new message in the same chat, matching
- * each chat type's existing message schema so it renders exactly like a
- * normal message (just from the "Upcheck Plugins" sender instead of a
- * person or the AI bot).
+ * each chat type's existing message schema so it renders like a normal
+ * message, but tagged with which plugin actually spoke (pluginId/
+ * pluginName/pluginIcon) so the UI can render a distinct, correctly
+ * labeled bubble instead of a generic "Upcheck Plugins" one.
  */
-export async function postPluginResponse({ db, chatType, chatId, currentUser, responseText }) {
+export async function postPluginResponse({ db, chatType, chatId, currentUser, responseText, pluginId = null, pluginName = PLUGIN_SENDER_NAME, pluginIcon = '🔌' }) {
   const now = new Date();
 
   if (chatType === 'dm') {
@@ -84,6 +89,9 @@ export async function postPluginResponse({ db, chatType, chatId, currentUser, re
     await db.collection('chat_messages').insertOne({
       conversationId: chatId,
       senderId: PLUGIN_SENDER_ID,
+      pluginId,
+      pluginName,
+      pluginIcon,
       recipientId,
       body: responseText,
       type: 'text',
@@ -101,7 +109,10 @@ export async function postPluginResponse({ db, chatType, chatId, currentUser, re
     await db.collection('team_messages').insertOne({
       teamId: chatId,
       senderId: PLUGIN_SENDER_ID,
-      senderName: PLUGIN_SENDER_NAME,
+      pluginId,
+      pluginName,
+      pluginIcon,
+      senderName: pluginName,
       senderUsername: PLUGIN_SENDER_USERNAME,
       body: responseText,
       type: 'text',
@@ -126,6 +137,9 @@ export async function postPluginResponse({ db, chatType, chatId, currentUser, re
     await db.collection('group_chat_messages').insertOne({
       groupId: chatId,
       senderId: PLUGIN_SENDER_ID,
+      pluginId,
+      pluginName,
+      pluginIcon,
       body: responseText,
       type: 'text',
       createdAt: now,

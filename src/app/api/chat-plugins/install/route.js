@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../lib/auth';
-import { getPlugin } from '../../../../lib/plugins/index.js';
+import { getPlugin, pluginSupportsChatType } from '../../../../lib/plugins/index.js';
 import { canManagePluginsForChat } from '../../../../lib/plugins/permissions.js';
 
 const VALID_CHAT_TYPES = ['dm', 'team', 'group'];
@@ -20,8 +20,12 @@ export async function POST(req) {
       return NextResponse.json({ error: 'chatType, chatId, and pluginId are required' }, { status: 400 });
     }
 
-    if (!getPlugin(pluginId)) {
+    const plugin = getPlugin(pluginId);
+    if (!plugin) {
       return NextResponse.json({ error: 'Unknown plugin' }, { status: 404 });
+    }
+    if (!pluginSupportsChatType(plugin, chatType)) {
+      return NextResponse.json({ error: `${plugin.name} isn't available for this chat type` }, { status: 400 });
     }
 
     if (!(await canManagePluginsForChat(db, user, chatType, chatId))) {

@@ -100,7 +100,7 @@ export async function GET(req, { params }) {
       const sender = userMap[m.senderId];
       let senderName;
       if (m.senderId === PLUGIN_SENDER_ID) {
-        senderName = PLUGIN_SENDER_NAME;
+        senderName = m.pluginName || PLUGIN_SENDER_NAME;
       } else if (m.senderId === BOT_ID) {
         senderName = BOT_NAME;
       } else {
@@ -375,7 +375,11 @@ export async function POST(req, { params }) {
     try {
       const dispatched = await tryDispatchSlashCommand({ db, chatType: 'group', chatId: groupId, body: trimmedBody, currentUser: user });
       if (dispatched) {
-        await postPluginResponse({ db, chatType: 'group', chatId: groupId, currentUser: user, responseText: dispatched.responseText });
+        await postPluginResponse({
+          db, chatType: 'group', chatId: groupId, currentUser: user,
+          responseText: dispatched.responseText,
+          pluginId: dispatched.pluginId, pluginName: dispatched.pluginName, pluginIcon: dispatched.pluginIcon,
+        });
       }
     } catch (e) {
       console.error('Plugin dispatch error:', e);

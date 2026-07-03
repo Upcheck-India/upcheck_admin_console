@@ -155,7 +155,11 @@ export async function POST(request) {
     try {
       const dispatched = await tryDispatchSlashCommand({ db, chatType: 'dm', chatId: conversationId, body: trimmedBody, currentUser });
       if (dispatched) {
-        await postPluginResponse({ db, chatType: 'dm', chatId: conversationId, currentUser, responseText: dispatched.responseText });
+        await postPluginResponse({
+          db, chatType: 'dm', chatId: conversationId, currentUser,
+          responseText: dispatched.responseText,
+          pluginId: dispatched.pluginId, pluginName: dispatched.pluginName, pluginIcon: dispatched.pluginIcon,
+        });
       }
     } catch (e) {
       console.error('Plugin dispatch error:', e);

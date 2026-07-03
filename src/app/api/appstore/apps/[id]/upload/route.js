@@ -173,7 +173,11 @@ export async function POST(request, { params }) {
     // 4. Stream the request body straight into GridFS, validating ZIP
     // structure and computing a checksum inline — no full-file buffering
     // anywhere in this path.
-    bucket = new GridFSBucket(db, { bucketName: 'appstore_apks' });
+    // Default GridFS chunk size is 255KB, which means a 100MB+ APK becomes
+    // 400+ separate chunk-document inserts — a meaningful and avoidable
+    // source of latency on top of the raw transfer time. 1MB chunks cut
+    // that overhead by ~4x for large files.
+    bucket = new GridFSBucket(db, { bucketName: 'appstore_apks', chunkSizeBytes: 1024 * 1024 });
     const metadata = {
       appId: id,
       version: version.trim(),

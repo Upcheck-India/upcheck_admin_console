@@ -469,6 +469,8 @@ const GroupChatThread = () => {
                     createdAt={msg.createdAt}
                     timeFormat={timeFormat}
                     onTaskClick={setViewingTaskId}
+                    pluginName={msg.pluginName}
+                    pluginIcon={msg.pluginIcon}
                   />
                 );
               }

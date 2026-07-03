@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Puzzle, Plus, Trash2, Loader, ChevronDown, ChevronUp } from 'lucide-react';
+import { Puzzle, Plus, Trash2, Loader, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import { getPluginConfigEditor } from './plugins';
 
 // Shared "Plugins" section for a chat's settings panel (DM/Team/Group).
 // Lists installed plugins with their available slash commands, and — for
@@ -15,6 +16,7 @@ export default function PluginsPanel({ chatType, chatId }) {
   const [canManage, setCanManage] = useState(false);
   const [showCatalog, setShowCatalog] = useState(false);
   const [busyPluginId, setBusyPluginId] = useState(null);
+  const [configuringPluginId, setConfiguringPluginId] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -37,7 +39,9 @@ export default function PluginsPanel({ chatType, chatId }) {
   useEffect(() => { load(); }, [load]);
 
   const installedIds = new Set(installed.map(p => p.pluginId));
-  const notInstalled = catalog.filter(p => !installedIds.has(p.id));
+  const notInstalled = catalog.filter(p =>
+    !installedIds.has(p.id) && (!p.supportedChatTypes || p.supportedChatTypes.includes(chatType))
+  );
 
   const handleInstall = async (pluginId) => {
     setBusyPluginId(pluginId);
@@ -100,30 +104,54 @@ export default function PluginsPanel({ chatType, chatId }) {
         <p className="text-xs text-slate-400 mb-3">No plugins installed in this chat yet.</p>
       ) : (
         <div className="space-y-2 mb-3">
-          {installed.map(p => (
-            <div key={p.pluginId} className="p-3 rounded-xl border border-slate-200 bg-white">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800">{p.icon} {p.name}</span>
-                {canManage && (
-                  <button
-                    type="button"
-                    disabled={busyPluginId === p.pluginId}
-                    onClick={() => handleUninstall(p.pluginId)}
-                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors disabled:opacity-50"
-                    title="Uninstall"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+          {installed.map(p => {
+            const ConfigEditor = getPluginConfigEditor(p.pluginId);
+            const isConfiguring = configuringPluginId === p.pluginId;
+            return (
+              <div key={p.pluginId} className="p-3 rounded-xl border border-slate-200 bg-white">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800">{p.icon} {p.name}</span>
+                  <div className="flex items-center gap-1">
+                    {canManage && ConfigEditor && (
+                      <button
+                        type="button"
+                        onClick={() => setConfiguringPluginId(isConfiguring ? null : p.pluginId)}
+                        className={`p-1 rounded transition-colors ${isConfiguring ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'}`}
+                        title="Configure"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canManage && (
+                      <button
+                        type="button"
+                        disabled={busyPluginId === p.pluginId}
+                        onClick={() => handleUninstall(p.pluginId)}
+                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors disabled:opacity-50"
+                        title="Uninstall"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">{p.description}</p>
+                <div className="mt-2 space-y-0.5">
+                  {p.commands.map(c => (
+                    <p key={c.name} className="text-[10px] text-slate-400 font-mono">{c.usage} — {c.description}</p>
+                  ))}
+                </div>
+                {isConfiguring && ConfigEditor && (
+                  <ConfigEditor
+                    chatType={chatType}
+                    chatId={chatId}
+                    config={p.config}
+                    onSaved={async () => { setConfiguringPluginId(null); await load(); }}
+                  />
                 )}
               </div>
-              <p className="text-[11px] text-slate-500 mt-1">{p.description}</p>
-              <div className="mt-2 space-y-0.5">
-                {p.commands.map(c => (
-                  <p key={c.name} className="text-[10px] text-slate-400 font-mono">{c.usage} — {c.description}</p>
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

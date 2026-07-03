@@ -107,7 +107,7 @@ export async function GET(req) {
           const sender = userMap[m.senderId];
           let senderName;
           if (m.senderId === PLUGIN_SENDER_ID) {
-            senderName = PLUGIN_SENDER_NAME;
+            senderName = m.pluginName || PLUGIN_SENDER_NAME;
           } else if (m.senderId === BOT_ID) {
             senderName = BOT_NAME;
           } else {
