@@ -6,9 +6,16 @@ import { useAuth } from '../../../hooks/useAuth';
 import TopNav from '../../components/TopNav';
 
 import {
-  ArrowLeft, Trash2, Shield, Copy, CheckCircle, RefreshCw, AlertCircle, Clock
+  ArrowLeft, Trash2, Shield, Copy, CheckCircle, RefreshCw, AlertCircle, Clock, Zap
 } from 'lucide-react';
 import { useTimeFormat, setTimeFormatPreference } from '../../utils/timeFormat';
+import {
+  REALTIME_MODULES,
+  getRealtimeModes,
+  refreshRealtimeModes,
+  setRealtimeMode as persistRealtimeMode,
+} from '../../../lib/realtimePrefs';
+import { isRealtimeConfigured } from '../../../lib/realtime';
 
 const MessagesSettings = () => {
   const { user } = useAuth(false);
@@ -25,7 +32,18 @@ const MessagesSettings = () => {
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(user?.messageNotificationsEnabled !== false);
   const [savingNotifications, setSavingNotifications] = useState(false);
+  const [realtimeModes, setRealtimeModes] = useState(getRealtimeModes());
   const timeFormat = useTimeFormat();
+
+  useEffect(() => {
+    refreshRealtimeModes().then(setRealtimeModes).catch(() => {});
+  }, []);
+
+  const handleRealtimeMode = async (module, mode) => {
+    setRealtimeModes((prev) => ({ ...prev, [module]: mode }));
+    const next = await persistRealtimeMode(module, mode);
+    setRealtimeModes(next);
+  };
 
   useEffect(() => {
     if (user) {
@@ -371,6 +389,52 @@ const MessagesSettings = () => {
                   >
                     24-hour (14:30)
                   </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Realtime Transport */}
+            <div className="border-t border-slate-100 pt-6 flex items-start gap-4">
+              <div className="p-3 bg-sky-50 rounded-xl text-sky-600 flex-shrink-0">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-md font-bold text-slate-800 tracking-tight mb-1">Realtime Transport</h2>
+                <p className="text-xs text-slate-500 leading-relaxed mb-4">
+                  Choose how each module receives updates. Realtime uses a live socket connection (instant); Polling periodically re-fetches over HTTP (the fallback). Realtime automatically falls back to polling if the connection drops.
+                </p>
+                {!isRealtimeConfigured() && (
+                  <div className="mb-4 flex items-start gap-2 bg-amber-50/70 border border-amber-200/60 rounded-xl p-3">
+                    <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800">
+                      Realtime isn&apos;t configured in this deployment — all modules use polling regardless of the setting below.
+                    </p>
+                  </div>
+                )}
+                <div className="space-y-3 max-w-md">
+                  {REALTIME_MODULES.map((mod) => (
+                    <div key={mod} className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold text-slate-700 capitalize">{mod}</span>
+                      <div className="flex bg-slate-100 rounded-xl p-1 w-52">
+                        <button
+                          onClick={() => handleRealtimeMode(mod, 'realtime')}
+                          className={`flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all ${
+                            realtimeModes[mod] === 'realtime' ? 'bg-white shadow-sm text-sky-600' : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Realtime
+                        </button>
+                        <button
+                          onClick={() => handleRealtimeMode(mod, 'polling')}
+                          className={`flex-1 text-xs font-semibold py-1.5 rounded-lg transition-all ${
+                            realtimeModes[mod] === 'polling' ? 'bg-white shadow-sm text-sky-600' : 'text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Polling
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
