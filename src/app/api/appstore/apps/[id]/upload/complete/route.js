@@ -3,15 +3,21 @@ import { getAuthUser } from '../../../../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 import { getSession, deleteSession, chunkPath } from '../../../../../../../lib/storage/uploadSessions.js';
 import { finalizeApkUpload } from '../../../../../../../lib/appstore/finalizeUpload.js';
+import { createJob, completeJob, failJob } from '../../../../../../../lib/storage/finalizeJobs.js';
 
-// POST ?uploadId= — called once every chunk has been acknowledged.
-// Concatenates the chunk files in order and runs them through the same
-// validate+store pipeline the old single-shot upload route used, then
-// records the new version exactly as before.
+// POST ?uploadId= — called once every chunk has been acknowledged. This
+// kicks off the concat+hash+store pipeline in the BACKGROUND and responds
+// immediately, instead of making the client's HTTP request wait on the
+// entire assemble-and-upload-to-storage chain. For a large APK, that chain
+// (dominated by the outbound upload to whichever storage backend is
+// active — GridFS/Vercel Blob/UploadThing) can run long enough to exceed a
+// reverse proxy's idle timeout, producing a 504 regardless of which
+// backend is configured, since the proxy times out this one request no
+// matter which backend it's waiting on. The client now polls
+// GET .../upload/status instead of waiting on this response body.
 export async function POST(request, { params }) {
   const { searchParams } = new URL(request.url);
   const uploadId = searchParams.get('uploadId');
-  let session = null;
   try {
     const { id } = await params;
     const auth = await getAuthUser(request);
@@ -27,7 +33,7 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'uploadId is required' }, { status: 400 });
     }
 
-    session = getSession(uploadId);
+    const session = getSession(uploadId);
     if (!session || session.appId !== id) {
       return NextResponse.json({ error: 'Unknown or expired upload session' }, { status: 404 });
     }
@@ -59,24 +65,25 @@ export async function POST(request, { params }) {
 
     const chunkPaths = Array.from({ length: session.totalChunks }, (_, i) => chunkPath(session, i));
 
-    let result;
-    try {
-      result = await finalizeApkUpload({ db, app, session, chunkPaths });
-    } catch (streamErr) {
-      if (streamErr.message === 'FILE_TOO_LARGE') {
-        return NextResponse.json({ error: 'Assembled file is too large.' }, { status: 400 });
-      }
-      if (streamErr.message === 'INVALID_APK_FORMAT') {
-        return NextResponse.json({ error: 'Invalid file format. Please upload a valid Android APK file.' }, { status: 400 });
-      }
-      throw streamErr;
-    }
+    createJob(uploadId);
+    finalizeApkUpload({ db, app, session, chunkPaths })
+      .then((result) => {
+        completeJob(uploadId, result);
+      })
+      .catch((streamErr) => {
+        let message = streamErr.message;
+        if (message === 'FILE_TOO_LARGE') message = 'Assembled file is too large.';
+        if (message === 'INVALID_APK_FORMAT') message = 'Invalid file format. Please upload a valid Android APK file.';
+        console.error('App Store chunked upload finalize error:', streamErr);
+        failJob(uploadId, message);
+      })
+      .finally(() => {
+        deleteSession(uploadId).catch(() => {});
+      });
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, processing: true, uploadId });
   } catch (error) {
     console.error('App Store chunked upload complete error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
-  } finally {
-    if (uploadId) await deleteSession(uploadId).catch(() => {});
   }
 }
