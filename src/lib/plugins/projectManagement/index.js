@@ -1,4 +1,4 @@
-import { canViewUserData } from '../permissions.js';
+import { canViewUserData, canViewTask } from '../permissions.js';
 import {
   getUserTasks, getDueSoonTasks, getOverdueTasks, getTodoTasks, getProjectSprints, getTaskById,
   formatTaskLine, formatDueLabel, resolveAssigneeNames,
@@ -89,15 +89,7 @@ async function handleTaskDetail({ db, currentUser, argsText }) {
     return `❓ No task found with id ${taskId}.`;
   }
 
-  const isAssignee = (task.assignees || []).some(a => a.toString() === currentUser._id.toString());
-  const isReporter = task.reporter?.toString() === currentUser._id.toString();
-  let allowed = isAssignee || isReporter;
-  if (!allowed) {
-    for (const assigneeId of task.assignees || []) {
-      if (await canViewUserData(db, currentUser, assigneeId.toString())) { allowed = true; break; }
-    }
-  }
-  if (!allowed) {
+  if (!(await canViewTask(db, currentUser, task))) {
     return `🔒 You don't have permission to view task ${taskId}.`;
   }
 

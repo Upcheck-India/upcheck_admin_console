@@ -10,6 +10,10 @@ import NewMessagesButton from '../../components/messages/NewMessagesButton';
 import MessageImage from '../../components/messages/MessageImage';
 import ForwardModal from '../../components/messages/ForwardModal';
 import PluginsPanel from '../../components/messages/PluginsPanel';
+import MessageBody from '../../components/messages/MessageBody';
+import TaskMentionDropdown from '../../components/messages/TaskMentionDropdown';
+import TaskInfoModal from '../../components/messages/TaskInfoModal';
+import { useTaskMentionAutocomplete } from '../../utils/useTaskMentionAutocomplete';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../utils/timeFormat';
 import { formatTypingText } from '../../utils/typingText';
@@ -68,6 +72,8 @@ const ChatThread = () => {
   const [replyToMessage, setReplyToMessage] = useState(null);
   const [forwardMessage, setForwardMessage] = useState(null);
   const [infoMessage, setInfoMessage] = useState(null);
+  const [viewingTaskId, setViewingTaskId] = useState(null);
+  const taskMention = useTaskMentionAutocomplete({ chatType: 'dm', chatId: conversationId });
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -702,7 +708,11 @@ const ChatThread = () => {
                               caption={msg.body && msg.body !== '📷 Photo' ? msg.body : null}
                             />
                           ) : (
-                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed select-text">{msg.body}</p>
+                            <MessageBody
+                              text={msg.body}
+                              onTaskClick={setViewingTaskId}
+                              className="text-sm whitespace-pre-wrap break-words leading-relaxed select-text"
+                            />
                           )}
 
                           {/* Hover Quick Actions */}
@@ -792,6 +802,13 @@ const ChatThread = () => {
       {/* Composer Input Bar */}
       <div className="bg-white border-t border-slate-100 p-4 shadow-lg z-10">
         <div className="flex items-end gap-3.5 max-w-4xl mx-auto relative">
+          {taskMention.query !== null && (
+            <TaskMentionDropdown
+              loading={taskMention.loading}
+              tasks={taskMention.results}
+              onSelect={(task) => setMessageText(prev => taskMention.selectTask(task, prev))}
+            />
+          )}
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelected} />
           <button
             type="button"
@@ -806,10 +823,11 @@ const ChatThread = () => {
           <textarea
             ref={textareaRef}
             value={messageText}
-            onChange={handleTyping}
+            onChange={(e) => { handleTyping(e); taskMention.handleComposerChange(e.target.value, e.target.selectionStart); }}
             onPaste={handlePaste}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
+                if (taskMention.query !== null) return;
                 e.preventDefault();
                 if (connectionStatus === 'accepted' && messageText.trim()) handleSend();
               }
@@ -913,6 +931,8 @@ const ChatThread = () => {
           </div>
         </div>
       )}
+
+      <TaskInfoModal taskId={viewingTaskId} onClose={() => setViewingTaskId(null)} />
     </div>
   );
 };

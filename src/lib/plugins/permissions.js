@@ -89,3 +89,23 @@ export async function canViewUserData(db, caller, targetUserId) {
   });
   return !!sharedTeam;
 }
+
+/**
+ * Whether `caller` may view a specific task — used by both the /task slash
+ * command and the #task-mention resolve/search endpoints, so the two
+ * surfaces can never disagree about who can see what. Allowed if the
+ * caller is an assignee or the reporter, or if canViewUserData passes for
+ * any of the task's assignees (shared team / platform admin).
+ */
+export async function canViewTask(db, caller, task) {
+  if (!task) return false;
+  const callerId = caller._id.toString();
+  const isAssignee = (task.assignees || []).some(a => a.toString() === callerId);
+  const isReporter = task.reporter?.toString() === callerId;
+  if (isAssignee || isReporter) return true;
+
+  for (const assigneeId of task.assignees || []) {
+    if (await canViewUserData(db, caller, assigneeId.toString())) return true;
+  }
+  return false;
+}

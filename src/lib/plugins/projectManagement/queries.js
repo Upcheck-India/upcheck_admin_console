@@ -119,4 +119,36 @@ export async function getTaskById(db, taskId) {
   return db.collection('project_tasks').findOne({ _id: new ObjectId(taskId) });
 }
 
+/**
+ * Task search backing the #task-mention autocomplete. Scope is
+ * intentionally conservative and mirrors the rest of the plugin: if the
+ * installing chat is linked to a project (config.projectId), search that
+ * project's tasks by title; otherwise search only the caller's own tasks
+ * (assignee or reporter) — never an unscoped cross-project search, since
+ * chat participants shouldn't be able to fish for tasks they can't
+ * otherwise see.
+ */
+export async function searchTasksForMention(db, currentUser, config, queryText, { limit = 8 } = {}) {
+  const titleFilter = queryText ? { title: { $regex: queryText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } } : {};
+
+  if (config?.projectId && ObjectId.isValid(config.projectId)) {
+    return db.collection('project_tasks')
+      .find({ projectId: new ObjectId(config.projectId), ...titleFilter })
+      .sort({ updatedAt: -1 })
+      .limit(limit)
+      .toArray();
+  }
+
+  const userId = currentUser._id.toString();
+  const userIdObj = toObjectIdSafe(userId);
+  return db.collection('project_tasks')
+    .find({
+      $or: [{ assignees: { $in: [userId, userIdObj] } }, { reporter: { $in: [userId, userIdObj] } }],
+      ...titleFilter,
+    })
+    .sort({ updatedAt: -1 })
+    .limit(limit)
+    .toArray();
+}
+
 export { formatTaskLine, formatDueLabel, resolveAssigneeNames, DUE_SOON_WINDOW_MS };

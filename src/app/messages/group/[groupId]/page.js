@@ -10,6 +10,10 @@ import NewMessagesButton from '../../../components/messages/NewMessagesButton';
 import MessageImage from '../../../components/messages/MessageImage';
 import ForwardModal from '../../../components/messages/ForwardModal';
 import PluginsPanel from '../../../components/messages/PluginsPanel';
+import MessageBody from '../../../components/messages/MessageBody';
+import TaskMentionDropdown from '../../../components/messages/TaskMentionDropdown';
+import TaskInfoModal from '../../../components/messages/TaskInfoModal';
+import { useTaskMentionAutocomplete } from '../../../utils/useTaskMentionAutocomplete';
 import { getChatTheme, getChatThemeById, setChatTheme as persistChatTheme } from '../../../utils/chatThemes';
 import { useTimeFormat, formatMessageTime } from '../../../utils/timeFormat';
 import { formatTypingText } from '../../../utils/typingText';
@@ -22,19 +26,6 @@ import {
 
 const POLL_INTERVAL = 4000;
 const MESSAGES_LIMIT = 50;
-
-const formatText = (text) => {
-  if (!text) return null;
-  const regex = /(\*\*.*?\*\*|\*.*?\*|`.*?`|@[a-zA-Z0-9_]+)/g;
-  const parts = text.split(regex);
-  return parts.map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>;
-    if (part.startsWith('`') && part.endsWith('`')) return <code key={index} className="bg-slate-100 px-1 rounded font-mono text-sm">{part.slice(1, -1)}</code>;
-    if (part.startsWith('@')) return <span key={index} className="text-blue-500 font-bold">{part}</span>;
-    return part;
-  });
-};
 
 const GroupChatThread = () => {
   const { user } = useAuth(false);
@@ -70,6 +61,8 @@ const GroupChatThread = () => {
 
   const [replyToMessage, setReplyToMessage] = useState(null);
   const [forwardMessage, setForwardMessage] = useState(null);
+  const [viewingTaskId, setViewingTaskId] = useState(null);
+  const taskMention = useTaskMentionAutocomplete({ chatType: 'group', chatId: groupId });
 
   const scrollToBottom = (smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
@@ -211,6 +204,7 @@ const GroupChatThread = () => {
   const typingTimeoutRef = useRef(null);
   const handleTyping = (e) => {
     setMessageText(e.target.value);
+    taskMention.handleComposerChange(e.target.value, e.target.selectionStart);
     if (e.target.value.trim().length > 0 && !typingTimeoutRef.current) {
       fetch('/api/group-chats/typing', {
         method: 'POST',
@@ -336,6 +330,7 @@ const GroupChatThread = () => {
   const handleSend = () => sendMessage({ body: messageText });
 
   const handleKeyDown = (e) => {
+    if (taskMention.query !== null) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -524,7 +519,9 @@ const GroupChatThread = () => {
                           <MessageImage src={msg.mediaUrl} caption={msg.body && msg.body !== '📷 Photo' ? msg.body : null} />
                         ) : (
                           <div className="whitespace-pre-wrap break-words leading-relaxed font-medium">
-                            {isDeleted ? msg.body : formatText(msg.body)}
+                            {isDeleted ? msg.body : (
+                              <MessageBody text={msg.body} onTaskClick={setViewingTaskId} />
+                            )}
                           </div>
                         )}
 
@@ -593,13 +590,20 @@ const GroupChatThread = () => {
             {uploadingImage ? <Loader className="w-5 h-5 animate-spin" /> : <ImageIcon className="w-5 h-5" />}
           </button>
           <div className="flex-1 bg-slate-50 border border-slate-200/80 rounded-2xl relative shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500 transition-all">
+            {taskMention.query !== null && (
+              <TaskMentionDropdown
+                loading={taskMention.loading}
+                tasks={taskMention.results}
+                onSelect={(task) => setMessageText(prev => taskMention.selectTask(task, prev))}
+              />
+            )}
             <textarea
               ref={textareaRef}
               value={messageText}
               onChange={handleTyping}
               onKeyDown={handleKeyDown}
               onPaste={handlePaste}
-              placeholder="Type a message... (Use **bold**, *italic*, `code`, @mention)"
+              placeholder="Type a message... (Use **bold**, *italic*, `code`, @mention, #task)"
               className="w-full bg-transparent px-4 py-3 text-sm text-slate-800 placeholder-slate-400 resize-none max-h-32 focus:outline-none scrollbar-hide font-medium"
               rows={1}
             />
@@ -667,6 +671,8 @@ const GroupChatThread = () => {
         onClose={() => setForwardMessage(null)}
         onForward={handleForward}
       />
+
+      <TaskInfoModal taskId={viewingTaskId} onClose={() => setViewingTaskId(null)} />
     </div>
   );
 };
