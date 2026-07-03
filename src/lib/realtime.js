@@ -116,3 +116,11 @@ export function subscribeConnection(cb) {
 export function getSocket() {
   return socket;
 }
+
+export function joinRoom(kind, id) {
+  if (socket && id) socket.emit('join', { kind, id });
+}
+
+export function leaveRoom(kind, id) {
+  if (socket && id) socket.emit('leave', { kind, id });
+}
