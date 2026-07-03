@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../lib/auth';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
+import { getProviderForVersion } from '../../../../../lib/storage/index.js';
 
 export async function GET(request, { params }) {
   try {
@@ -221,13 +222,11 @@ export async function DELETE(request, { params }) {
       return NextResponse.json({ error: 'Forbidden: Only admins or the original publisher can delete this app' }, { status: 403 });
     }
 
-    // 1. Delete all version files from GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'appstore_apks' });
+    // 1. Delete all version files, each from whichever backend it was
+    // actually stored with.
     const versions = app.versions || [];
     for (const v of versions) {
-      if (v.fileId) {
-        await bucket.delete(new ObjectId(v.fileId)).catch(() => {});
-      }
+      await getProviderForVersion(v).deleteFile(db, v).catch(() => {});
     }
 
     // 2. Delete app metadata document

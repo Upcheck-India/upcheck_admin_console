@@ -1,29 +1,37 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../lib/auth';
-import { GridFSBucket, ObjectId } from 'mongodb';
-import { Readable } from 'stream';
+import { ObjectId } from 'mongodb';
+import { getProviderForVersion } from '../../../../../lib/storage/index.js';
 
 export async function GET(request, { params }) {
   try {
-    const { fileId } = await params;
+    const { versionId } = await params;
     const auth = await getAuthUser(request);
     if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const { user, db } = auth;
 
-    if (!fileId || !ObjectId.isValid(fileId)) {
-      return NextResponse.json({ error: 'Invalid file ID' }, { status: 400 });
+    if (!versionId || !ObjectId.isValid(versionId)) {
+      return NextResponse.json({ error: 'Invalid version ID' }, { status: 400 });
     }
 
-    const objectFileId = new ObjectId(fileId);
+    const objectVersionId = new ObjectId(versionId);
 
-    // 1. Find the parent app containing this version
+    // 1. Find the parent app containing this version — versions are
+    // identified by their own stable _id regardless of which storage
+    // backend actually holds the bytes (fileId/blobUrl/utKey), so this
+    // lookup and everything downstream works the same for every provider.
     const app = await db.collection('appstore_apps').findOne({
-      "versions.fileId": objectFileId
+      'versions._id': objectVersionId
     });
 
     if (!app) {
+      return NextResponse.json({ error: 'App or version file not found' }, { status: 404 });
+    }
+
+    const version = (app.versions || []).find(v => v._id?.toString() === versionId);
+    if (!version) {
       return NextResponse.json({ error: 'App or version file not found' }, { status: 404 });
     }
 
@@ -87,37 +95,27 @@ export async function GET(request, { params }) {
       }
     }
 
-    // 3. Increment download counter
+    // 4. Increment download counter
     await db.collection('appstore_apps').updateOne(
       { _id: app._id },
       { $inc: { downloadCount: 1 } }
     );
 
-    // 4. Download from GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'appstore_apks' });
-    const filesCursor = bucket.find({ _id: objectFileId });
-    const files = await filesCursor.toArray();
-
-    if (!files || files.length === 0) {
+    // 5. Stream from whichever backend this version was actually stored
+    // with — the app's globally active provider may have changed since
+    // this version was uploaded, so we branch on the version's own record.
+    const provider = getProviderForVersion(version);
+    const download = await provider.getDownloadStream(db, version);
+    if (!download) {
       return NextResponse.json({ error: 'Binary file not found in storage' }, { status: 404 });
     }
 
-    const file = files[0];
-    // Stream straight from GridFS to the response instead of buffering the
-    // whole APK in memory first — the old Buffer.concat() approach held the
-    // entire file (and a full copy of it) in RAM and didn't send a single
-    // byte to the client until the whole thing had been read from Mongo,
-    // which is both slow and a likely contributor to gateway timeouts on
-    // larger files.
-    const downloadStream = bucket.openDownloadStream(objectFileId);
-    const webStream = Readable.toWeb(downloadStream);
-
     const headers = new Headers();
-    headers.set('Content-Disposition', `attachment; filename="${file.filename}"`);
-    headers.set('Content-Type', file.contentType || 'application/vnd.android.package-archive');
-    headers.set('Content-Length', file.length.toString());
+    headers.set('Content-Disposition', `attachment; filename="${version.filename || 'app.apk'}"`);
+    headers.set('Content-Type', download.contentType || 'application/vnd.android.package-archive');
+    if (download.size) headers.set('Content-Length', download.size.toString());
 
-    return new Response(webStream, {
+    return new Response(download.webStream, {
       status: 200,
       headers
     });

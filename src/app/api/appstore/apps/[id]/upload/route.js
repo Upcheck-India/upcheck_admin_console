@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../../lib/auth';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import crypto from 'crypto';
 import { sendPushNotification } from '../../../../../../lib/pushNotifications';
+import { getActiveProvider, getProviderForVersion } from '../../../../../../lib/storage/index.js';
 
 const VERSION_RE = /^\d{1,4}(\.\d{1,4}){1,3}(-[a-zA-Z0-9.]+)?$/;
 const MAX_APK_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
 
 // Rejects once more than maxBytes has flowed through — a defense-in-depth
-// check for when Content-Length is missing/wrong, since GridFS itself has
-// no size cap.
+// check for when Content-Length is missing/wrong, since none of the
+// storage backends enforce a size cap of their own.
 class SizeLimitStream extends Transform {
   constructor(maxBytes, opts) {
     super(opts);
@@ -89,8 +90,6 @@ class HashPassThrough extends Transform {
 }
 
 export async function POST(request, { params }) {
-  let uploadStream = null;
-  let bucket = null;
   try {
     const { id } = await params;
     const auth = await getAuthUser(request);
@@ -140,7 +139,7 @@ export async function POST(request, { params }) {
     // file means the origin sits idle doing nothing observable for the
     // whole upload duration and is a prime cause of gateway/proxy timeouts
     // (524s) on slower connections. Reading the body as a raw stream lets
-    // bytes start flowing into GridFS immediately.
+    // bytes start flowing into storage immediately.
     const { searchParams } = new URL(request.url);
     const version = searchParams.get('version') || '';
     const changelog = decodeURIComponent(searchParams.get('changelog') || '');
@@ -170,38 +169,31 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: `Version ${version} already exists` }, { status: 400 });
     }
 
-    // 4. Stream the request body straight into GridFS, validating ZIP
-    // structure and computing a checksum inline — no full-file buffering
-    // anywhere in this path.
-    // Default GridFS chunk size is 255KB, which means a 100MB+ APK becomes
-    // 400+ separate chunk-document inserts — a meaningful and avoidable
-    // source of latency on top of the raw transfer time. 1MB chunks cut
-    // that overhead by ~4x for large files.
-    bucket = new GridFSBucket(db, { bucketName: 'appstore_apks', chunkSizeBytes: 1024 * 1024 });
-    const metadata = {
+    // 4. Stream the request body straight into the active storage backend,
+    // validating ZIP structure and computing a checksum inline — no
+    // full-file buffering anywhere in this path (except UploadThing, which
+    // buffers internally — see lib/storage/uploadthing.js).
+    const provider = await getActiveProvider(db);
+    const { sink, finalize, cleanup } = provider.startUpload(db, {
+      filename,
+      contentType: 'application/vnd.android.package-archive',
       appId: id,
       version: version.trim(),
       uploadedBy: user._id.toString(),
-      uploadedAt: new Date()
-    };
-
-    uploadStream = bucket.openUploadStream(filename, {
-      contentType: 'application/vnd.android.package-archive',
-      metadata
     });
 
     const sizeLimiter = new SizeLimitStream(MAX_APK_SIZE_BYTES);
     const magicCheck = new ZipMagicCheckStream();
     const hasher = new HashPassThrough();
 
+    let storageResult;
     try {
-      await pipeline(Readable.fromWeb(request.body), sizeLimiter, magicCheck, hasher, uploadStream);
+      await pipeline(Readable.fromWeb(request.body), sizeLimiter, magicCheck, hasher, sink);
+      storageResult = await finalize();
     } catch (streamErr) {
-      // Clean up the partial GridFS file — the pipeline may have already
-      // written some chunks before the error was raised downstream.
-      if (uploadStream?.id) {
-        await bucket.delete(uploadStream.id).catch(() => {});
-      }
+      // Clean up whatever the provider may have already written before the
+      // error was raised.
+      await cleanup(storageResult).catch(() => {});
       if (streamErr.message === 'FILE_TOO_LARGE') {
         return NextResponse.json({ error: `File is too large. Maximum size is ${MAX_APK_SIZE_BYTES / (1024 * 1024)}MB` }, { status: 400 });
       }
@@ -210,8 +202,6 @@ export async function POST(request, { params }) {
       }
       throw streamErr;
     }
-
-    const fileId = uploadStream.id;
 
     // 5. Security report — honest about what was actually checked. We
     // don't have a malware-scanning or APK-signature-verification service
@@ -226,7 +216,7 @@ export async function POST(request, { params }) {
     const newVersion = {
       _id: new ObjectId(),
       version: version.trim(),
-      fileId: fileId,
+      ...storageResult,
       filename,
       sizeBytes: sizeLimiter.total,
       uploadedAt: new Date(),
@@ -251,10 +241,7 @@ export async function POST(request, { params }) {
       updatedVersions.sort((a, b) => new Date(a.uploadedAt).getTime() - new Date(b.uploadedAt).getTime());
       // Get oldest
       const oldest = updatedVersions[0];
-      // Delete from GridFS
-      if (oldest.fileId) {
-        await bucket.delete(new ObjectId(oldest.fileId)).catch(() => {});
-      }
+      await getProviderForVersion(oldest).deleteFile(db, oldest).catch(() => {});
       // Remove from array
       updatedVersions.shift();
     }

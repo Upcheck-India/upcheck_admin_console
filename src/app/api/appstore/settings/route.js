@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../lib/auth';
+import { DEFAULT_PROVIDER_ID, PROVIDERS } from '../../../../lib/storage/index.js';
 
 export async function GET(request) {
   try {
@@ -23,6 +24,7 @@ export async function GET(request) {
         uploadsDisabled: false,
         downloadsDisabled: false,
         updatesDisabled: false,
+        storageProvider: DEFAULT_PROVIDER_ID,
         updatedAt: new Date()
       };
       await db.collection('appstore_settings').insertOne(settings);
@@ -35,6 +37,7 @@ export async function GET(request) {
       uploadsDisabled: false,
       downloadsDisabled: false,
       updatesDisabled: false,
+      storageProvider: DEFAULT_PROVIDER_ID,
       ...settings,
     };
 
@@ -72,6 +75,7 @@ export async function PUT(request) {
       uploadsDisabled,
       downloadsDisabled,
       updatesDisabled,
+      storageProvider,
     } = body;
 
     const updateDoc = {
@@ -86,6 +90,7 @@ export async function PUT(request) {
       uploadsDisabled: !!uploadsDisabled,
       downloadsDisabled: !!downloadsDisabled,
       updatesDisabled: !!updatesDisabled,
+      storageProvider: PROVIDERS[storageProvider] ? storageProvider : DEFAULT_PROVIDER_ID,
       updatedAt: new Date()
     };
 
