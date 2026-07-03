@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getAuthUser } from '../../../../lib/auth';
+import { getAuthUserResult } from '../../../../lib/auth';
 import {
   normalizeRealtimePrefs,
   buildRealtimeUpdate,
@@ -10,11 +10,14 @@ import {
 // when no document exists yet.
 export async function GET(request) {
   try {
-    const auth = await getAuthUser(request);
-    if (!auth) {
+    const authResult = await getAuthUserResult(request);
+    if (authResult.status === 'db_unavailable') {
+      return NextResponse.json({ error: 'Auth temporarily unavailable' }, { status: 503 });
+    }
+    if (authResult.status !== 'ok') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const { user, db } = auth;
+    const { user, db } = authResult;
     const userId = user._id.toString();
 
     const doc = await db.collection('user_preferences').findOne({ userId });
@@ -30,11 +33,14 @@ export async function GET(request) {
 // each 'realtime' | 'polling'.
 export async function PUT(request) {
   try {
-    const auth = await getAuthUser(request);
-    if (!auth) {
+    const authResult = await getAuthUserResult(request);
+    if (authResult.status === 'db_unavailable') {
+      return NextResponse.json({ error: 'Auth temporarily unavailable' }, { status: 503 });
+    }
+    if (authResult.status !== 'ok') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const { user, db } = auth;
+    const { user, db } = authResult;
     const userId = user._id.toString();
 
     const body = await request.json().catch(() => ({}));
