@@ -41,6 +41,41 @@ clientPromise.then(async (resolvedClient) => {
   }
 }).catch(() => {});
 
+// Ensure messaging indexes exist (idempotent, runs once per process, fire-and-
+// forget so it never blocks the first request). Auth previously did an
+// unindexed COLLSCAN of admin_sessions/admin_users on EVERY request, and
+// team/group message + typing + mute queries had no index at all and scanned
+// growing collections on every 2s poll. createIndex is a no-op when the index
+// already exists.
+clientPromise.then(async (resolvedClient) => {
+  try {
+    const db = resolvedClient.db('resources');
+    await Promise.all([
+      // Auth — hit on every single API request
+      db.collection('admin_sessions').createIndex({ token: 1 }),
+      db.collection('admin_users').createIndex({ sessionToken: 1 }, { sparse: true }),
+      // Message reads/polls
+      db.collection('chat_messages').createIndex({ conversationId: 1, createdAt: -1 }),
+      db.collection('team_messages').createIndex({ teamId: 1, createdAt: 1 }),
+      db.collection('group_chat_messages').createIndex({ groupId: 1, createdAt: 1 }),
+      // Idempotency dedupe by clientId
+      db.collection('team_messages').createIndex({ clientId: 1 }, { sparse: true }),
+      db.collection('group_chat_messages').createIndex({ clientId: 1 }, { sparse: true }),
+      // Typing (polled every cycle)
+      db.collection('dm_typing').createIndex({ conversationId: 1, updatedAt: 1 }),
+      db.collection('team_typing').createIndex({ teamId: 1, updatedAt: 1 }),
+      db.collection('group_typing').createIndex({ groupId: 1, updatedAt: 1 }),
+      // Mute lookups on send + poll
+      db.collection('chat_mutes').createIndex({ chatId: 1, chatType: 1 }),
+      db.collection('chat_mutes').createIndex({ userId: 1, chatType: 1 }),
+      // Connections list
+      db.collection('chat_connections').createIndex({ userId: 1, status: 1 }),
+    ]);
+  } catch (err) {
+    console.error('Failed to ensure messaging indexes on startup:', err);
+  }
+}).catch(() => {});
+
 // Mongoose connection management
 export async function connectToDatabase() {
   if (global.mongoose.conn) {

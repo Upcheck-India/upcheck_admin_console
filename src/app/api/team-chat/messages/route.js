@@ -52,23 +52,24 @@ export async function GET(request) {
     }
 
     const messages = await db.collection('team_messages')
-      .aggregate([
-        { $match: query },
-        { $sort: { _id: -1 } },
-        { $limit: limit },
-        {
-          $lookup: {
-            from: 'admin_users',
-            let: { senderId: "$senderId" },
-            pipeline: [
-              { $match: { $expr: { $eq: [ { $toString: "$_id" }, "$$senderId" ] } } },
-              { $project: { firstName: 1, lastName: 1, name: 1, username: 1, avatar: 1 } }
-            ],
-            as: 'senderDetails'
-          }
-        }
-      ])
+      .find(query)
+      .sort({ _id: -1 })
+      .limit(limit)
       .toArray();
+
+    // Batch-resolve senders in ONE indexed $in query. The previous $lookup used
+    // { $toString: "$_id" } in the join predicate, which defeats the _id index
+    // and COLLSCANs admin_users once per message.
+    const senderObjIds = [...new Set(messages.map(m => m.senderId).filter(Boolean))]
+      .map(id => { try { return new ObjectId(id); } catch { return null; } })
+      .filter(Boolean);
+    const senderDocs = senderObjIds.length
+      ? await db.collection('admin_users')
+          .find({ _id: { $in: senderObjIds } })
+          .project({ firstName: 1, lastName: 1, name: 1, username: 1, avatar: 1 })
+          .toArray()
+      : [];
+    const userMap = senderDocs.reduce((acc, u) => { acc[u._id.toString()] = u; return acc; }, {});
 
     // Mark messages as read for current user
     const msgIds = messages.map(m => m._id);
@@ -88,7 +89,7 @@ export async function GET(request) {
     // Filter out messages deleted for current user and resolve sender info
     const userId = currentUser._id.toString();
     const filtered = messages.map(m => {
-      const details = m.senderDetails?.[0];
+      const details = userMap[m.senderId];
       let resolvedName = m.senderName;
       if (details) {
         if (details.firstName || details.lastName) {
@@ -112,7 +113,6 @@ export async function GET(request) {
         senderAvatar: resolvedAvatar,
         body: m.deletedFor?.includes(userId) ? '[Message deleted]' : m.body,
         replyTo: m.replyTo ? m.replyTo.toString() : null,
-        senderDetails: undefined,
       };
     });
 

@@ -45,33 +45,31 @@ export async function GET(request) {
       { $set: { lastActive: new Date() } }
     );
 
-    // Fetch new messages
+    // Fetch new messages (indexed find on {teamId, createdAt}), then batch-
+    // resolve senders in one $in query — the old $lookup with { $toString }
+    // COLLSCANed admin_users once per message on every 2s poll.
     const newMessages = await db.collection('team_messages')
-      .aggregate([
-        {
-          $match: {
-            teamId,
-            $or: [
-              { createdAt: { $gt: sinceDate } },
-              { updatedAt: { $gt: sinceDate } }
-            ],
-            deletedForEveryone: { $ne: true }
-          }
-        },
-        { $sort: { createdAt: 1 } },
-        {
-          $lookup: {
-            from: 'admin_users',
-            let: { senderId: "$senderId" },
-            pipeline: [
-              { $match: { $expr: { $eq: [ { $toString: "$_id" }, "$$senderId" ] } } },
-              { $project: { firstName: 1, lastName: 1, name: 1, username: 1, avatar: 1 } }
-            ],
-            as: 'senderDetails'
-          }
-        }
-      ])
+      .find({
+        teamId,
+        $or: [
+          { createdAt: { $gt: sinceDate } },
+          { updatedAt: { $gt: sinceDate } }
+        ],
+        deletedForEveryone: { $ne: true }
+      })
+      .sort({ createdAt: 1 })
       .toArray();
+
+    const senderObjIds = [...new Set(newMessages.map(m => m.senderId).filter(Boolean))]
+      .map(id => { try { return new ObjectId(id); } catch { return null; } })
+      .filter(Boolean);
+    const senderDocs = senderObjIds.length
+      ? await db.collection('admin_users')
+          .find({ _id: { $in: senderObjIds } })
+          .project({ firstName: 1, lastName: 1, name: 1, username: 1, avatar: 1 })
+          .toArray()
+      : [];
+    const userMap = senderDocs.reduce((acc, u) => { acc[u._id.toString()] = u; return acc; }, {});
 
     const userId = currentUser._id.toString();
 
@@ -90,7 +88,7 @@ export async function GET(request) {
     updates.newMessages = newMessages
       .filter(m => !m.deletedFor?.includes(userId))
       .map(m => {
-        const details = m.senderDetails?.[0];
+        const details = userMap[m.senderId];
         let resolvedName = m.senderName;
         if (details) {
           if (details.firstName || details.lastName) {
@@ -112,7 +110,6 @@ export async function GET(request) {
           senderName: resolvedName,
           senderAvatar: resolvedAvatar,
           replyTo: m.replyTo ? m.replyTo.toString() : null,
-          senderDetails: undefined,
         };
       });
 
