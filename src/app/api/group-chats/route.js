@@ -99,6 +99,22 @@ export async function GET(req) {
       return acc;
     }, {});
 
+    // Get last message reactions for group chats
+    const lastMessages = await db.collection('group_chat_messages')
+      .aggregate([
+        { $match: { groupId: { $in: groupIds } } },
+        { $sort: { createdAt: -1 } },
+        { $group: {
+          _id: '$groupId',
+          reactions: { $first: '$reactions' }
+        }}
+      ]).toArray();
+
+    const lastMessageReactionsMap = lastMessages.reduce((acc, lm) => {
+      acc[lm._id] = lm.reactions || [];
+      return acc;
+    }, {});
+
     // Fetch active mutes for groups
     const mutes = await db.collection('chat_mutes').find({
       userId: userId,
@@ -120,7 +136,8 @@ export async function GET(req) {
         unreadCount: unreadMap[group._id.toString()]?.count || 0,
         memberCount: (group.members?.length || 0) + (group.teams?.length || 0), // rough count
         isMuted: !!muteInfo,
-        mutedUntil: muteInfo?.mutedUntil || null
+        mutedUntil: muteInfo?.mutedUntil || null,
+        lastMessageReactions: lastMessageReactionsMap[group._id.toString()] || []
       };
     });
 

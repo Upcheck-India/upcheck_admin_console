@@ -175,6 +175,26 @@ export async function GET(req) {
       }, {});
     }
 
+    // Get last message reactions for teams
+    let lastMessageReactionsMap = {};
+    if (userId) {
+      const teamIdsStr = teams.map(t => t._id.toString());
+      const lastMessages = await db.collection('team_messages')
+        .aggregate([
+          { $match: { teamId: { $in: teamIdsStr } } },
+          { $sort: { createdAt: -1 } },
+          { $group: {
+            _id: '$teamId',
+            reactions: { $first: '$reactions' }
+          }}
+        ]).toArray();
+
+      lastMessageReactionsMap = lastMessages.reduce((acc, lm) => {
+        acc[lm._id] = lm.reactions || [];
+        return acc;
+      }, {});
+    }
+
     // Populate lead and member info using lookup
     const populatedTeams = teams.map(team => {
       const lead = team.lead ? userLookup.get(team.lead.toString()) : null;
@@ -192,7 +212,8 @@ export async function GET(req) {
         unreadCount: unreadMap[team._id.toString()]?.count || 0,
         hasMention: unreadMap[team._id.toString()]?.hasMention || false,
         isMuted: !!muteInfo,
-        mutedUntil: muteInfo?.mutedUntil || null
+        mutedUntil: muteInfo?.mutedUntil || null,
+        lastMessageReactions: lastMessageReactionsMap[team._id.toString()] || []
       };
     });
 
