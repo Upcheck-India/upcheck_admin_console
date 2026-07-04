@@ -141,30 +141,34 @@ export async function POST(request) {
         }).catch(e => console.error('Bot Agent execution error:', e));
       });
     } else if (!isRecipientMuted) {
-      // Send push notification to recipient
-      await sendPushNotification(
+      // Fire-and-forget: don't make the sender wait on the push provider
+      // round-trip. Delivery is best-effort regardless.
+      sendPushNotification(
         recipientId,
         `New message from ${currentUser.username || 'Someone'}`,
         persistedBody,
         { type: 'chat_message', conversationId, messageId: messageId.toString() }
-      );
+      ).catch(err => console.error('Push notification error:', err));
     }
 
-    // Deterministic slash-command plugins (no AI/LLM) — a no-op unless the
-    // Project Management plugin (or another) is installed in this
-    // conversation and the message matched one of its commands.
-    try {
-      const dispatched = await tryDispatchSlashCommand({ db, chatType: 'dm', chatId: conversationId, body: trimmedBody, currentUser });
-      if (dispatched) {
-        await postPluginResponse({
-          db, chatType: 'dm', chatId: conversationId, currentUser,
-          responseText: dispatched.responseText,
-          pluginId: dispatched.pluginId, pluginName: dispatched.pluginName, pluginIcon: dispatched.pluginIcon,
-        });
+    // Deterministic slash-command plugins (no AI/LLM) — a no-op unless a plugin
+    // is installed in this conversation and the message matched a command.
+    // Fire-and-forget so a plugin DB read never delays the send response; the
+    // plugin's reply is inserted as its own message and arrives via poll/socket.
+    (async () => {
+      try {
+        const dispatched = await tryDispatchSlashCommand({ db, chatType: 'dm', chatId: conversationId, body: trimmedBody, currentUser });
+        if (dispatched) {
+          await postPluginResponse({
+            db, chatType: 'dm', chatId: conversationId, currentUser,
+            responseText: dispatched.responseText,
+            pluginId: dispatched.pluginId, pluginName: dispatched.pluginName, pluginIcon: dispatched.pluginIcon,
+          });
+        }
+      } catch (e) {
+        console.error('Plugin dispatch error:', e);
       }
-    } catch (e) {
-      console.error('Plugin dispatch error:', e);
-    }
+    })();
 
     return NextResponse.json({
       message: {
