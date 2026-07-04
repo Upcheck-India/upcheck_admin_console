@@ -72,7 +72,7 @@ export async function GET(request) {
     const peers = await db.collection('admin_users')
       .find(
         { _id: { $in: peerIds } },
-        { projection: { _id: 1, username: 1, name: 1, email: 1 } }
+        { projection: { _id: 1, username: 1, name: 1, email: 1, avatar: 1 } }
       )
       .toArray();
 
@@ -152,7 +152,8 @@ export async function GET(request) {
           id: peerMap[c.peerId]._id.toString(),
           username: peerMap[c.peerId].username,
           name: peerMap[c.peerId].name,
-          email: peerMap[c.peerId].email
+          email: peerMap[c.peerId].email,
+          avatar: peerMap[c.peerId].avatar || null
         } : null,
         lastMessage: lastMessageMap[c.conversationId] || null,
         unreadCount: unreadMap[c.conversationId] || 0,
