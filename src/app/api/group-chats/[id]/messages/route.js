@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 import { sendPushNotification } from '../../../../../lib/pushNotifications';
 import { tryDispatchSlashCommand, postPluginResponse, PLUGIN_SENDER_ID, PLUGIN_SENDER_NAME } from '../../../../../lib/plugins/dispatch.js';
+import { mediaFallbackBody } from '../../../../../lib/mediaType.js';
 
 const BOT_ID = '600000000000000000000001';
 const BOT_NAME = 'Upcheck Admin Bot';
@@ -209,7 +210,7 @@ export async function POST(req, { params }) {
     // Always give media-only messages a readable fallback body instead of ''
     // so the chat bubble isn't left completely blank if the image fails to
     // render on the client.
-    const persistedBody = trimmedBody || (mediaUrl ? '📷 Photo' : '');
+    const persistedBody = trimmedBody || mediaFallbackBody(mediaUrl);
 
     // Look up parent message to store reply snippet
     let replyToBody = null;

@@ -3,6 +3,7 @@ import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 import { sendPushNotification } from '../../../../lib/pushNotifications';
 import { tryDispatchSlashCommand, postPluginResponse } from '../../../../lib/plugins/dispatch.js';
+import { mediaFallbackBody } from '../../../../lib/mediaType.js';
 
 export async function POST(request) {
   try {
@@ -83,7 +84,7 @@ export async function POST(request) {
     // as a totally blank bubble on the client. Always give media a readable
     // fallback body so there's something to show even if the media fails to
     // load or the client's type-based branching misses.
-    const persistedBody = trimmedBody || (mediaUrl ? '📷 Photo' : '');
+    const persistedBody = trimmedBody || mediaFallbackBody(mediaUrl);
 
     const message = {
       _id: messageId,

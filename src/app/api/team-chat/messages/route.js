@@ -4,6 +4,7 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { sendPushNotification } from '../../../../lib/pushNotifications';
 import { tryDispatchSlashCommand, postPluginResponse } from '../../../../lib/plugins/dispatch.js';
+import { mediaFallbackBody } from '../../../../lib/mediaType.js';
 
 import { getAuthUser } from '../../../../lib/auth';
 
@@ -188,7 +189,7 @@ export async function POST(request) {
     // Always give media-only messages a readable fallback body instead of ''
     // so the chat bubble isn't left completely blank if the image fails to
     // render on the client.
-    const persistedBody = trimmedBody || (mediaUrl ? '📷 Photo' : '');
+    const persistedBody = trimmedBody || mediaFallbackBody(mediaUrl);
 
     const now = new Date();
     const msgDoc = {
