@@ -94,7 +94,17 @@ export async function GET(req, { params }) {
     
     // Set appropriate headers for the response
     const headers = new Headers();
-    headers.set('Content-Disposition', `attachment; filename="${file.filename}"`);
+    
+    const { searchParams } = new URL(req.url);
+    const isImage = file.contentType && file.contentType.startsWith('image/');
+    const isInline = searchParams.get('inline') === 'true' || isImage;
+    
+    if (isInline) {
+      headers.set('Content-Disposition', `inline; filename="${file.filename}"`);
+    } else {
+      headers.set('Content-Disposition', `attachment; filename="${file.filename}"`);
+    }
+    
     headers.set('Content-Type', file.contentType || 'application/octet-stream');
     headers.set('Content-Length', fileBuffer.length.toString());
     

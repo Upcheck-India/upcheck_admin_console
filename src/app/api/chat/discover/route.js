@@ -12,7 +12,7 @@ export async function GET(request) {
     // 1. Fetch all other users
     const allUsers = await db.collection('admin_users').find(
       { _id: { $ne: currentUser._id }, messagingId: { $exists: true, $ne: null } },
-      { projection: { _id: 1, username: 1, email: 1, name: 1, messagingId: 1, messagingPrivacy: 1, role: 1 } }
+      { projection: { _id: 1, username: 1, email: 1, name: 1, messagingId: 1, messagingPrivacy: 1, role: 1, avatar: 1 } }
     ).toArray();
 
     // 2. Determine "teammates"
@@ -55,7 +55,8 @@ export async function GET(request) {
         username: u.username,
         email: u.email,
         name: u.name,
-        messagingId: u.messagingId
+        messagingId: u.messagingId,
+        avatar: u.avatar || null
       }))
     });
   } catch (err) {
