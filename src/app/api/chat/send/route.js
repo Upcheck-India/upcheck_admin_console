@@ -7,9 +7,9 @@ import { mediaFallbackBody } from '../../../../lib/mediaType.js';
 
 export async function POST(request) {
   try {
-    const { conversationId, body, clientId, replyToId, mediaUrl, isForwarded } = await request.json();
+    const { conversationId, body, clientId, replyToId, mediaUrl, isForwarded, type, poll } = await request.json();
     
-    if (!conversationId || (!body?.trim() && !mediaUrl)) {
+    if (!conversationId || (!body?.trim() && !mediaUrl && type !== 'poll')) {
       return NextResponse.json({ error: 'Conversation ID and message body (or mediaUrl) required' }, { status: 400 });
     }
 
@@ -79,12 +79,12 @@ export async function POST(request) {
     const messageId = new ObjectId();
 
     const trimmedBody = body?.trim() || '';
-    const messageType = mediaUrl ? 'image' : 'text';
+    const messageType = type === 'poll' ? 'poll' : (mediaUrl ? 'image' : 'text');
     // Media messages with no caption used to persist body: '' which rendered
     // as a totally blank bubble on the client. Always give media a readable
     // fallback body so there's something to show even if the media fails to
     // load or the client's type-based branching misses.
-    const persistedBody = trimmedBody || mediaFallbackBody(mediaUrl);
+    const persistedBody = type === 'poll' ? `📊 Poll: ${poll?.question}` : (trimmedBody || mediaFallbackBody(mediaUrl));
 
     const message = {
       _id: messageId,
@@ -94,6 +94,7 @@ export async function POST(request) {
       body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
+      ...(type === 'poll' ? { poll: { ...poll, votes: [] } } : {}),
       status: 'sent',
       createdAt: now,
       clientId: clientId || null,

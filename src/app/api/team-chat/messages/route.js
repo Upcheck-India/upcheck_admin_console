@@ -133,23 +133,23 @@ export async function POST(request) {
     if (!authData) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const currentUser = authData.user;
 
-    const { teamId, body, clientId, replyToId, mediaUrl, isForwarded } = await request.json();
-
-    if (!teamId || (!body?.trim() && !mediaUrl)) {
+    const { teamId, body, clientId, replyToId, mediaUrl, isForwarded, type, poll } = await request.json();
+ 
+    if (!teamId || (!body?.trim() && !mediaUrl && type !== 'poll')) {
       return NextResponse.json({ error: 'teamId and body (or mediaUrl) required' }, { status: 400 });
     }
-
+ 
     const client = await clientPromise;
     const db = client.db('resources');
-
+ 
     const team = await verifyTeamMember(db, teamId, currentUser._id.toString());
     if (!team) return NextResponse.json({ error: 'Not a team member' }, { status: 403 });
-
+ 
     const botId = "600000000000000000000001";
     const cleanBody = body?.trim() || '';
     const isBotMentioned = cleanBody.toLowerCase().includes('@upcheck_admin_bot');
     const isBotMember = team.members && team.members.some(m => m.toString() === botId);
-
+ 
     if (isBotMember && isBotMentioned) {
       if (team.isBotProcessing) {
         const lockAge = Date.now() - new Date(team.botProcessingStartedAt || team.updatedAt || 0).getTime();
@@ -171,7 +171,7 @@ export async function POST(request) {
         }
       }
     }
-
+ 
     // Idempotency check
     if (clientId) {
       const existing = await db.collection('team_messages').findOne({ clientId });
@@ -179,18 +179,18 @@ export async function POST(request) {
         return NextResponse.json({ message: { ...existing, _id: existing._id.toString() } });
       }
     }
-
+ 
     const senderName = currentUser.firstName && currentUser.lastName
       ? `${currentUser.firstName} ${currentUser.lastName}`.trim()
       : currentUser.username;
-
+ 
     const trimmedBody = body?.trim() || '';
-    const messageType = mediaUrl ? 'image' : 'text';
+    const messageType = type === 'poll' ? 'poll' : (mediaUrl ? 'image' : 'text');
     // Always give media-only messages a readable fallback body instead of ''
     // so the chat bubble isn't left completely blank if the image fails to
     // render on the client.
-    const persistedBody = trimmedBody || mediaFallbackBody(mediaUrl);
-
+    const persistedBody = type === 'poll' ? `📊 Poll: ${poll?.question}` : (trimmedBody || mediaFallbackBody(mediaUrl));
+ 
     const now = new Date();
     const msgDoc = {
       teamId,
@@ -200,6 +200,7 @@ export async function POST(request) {
       body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
+      ...(type === 'poll' ? { poll: { ...poll, votes: [] } } : {}),
       replyTo: replyToId && ObjectId.isValid(replyToId) ? new ObjectId(replyToId) : null,
       reactions: [],
       readBy: [{ userId: currentUser._id.toString(), readAt: now }],
@@ -210,7 +211,7 @@ export async function POST(request) {
       updatedAt: now,
       isForwarded: isForwarded || false
     };
-    
+     
     // Add senderAvatar for immediate response
     const returnMsgDoc = { ...msgDoc, senderAvatar: currentUser.avatar };
 

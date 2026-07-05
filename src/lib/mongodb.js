@@ -58,6 +58,10 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('chat_messages').createIndex({ conversationId: 1, createdAt: -1 }),
       db.collection('team_messages').createIndex({ teamId: 1, createdAt: 1 }),
       db.collection('group_chat_messages').createIndex({ groupId: 1, createdAt: 1 }),
+      // Optimization indexes for unread count polling
+      db.collection('chat_messages').createIndex({ conversationId: 1, recipientId: 1, status: 1 }),
+      db.collection('group_chat_messages').createIndex({ groupId: 1, 'readBy.userId': 1 }),
+      db.collection('team_messages').createIndex({ teamId: 1, 'readBy.userId': 1 }),
       // Idempotency dedupe by clientId
       db.collection('team_messages').createIndex({ clientId: 1 }, { sparse: true }),
       db.collection('group_chat_messages').createIndex({ clientId: 1 }, { sparse: true }),

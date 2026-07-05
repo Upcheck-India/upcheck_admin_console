@@ -156,12 +156,12 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { body, replyToId, mediaUrl, isForwarded, clientId } = await req.json();
-
-    if (!body?.trim() && !mediaUrl) {
+    const { body, replyToId, mediaUrl, isForwarded, clientId, type, poll } = await req.json();
+ 
+    if (!body?.trim() && !mediaUrl && type !== 'poll') {
       return NextResponse.json({ error: 'Message body or mediaUrl is required' }, { status: 400 });
     }
-
+ 
     // Idempotency check — mirrors chat/send and team-chat/messages. Without
     // this, a duplicate POST (e.g. a client retry) creates a second message,
     // and the web client's optimistic-send/poll dedupe (keyed on clientId)
@@ -172,17 +172,17 @@ export async function POST(req, { params }) {
         return NextResponse.json({ message: { ...existing, _id: existing._id.toString() } });
       }
     }
-
+ 
     const group = await db.collection('group_chats').findOne({ _id: new ObjectId(groupId) });
     if (!group) {
       return NextResponse.json({ error: 'Group chat not found' }, { status: 404 });
     }
-
+ 
     const botId = "600000000000000000000001";
     const cleanBody = body?.trim() || '';
     const isBotMentioned = cleanBody.toLowerCase().includes('@upcheck_admin_bot');
     const isBotMember = group.members && group.members.some(m => m.toString() === botId);
-
+ 
     if (isBotMember && isBotMentioned) {
       if (group.isBotProcessing) {
         const lockAge = Date.now() - new Date(group.botProcessingStartedAt || group.updatedAt || 0).getTime();
@@ -204,14 +204,14 @@ export async function POST(req, { params }) {
         }
       }
     }
-
+ 
     const trimmedBody = body?.trim() || '';
-    const messageType = mediaUrl ? 'image' : 'text';
+    const messageType = type === 'poll' ? 'poll' : (mediaUrl ? 'image' : 'text');
     // Always give media-only messages a readable fallback body instead of ''
     // so the chat bubble isn't left completely blank if the image fails to
     // render on the client.
-    const persistedBody = trimmedBody || mediaFallbackBody(mediaUrl);
-
+    const persistedBody = type === 'poll' ? `📊 Poll: ${poll?.question}` : (trimmedBody || mediaFallbackBody(mediaUrl));
+ 
     // Look up parent message to store reply snippet
     let replyToBody = null;
     let replyToName = null;
@@ -232,13 +232,14 @@ export async function POST(req, { params }) {
         }
       } catch (e) {}
     }
-
+ 
     const newMessage = {
       groupId,
       senderId: userId,
       body: persistedBody,
       type: messageType,
       ...(mediaUrl ? { mediaUrl } : {}),
+      ...(type === 'poll' ? { poll: { ...poll, votes: [] } } : {}),
       clientId: clientId || null,
       createdAt: new Date(),
       readBy: [{ userId, readAt: new Date() }],
