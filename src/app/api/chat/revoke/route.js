@@ -46,7 +46,7 @@ export async function POST(request) {
       );
     } else {
       const myDoc = await db.collection('chat_connections').findOne({ userId: currentUser._id.toString(), peerId });
-      if (myDoc && myDoc.status === 'blocked' && myDoc.blockedBy !== currentUser._id.toString()) {
+      if (myDoc && myDoc.status === 'blocked' && myDoc.blockedBy && myDoc.blockedBy !== currentUser._id.toString()) {
         return NextResponse.json({ error: 'Only the blocker can unblock.' }, { status: 403 });
       }
 
