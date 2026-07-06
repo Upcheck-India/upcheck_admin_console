@@ -25,9 +25,10 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: 'Invalid group ID' }, { status: 400 });
     }
 
-    const auth = await getAuthUser(req);
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { db } = auth;
+    const user = await getAuthUser(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const client = await clientPromise;
+    const db = client.db('resources');
 
     const now = new Date();
     const pinnedMessages = await db.collection('group_chat_messages')

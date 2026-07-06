@@ -25,10 +25,11 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Invalid parameters' }, { status: 400 });
     }
 
-    const auth = await getAuthUser(req);
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { db } = auth;
-    const username = auth.username || 'System';
+    const user = await getAuthUser(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const client = await clientPromise;
+    const db = client.db('resources');
+    const username = user.username || 'System';
 
     const { isPinned, duration } = await req.json();
 

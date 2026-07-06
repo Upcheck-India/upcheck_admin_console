@@ -30,9 +30,10 @@ export async function GET(req, { params }) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    const auth = await getAuthUser(req);
-    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const { db } = auth;
+    const user = await getAuthUser(req);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const client = await clientPromise;
+    const db = client.db('resources');
 
     const query = {
       groupId,
