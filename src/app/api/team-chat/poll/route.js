@@ -104,12 +104,17 @@ export async function GET(request) {
         }
         const resolvedAvatar = details?.avatar || m.senderAvatar || '';
 
+        const pinExpired = m.pinned && m.pinExpiresAt && new Date(m.pinExpiresAt) < new Date();
         return {
           ...m,
           _id: m._id.toString(),
           senderName: resolvedName,
           senderAvatar: resolvedAvatar,
           replyTo: m.replyTo ? m.replyTo.toString() : null,
+          pinned: pinExpired ? false : !!m.pinned,
+          pinnedAt: pinExpired ? null : m.pinnedAt,
+          pinnedBy: pinExpired ? null : m.pinnedBy,
+          pinExpiresAt: pinExpired ? null : m.pinExpiresAt
         };
       });
 

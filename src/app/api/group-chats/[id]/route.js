@@ -150,6 +150,7 @@ export async function PUT(req, { params }) {
       members,
       teams,
       excludedMembers,
+      avatar: data.avatar !== undefined ? data.avatar : (group.avatar || null),
       updatedAt: new Date()
     };
 

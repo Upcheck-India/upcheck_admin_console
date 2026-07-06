@@ -47,7 +47,7 @@ export async function POST(req, { params }) {
 
     await db.collection('chat_messages').updateOne(
       { _id: new ObjectId(messageId) },
-      { $set: { 'poll.votes': votes } }
+      { $set: { 'poll.votes': votes, updatedAt: new Date() } }
     );
 
     return NextResponse.json({ success: true, votes });

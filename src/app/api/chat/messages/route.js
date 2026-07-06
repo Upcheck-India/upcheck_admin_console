@@ -70,10 +70,18 @@ export async function GET(request) {
       .limit(limit)
       .toArray();
 
-    const serialized = messages.map(m => ({
-      ...m,
-      _id: m._id.toString()
-    }));
+    const now = new Date();
+    const serialized = messages.map(m => {
+      const pinExpired = m.pinned && m.pinExpiresAt && new Date(m.pinExpiresAt) < now;
+      return {
+        ...m,
+        _id: m._id.toString(),
+        pinned: pinExpired ? false : !!m.pinned,
+        pinnedAt: pinExpired ? null : m.pinnedAt,
+        pinnedBy: pinExpired ? null : m.pinnedBy,
+        pinExpiresAt: pinExpired ? null : m.pinExpiresAt
+      };
+    });
 
     return NextResponse.json({
       messages: serialized,

@@ -69,10 +69,18 @@ export async function GET(request) {
         .sort({ createdAt: 1 })
         .toArray();
 
-      updates.newMessages = newMessages.map(m => ({
-        ...m,
-        _id: m._id.toString()
-      }));
+      const now = new Date();
+      updates.newMessages = newMessages.map(m => {
+        const pinExpired = m.pinned && m.pinExpiresAt && new Date(m.pinExpiresAt) < now;
+        return {
+          ...m,
+          _id: m._id.toString(),
+          pinned: pinExpired ? false : !!m.pinned,
+          pinnedAt: pinExpired ? null : m.pinnedAt,
+          pinnedBy: pinExpired ? null : m.pinnedBy,
+          pinExpiresAt: pinExpired ? null : m.pinExpiresAt
+        };
+      });
 
       // Peer's typing status for this conversation (short-lived, like group/team typing).
       const typingSince = new Date(Date.now() - 5000);

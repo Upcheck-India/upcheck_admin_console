@@ -107,6 +107,7 @@ export async function GET(req, { params }) {
       } else {
         senderName = sender ? (sender.firstName || sender.lastName ? `${sender.firstName} ${sender.lastName}`.trim() : sender.username) : 'Unknown';
       }
+      const pinExpired = m.pinned && m.pinExpiresAt && new Date(m.pinExpiresAt) < new Date();
       return {
         ...m,
         _id: m._id.toString(),
@@ -114,6 +115,10 @@ export async function GET(req, { params }) {
         replyToId: m.replyToId ? m.replyToId.toString() : null,
         replyToBody: m.replyToBody || null,
         replyToName: m.replyToName || null,
+        pinned: pinExpired ? false : !!m.pinned,
+        pinnedAt: pinExpired ? null : m.pinnedAt,
+        pinnedBy: pinExpired ? null : m.pinnedBy,
+        pinExpiresAt: pinExpired ? null : m.pinExpiresAt
       };
     });
 

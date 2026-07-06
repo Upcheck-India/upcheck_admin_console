@@ -106,6 +106,7 @@ export async function GET(request) {
 
       const resolvedAvatar = details?.avatar || m.senderAvatar || '';
 
+      const pinExpired = m.pinned && m.pinExpiresAt && new Date(m.pinExpiresAt) < new Date();
       return {
         ...m,
         _id: m._id.toString(),
@@ -113,6 +114,10 @@ export async function GET(request) {
         senderAvatar: resolvedAvatar,
         body: m.deletedFor?.includes(userId) ? '[Message deleted]' : m.body,
         replyTo: m.replyTo ? m.replyTo.toString() : null,
+        pinned: pinExpired ? false : !!m.pinned,
+        pinnedAt: pinExpired ? null : m.pinnedAt,
+        pinnedBy: pinExpired ? null : m.pinnedBy,
+        pinExpiresAt: pinExpired ? null : m.pinExpiresAt
       };
     });
 

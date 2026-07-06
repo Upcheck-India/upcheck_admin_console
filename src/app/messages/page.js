@@ -48,6 +48,17 @@ const MessagesHome = () => {
     }
   };
   const [lastPoll, setLastPoll] = useState('');
+  
+  // Group creation states
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDesc, setNewGroupDesc] = useState('');
+  const [selectedWebMembers, setSelectedWebMembers] = useState([]);
+  const [selectedWebTeams, setSelectedWebTeams] = useState([]);
+  const [allOrgUsers, setAllOrgUsers] = useState([]);
+  const [allOrgTeams, setAllOrgTeams] = useState([]);
+  const [loadingGroupResources, setLoadingGroupResources] = useState(false);
+  const [submittingGroup, setSubmittingGroup] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
 
   const fetchConnections = useCallback(async () => {
@@ -74,6 +85,68 @@ const MessagesHome = () => {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (showCreateGroup) {
+      const fetchResources = async () => {
+        setLoadingGroupResources(true);
+        try {
+          const [usersRes, teamsRes] = await Promise.all([
+            fetch('/api/users?limit=500', { credentials: 'include' }),
+            fetch('/api/teams', { credentials: 'include' })
+          ]);
+          if (usersRes.ok) {
+            const data = await usersRes.json();
+            setAllOrgUsers((data.users || []).filter(u => u._id !== user?._id));
+          }
+          if (teamsRes.ok) {
+            const data = await teamsRes.json();
+            setAllOrgTeams(data.teams || []);
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setLoadingGroupResources(false);
+        }
+      };
+      fetchResources();
+    }
+  }, [showCreateGroup, user?._id]);
+
+  const handleCreateGroupSubmit = async (e) => {
+    e.preventDefault();
+    if (!newGroupName.trim() || submittingGroup) return;
+    setSubmittingGroup(true);
+    try {
+      const res = await fetch('/api/group-chats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newGroupName.trim(),
+          description: newGroupDesc.trim(),
+          members: selectedWebMembers,
+          teams: selectedWebTeams
+        }),
+        credentials: 'include'
+      });
+      if (res.ok) {
+        setShowCreateGroup(false);
+        setNewGroupName('');
+        setNewGroupDesc('');
+        setSelectedWebMembers([]);
+        setSelectedWebTeams([]);
+        await fetchConnections(); // Refresh sidebar list
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to create group');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create group');
+    } finally {
+      setSubmittingGroup(false);
+    }
+  };
 
   const generateMessagingId = async () => {
     try {
@@ -493,6 +566,10 @@ const MessagesHome = () => {
           <div className="pt-2">
             <div className="px-4.5 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center justify-between">
               <span>Group Chats</span>
+              <Plus 
+                className="w-3.5 h-3.5 text-slate-400 hover:text-purple-600 cursor-pointer" 
+                onClick={(e) => { e.stopPropagation(); setShowCreateGroup(true); }}
+              />
             </div>
             <div className="space-y-0.5 pb-4">
               {groupChats.length === 0 ? (
@@ -520,6 +597,140 @@ const MessagesHome = () => {
       </div>
 
       {/* New Chat Modal */}
+      {showCreateGroup && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-100 overflow-hidden transform scale-100 transition-all duration-300">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h2 className="text-md font-bold text-slate-900">New Group Chat</h2>
+              <button
+                onClick={() => {
+                  setShowCreateGroup(false);
+                  setNewGroupName('');
+                  setNewGroupDesc('');
+                  setSelectedWebMembers([]);
+                  setSelectedWebTeams([]);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGroupSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Group Name</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Project Alpha"
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-lg text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Description</label>
+                <textarea
+                  placeholder="Group topic or details..."
+                  value={newGroupDesc}
+                  onChange={(e) => setNewGroupDesc(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 focus:border-purple-500 focus:bg-white rounded-lg text-sm text-slate-800 outline-none transition-all placeholder:text-slate-400 resize-none h-20"
+                />
+              </div>
+
+              {loadingGroupResources ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader className="w-6 h-6 text-purple-600 animate-spin" />
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4 max-h-60 overflow-y-auto pr-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 border-b pb-1">Include Teams</label>
+                    <div className="space-y-1.5">
+                      {allOrgTeams.length === 0 ? (
+                        <p className="text-[10px] text-slate-400">No teams found</p>
+                      ) : (
+                        allOrgTeams.map((team) => {
+                          const isSel = selectedWebTeams.includes(team._id);
+                          return (
+                            <label key={team._id} className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-slate-50 rounded transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={isSel}
+                                onChange={() => {
+                                  setSelectedWebTeams(prev =>
+                                    isSel ? prev.filter(id => id !== team._id) : [...prev, team._id]
+                                  );
+                                }}
+                                className="rounded text-purple-600 focus:ring-purple-500 border-slate-300 w-3.5 h-3.5"
+                              />
+                              <span className="text-xs font-semibold text-slate-700 truncate">{team.name}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2 border-b pb-1">Include Members</label>
+                    <div className="space-y-1.5">
+                      {allOrgUsers.length === 0 ? (
+                        <p className="text-[10px] text-slate-400">No members found</p>
+                      ) : (
+                        allOrgUsers.map((u) => {
+                          const isSel = selectedWebMembers.includes(u._id);
+                          const name = u.firstName || u.lastName ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : u.username;
+                          return (
+                            <label key={u._id} className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-slate-50 rounded transition-colors">
+                              <input
+                                type="checkbox"
+                                checked={isSel}
+                                onChange={() => {
+                                  setSelectedWebMembers(prev =>
+                                    isSel ? prev.filter(id => id !== u._id) : [...prev, u._id]
+                                  );
+                                }}
+                                className="rounded text-purple-600 focus:ring-purple-500 border-slate-300 w-3.5 h-3.5"
+                              />
+                              <span className="text-xs font-semibold text-slate-700 truncate">{name}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateGroup(false);
+                    setNewGroupName('');
+                    setNewGroupDesc('');
+                    setSelectedWebMembers([]);
+                    setSelectedWebTeams([]);
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-200 text-xs font-semibold text-slate-600 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newGroupName.trim() || submittingGroup}
+                  className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-xs font-semibold text-white rounded-lg disabled:opacity-50 transition-all shadow-sm"
+                >
+                  {submittingGroup ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showNewChat && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-100 overflow-hidden transform scale-100 transition-all duration-300">
