@@ -45,6 +45,7 @@ export async function POST(request) {
       },
       connection: connection ? {
         status: connection.status,
+        blockedBy: connection.blockedBy || null,
         conversationId: connection.conversationId
       } : null
     });

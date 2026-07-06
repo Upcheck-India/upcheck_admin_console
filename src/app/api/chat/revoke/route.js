@@ -15,21 +15,60 @@ export async function POST(request) {
 
     const newStatus = block ? 'blocked' : 'revoked';
 
-    // Update both connections
-    await db.collection('chat_connections').updateMany(
-      {
-        $or: [
-          { userId: currentUser._id.toString(), peerId: peerId },
-          { userId: peerId, peerId: currentUser._id.toString() }
-        ]
-      },
-      {
-        $set: {
-          status: newStatus,
-          updatedAt: new Date()
-        }
+    if (block) {
+      const myDoc = await db.collection('chat_connections').findOne({ userId: currentUser._id.toString(), peerId });
+      const theirDoc = await db.collection('chat_connections').findOne({ userId: peerId, peerId: currentUser._id.toString() });
+
+      await db.collection('chat_connections').updateOne(
+        { userId: currentUser._id.toString(), peerId },
+        {
+          $set: {
+            status: 'blocked',
+            blockedBy: currentUser._id.toString(),
+            prevStatus: myDoc?.status || 'accepted',
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+
+      await db.collection('chat_connections').updateOne(
+        { userId: peerId, peerId: currentUser._id.toString() },
+        {
+          $set: {
+            status: 'blocked',
+            blockedBy: currentUser._id.toString(),
+            prevStatus: theirDoc?.status || 'accepted',
+            updatedAt: new Date()
+          }
+        },
+        { upsert: true }
+      );
+    } else {
+      const myDoc = await db.collection('chat_connections').findOne({ userId: currentUser._id.toString(), peerId });
+      if (myDoc && myDoc.status === 'blocked' && myDoc.blockedBy !== currentUser._id.toString()) {
+        return NextResponse.json({ error: 'Only the blocker can unblock.' }, { status: 403 });
       }
-    );
+
+      await db.collection('chat_connections').updateMany(
+        {
+          $or: [
+            { userId: currentUser._id.toString(), peerId: peerId },
+            { userId: peerId, peerId: currentUser._id.toString() }
+          ]
+        },
+        {
+          $set: {
+            status: 'revoked',
+            updatedAt: new Date()
+          },
+          $unset: {
+            blockedBy: "",
+            prevStatus: ""
+          }
+        }
+      );
+    }
 
     return NextResponse.json({ success: true, status: newStatus });
   } catch (err) {
