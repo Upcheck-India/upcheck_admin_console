@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
+import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 
