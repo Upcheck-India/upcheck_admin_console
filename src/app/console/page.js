@@ -652,6 +652,7 @@ const AdminLandingPage = () => {
                 { icon: <PenSquareIcon className="w-5 h-5" />, label: "New post", link: "/cms/new-post" },
                 { icon: <ClipboardList className="w-5 h-5" />, label: "Task Board", link: "/coming-soon" },
                 { icon: <Bell className="w-5 h-5" />, label: "Announcements", link: "/console/announcements" },
+                { icon: <Sparkles className="w-5 h-5" />, label: "What's New", link: "/console/whats-new" },
                 { icon: <HelpCircle className="w-5 h-5" />, label: "Support", link: "/coming-soon" }
               ].map((tool, index) => (
                 <Link

@@ -74,6 +74,9 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('chat_mutes').createIndex({ userId: 1, chatType: 1 }),
       // Connections list
       db.collection('chat_connections').createIndex({ userId: 1, status: 1 }),
+      // What's New / changelogs
+      db.collection('changelogs').createIndex({ isPublished: 1, createdAt: -1 }),
+      db.collection('changelog_seen').createIndex({ userId: 1, changelogId: 1 }, { unique: true }),
     ]);
   } catch (err) {
     console.error('Failed to ensure messaging indexes on startup:', err);
