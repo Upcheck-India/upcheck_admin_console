@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { Readable } from 'stream';
 import crypto from 'crypto';
+import sharp from 'sharp';
 import clientPromise from '../../../../lib/mongodb';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -66,10 +67,46 @@ export async function POST(req) {
       );
     }
 
+    // --- Optional client-side crop, applied server-side (the client sends
+    // normalized 0-1 fractions of the ORIGINAL image's natural dimensions,
+    // computed by the crop UI; no image-manipulation native module is
+    // installed in the app, so cropping happens here instead — the client
+    // stays pure JS/OTA-safe). Best-effort: any failure here falls back to
+    // the uncropped original rather than failing the whole upload.
+    let buffer = Buffer.from(bytes);
+    const cropX = parseFloat(formData.get('cropX'));
+    const cropY = parseFloat(formData.get('cropY'));
+    const cropWidth = parseFloat(formData.get('cropWidth'));
+    const cropHeight = parseFloat(formData.get('cropHeight'));
+    const hasCrop = [cropX, cropY, cropWidth, cropHeight].every(
+      (v) => Number.isFinite(v) && v >= 0 && v <= 1
+    ) && cropWidth > 0 && cropHeight > 0 && cropX + cropWidth <= 1.0001 && cropY + cropHeight <= 1.0001;
+
+    if (hasCrop) {
+      try {
+        const isAnimatable = file.type === 'image/gif' || file.type === 'image/webp';
+        const pipeline = sharp(buffer, isAnimatable ? { animated: true } : undefined);
+        const meta = await pipeline.metadata();
+        const naturalWidth = meta.width || 0;
+        const naturalHeight = meta.pageHeight || meta.height || 0;
+
+        if (naturalWidth > 0 && naturalHeight > 0) {
+          const left = Math.max(0, Math.round(cropX * naturalWidth));
+          const top = Math.max(0, Math.round(cropY * naturalHeight));
+          const width = Math.max(1, Math.min(naturalWidth - left, Math.round(cropWidth * naturalWidth)));
+          const height = Math.max(1, Math.min(naturalHeight - top, Math.round(cropHeight * naturalHeight)));
+
+          buffer = await pipeline.extract({ left, top, width, height }).toBuffer();
+        }
+      } catch (cropErr) {
+        console.error('Chat media crop failed, uploading uncropped:', cropErr);
+      }
+    }
+
     // --- De-duplication Check (MD5 Content Hash) ---
     const client = await clientPromise;
     const db = client.db('resources');
-    const md5 = crypto.createHash('md5').update(Buffer.from(bytes)).digest('hex');
+    const md5 = crypto.createHash('md5').update(buffer).digest('hex');
 
     const existingFile = await db.collection('chat_media.files').findOne({ 'metadata.md5': md5 });
     if (existingFile) {
@@ -99,7 +136,7 @@ export async function POST(req) {
       metadata,
     });
 
-    const readable = Readable.from(Buffer.from(bytes));
+    const readable = Readable.from(buffer);
 
     await new Promise((resolve, reject) => {
       readable.pipe(uploadStream);
