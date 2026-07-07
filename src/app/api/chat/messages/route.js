@@ -48,7 +48,7 @@ export async function GET(request) {
         status: { $ne: 'read' }
       },
       {
-        $set: { status: 'read', updatedAt: new Date() }
+        $set: { status: 'read', readAt: new Date(), updatedAt: new Date() }
       }
     );
 
