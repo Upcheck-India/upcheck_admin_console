@@ -52,7 +52,7 @@ export async function GET(request) {
           status: { $nin: ['read', 'streaming'] }
         },
         {
-          $set: { status: 'read', updatedAt: new Date() }
+          $set: { status: 'read', readAt: new Date(), updatedAt: new Date() }
         }
       );
 

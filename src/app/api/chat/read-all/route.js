@@ -19,7 +19,7 @@ export async function POST(request) {
           status: { $ne: 'read' }
         },
         {
-          $set: { status: 'read' }
+          $set: { status: 'read', readAt: new Date(), updatedAt: new Date() }
         }
       );
     }
