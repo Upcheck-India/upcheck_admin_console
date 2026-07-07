@@ -4,7 +4,7 @@ import { ObjectId } from 'mongodb';
 
 export async function PATCH(request, { params }) {
   try {
-    const { messageId } = await params;
+    const { id: messageId } = await params;
     const { body } = await request.json();
 
     if (!messageId || !ObjectId.isValid(messageId)) {
@@ -19,7 +19,7 @@ export async function PATCH(request, { params }) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { user: currentUser, db } = auth;
 
-    const message = await db.collection('chat_messages').findOne({ _id: new ObjectId(messageId) });
+    const message = await db.collection('team_messages').findOne({ _id: new ObjectId(messageId) });
     if (!message) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 });
     }
@@ -33,7 +33,7 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ error: 'Messages can only be edited within 30 minutes of sending' }, { status: 400 });
     }
 
-    const updateRes = await db.collection('chat_messages').findOneAndUpdate(
+    const updateRes = await db.collection('team_messages').findOneAndUpdate(
       { _id: new ObjectId(messageId) },
       {
         $set: {
@@ -49,7 +49,7 @@ export async function PATCH(request, { params }) {
 
     return NextResponse.json({ success: true, message: updatedDoc });
   } catch (err) {
-    console.error('Edit DM message error:', err);
+    console.error('Edit Team message error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
