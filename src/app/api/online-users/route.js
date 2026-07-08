@@ -22,12 +22,7 @@ export async function GET(req) {
           return null;
         }
       }).filter(Boolean);
-      query = {
-        $or: [
-          { lastHeartbeat: { $gte: twentySecondsAgo } },
-          { _id: { $in: idArray } }
-        ]
-      };
+      query = { _id: { $in: idArray } };
     } else {
       query = { lastHeartbeat: { $gte: twentySecondsAgo } };
     }
