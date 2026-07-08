@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { canAccessProject, canManagePermissions } from '../../../../lib/projectPermissions';
 import { sendEmail } from '../../../../lib/emailService';
 import { sendPushNotification } from '../../../../lib/pushNotifications';
+import { getAuthUser } from '../../../../lib/auth';
 
 // Sanitize tag: lowercase, alphanumeric + hyphens only, max 20 chars
 function sanitizeTag(tag) {
@@ -345,18 +346,14 @@ export async function DELETE(req, { params }) {
 // GET - Fetch a single project by ID
 export async function GET(req, { params }) {
   try {
-    const token = req.cookies.get('admin_token')?.value;
-    if (!token) {
+    // getAuthUser supports both the web console's admin_token cookie and a
+    // mobile Bearer token, unlike the cookie-only check this replaced (which
+    // 401'd every mobile client).
+    const auth = await getAuthUser(req);
+    if (!auth) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const client = await clientPromise;
-    const db = client.db("resources");
-    const user = await db.collection('admin_users').findOne({ sessionToken: token });
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const { user, db } = auth;
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
