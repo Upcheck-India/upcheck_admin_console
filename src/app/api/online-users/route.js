@@ -9,11 +9,32 @@ export async function GET(req) {
     const client = await clientPromise;
     const db = client.db('resources');
 
+    const { searchParams } = new URL(req.url);
+    const idsParam = searchParams.get('ids');
     const twentySecondsAgo = new Date(Date.now() - 20000);
+
+    let query = {};
+    if (idsParam) {
+      const idArray = idsParam.split(',').map(id => {
+        try {
+          return new ObjectId(id.trim());
+        } catch {
+          return null;
+        }
+      }).filter(Boolean);
+      query = {
+        $or: [
+          { lastHeartbeat: { $gte: twentySecondsAgo } },
+          { _id: { $in: idArray } }
+        ]
+      };
+    } else {
+      query = { lastHeartbeat: { $gte: twentySecondsAgo } };
+    }
 
     const online = await db
       .collection('admin_users')
-      .find({ lastHeartbeat: { $gte: twentySecondsAgo } }, { projection: { password: 0, sessionToken: 0 } })
+      .find(query, { projection: { password: 0, sessionToken: 0 } })
       .toArray();
 
     return NextResponse.json(online);
