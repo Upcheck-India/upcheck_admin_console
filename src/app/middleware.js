@@ -6,7 +6,7 @@ export function middleware(request) {
   const path = request.nextUrl.pathname
 
   // Define public paths that don't require authentication
-  const isPublicPath = path === '/login' || path === '/'
+  const isPublicPath = path === '/login' || path === '/' || path.startsWith('/profile/')
   
   // Define recruitment test taking paths that are accessible to candidates
   const isRecruitmentTestPath = path.startsWith('/recruitment/take/') || path.startsWith('/recruitment/submissions/')
