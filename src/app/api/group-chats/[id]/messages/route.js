@@ -337,12 +337,27 @@ export async function POST(req, { params }) {
 
           for (const rUser of recipientUsers) {
             if (rUser.username) {
-              const mentionTag = `@${rUser.username.toLowerCase()}`;
-              if (lowerBody.includes(mentionTag)) {
+              // Word-boundary check: a plain substring match on "@john" would
+              // also fire for "@johnsmith" in the message body. Require the
+              // character after the username (if any) not be a word char.
+              const escaped = rUser.username.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const mentionPattern = new RegExp(`@${escaped}(?![a-z0-9_])`, 'i');
+              if (mentionPattern.test(cleanBody)) {
                 mentionedUserIds.add(rUser._id.toString());
               }
             }
           }
+        }
+
+        // Persist which users were mentioned so this doesn't need to be
+        // re-derived from raw text later (e.g. for a future "mentions of me"
+        // filter) — previously this was only ever computed transiently for
+        // push-notification copy.
+        if (mentionedUserIds.size > 0) {
+          await db.collection('group_chat_messages').updateOne(
+            { _id: result.insertedId },
+            { $set: { mentions: Array.from(mentionedUserIds) } }
+          );
         }
 
         const senderName = user.firstName || user.lastName
