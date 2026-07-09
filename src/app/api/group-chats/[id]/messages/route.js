@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
-import { sendPushNotification } from '../../../../../lib/pushNotifications';
+import { sendPushNotificationsBatch } from '../../../../../lib/pushNotifications';
 import { tryDispatchSlashCommand, postPluginResponse, PLUGIN_SENDER_ID, PLUGIN_SENDER_NAME } from '../../../../../lib/plugins/dispatch.js';
 import { mediaFallbackBody } from '../../../../../lib/mediaType.js';
 
@@ -364,19 +364,16 @@ export async function POST(req, { params }) {
           ? `${user.firstName} ${user.lastName}`.trim()
           : user.username;
 
-        for (const recipientId of nonMutedRecipients) {
-          const isMentioned = mentionedUserIds.has(recipientId);
-          const title = isMentioned 
-            ? `🚨 ${senderName} mentioned you in group ${group.name}`
-            : `${senderName} in group ${group.name}`;
-
-          sendPushNotification(
-            recipientId,
-            title,
-            persistedBody,
-            { type: 'group_message', groupId, groupName: group.name, messageId: result.insertedId.toString() }
-          ).catch(err => console.error('[GroupChat Push Error]', err));
-        }
+        sendPushNotificationsBatch(
+          nonMutedRecipients.map((recipientId) => ({
+            userId: recipientId,
+            title: mentionedUserIds.has(recipientId)
+              ? `🚨 ${senderName} mentioned you in group ${group.name}`
+              : `${senderName} in group ${group.name}`,
+            body: persistedBody,
+            data: { type: 'group_message', groupId, groupName: group.name, messageId: result.insertedId.toString() },
+          }))
+        ).catch(err => console.error('[GroupChat Push Error]', err));
       }
     } catch (pushErr) {
       console.error('Failed to trigger group chat push notifications:', pushErr);
