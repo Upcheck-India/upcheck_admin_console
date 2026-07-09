@@ -134,12 +134,86 @@ export async function sendPushNotification(userId, title, body, data = {}) {
 }
 
 /**
- * Helper to send notifications to an entire team (except sender)
- * (Actually, we handled team push logic inside the team-chat POST route,
- * so we can just export this for future use or omit it. Since I already
- * implemented the team iteration in the route, I'll just leave this as is
- * but ensure exports are clean.)
+ * Sends push notifications to multiple recipients in one batch, instead of
+ * one sendPushNotification() call per recipient. Team/group chat message
+ * fan-out (a message to N members) used to do exactly that — N separate
+ * admin_users lookups and N separate fetch() calls to Expo, all in a tight
+ * loop — which is real, avoidable load even though it was fire-and-forget
+ * (never blocked the message-send response). One user lookup query plus
+ * Expo's own recommended <=100-per-request batching instead.
+ *
+ * @param {Array<{userId: string, title: string, body: string, data?: object}>} items
+ *   Per-recipient title/body/data, since e.g. a team message's push copy
+ *   differs for a mentioned recipient vs everyone else.
  */
+export async function sendPushNotificationsBatch(items) {
+  try {
+    if (!items || items.length === 0) return;
+    const client = await clientPromise;
+    const db = client.db('resources');
+
+    const userIds = [...new Set(items.map((i) => i.userId))];
+    const objIds = userIds.map((id) => {
+      try { return new ObjectId(id); } catch { return id; }
+    });
+    const users = await db.collection('admin_users').find({ _id: { $in: objIds } }).toArray();
+    const userMap = new Map(users.map((u) => [u._id.toString(), u]));
+
+    const messages = [];
+    const tokenOwners = []; // parallel to `messages`, for stale-token cleanup below
+    for (const item of items) {
+      const user = userMap.get(item.userId);
+      if (!user) continue;
+      const tokens = Array.from(new Set([
+        ...(Array.isArray(user.expoPushTokens) ? user.expoPushTokens : []),
+        ...(user.expoPushToken ? [user.expoPushToken] : []),
+      ].filter(Boolean)));
+      if (tokens.length === 0) continue;
+
+      const { channelId, sound } = resolveNotificationRouting(user, item.data?.type);
+      const categoryId = categoryIdForType(item.data?.type);
+      for (const token of tokens) {
+        messages.push({
+          to: token,
+          sound,
+          priority: 'high',
+          channelId,
+          ...(categoryId ? { categoryId } : {}),
+          title: item.title,
+          body: item.body,
+          data: item.data || {},
+        });
+        tokenOwners.push({ userId: item.userId, token });
+      }
+    }
+    if (messages.length === 0) return;
+
+    // Expo push notifications endpoint allows batching up to 100 messages per request
+    const chunkSize = 100;
+    for (let i = 0; i < messages.length; i += chunkSize) {
+      const chunk = messages.slice(i, i + chunkSize);
+      const chunkOwners = tokenOwners.slice(i, i + chunkSize);
+      const response = await fetch('https://exp.host/--/api/v2/push/send', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Accept-encoding': 'gzip, deflate', 'Content-Type': 'application/json' },
+        body: JSON.stringify(chunk),
+      });
+      const receipt = await response.json();
+      const tickets = Array.isArray(receipt?.data) ? receipt.data : [receipt?.data].filter(Boolean);
+      for (let j = 0; j < tickets.length; j++) {
+        const ticket = tickets[j];
+        if (ticket?.status === 'error') {
+          console.error('[Push Notification Batch Error from Expo]', ticket);
+          if (ticket.details?.error === 'DeviceNotRegistered' && chunkOwners[j]) {
+            await removeStaleToken(db, chunkOwners[j].userId, chunkOwners[j].token);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[Push Notification Batch Error]', error);
+  }
+}
 
 /**
  * Sends an Expo push notification to all registered users.

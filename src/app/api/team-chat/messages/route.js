@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { sendPushNotification } from '../../../../lib/pushNotifications';
+import { sendPushNotificationsBatch } from '../../../../lib/pushNotifications';
 import { tryDispatchSlashCommand, postPluginResponse } from '../../../../lib/plugins/dispatch.js';
 import { mediaFallbackBody } from '../../../../lib/mediaType.js';
 
@@ -303,19 +303,16 @@ export async function POST(request) {
       );
     }
 
-    for (const recipientId of nonMutedRecipients) {
-      const isMentioned = mentionedUserIds.has(recipientId);
-      const title = isMentioned 
-        ? `🚨 ${senderName} mentioned you in team ${team.name}`
-        : `${senderName} in ${team.name}`;
-
-      sendPushNotification(
-        recipientId,
-        title,
-        persistedBody,
-        { type: 'team_message', teamId, teamName: team.name, messageId: result.insertedId.toString() }
-      ).catch(err => console.error('[TeamChat Push Error]', err));
-    }
+    sendPushNotificationsBatch(
+      nonMutedRecipients.map((recipientId) => ({
+        userId: recipientId,
+        title: mentionedUserIds.has(recipientId)
+          ? `🚨 ${senderName} mentioned you in team ${team.name}`
+          : `${senderName} in ${team.name}`,
+        body: persistedBody,
+        data: { type: 'team_message', teamId, teamName: team.name, messageId: result.insertedId.toString() },
+      }))
+    ).catch(err => console.error('[TeamChat Push Error]', err));
 
     if (isBotMember && isBotMentioned) {
       import('../../../../lib/botAgent.js').then(({ triggerBotAgent }) => {
