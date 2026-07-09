@@ -19,6 +19,7 @@ import {
   MessageSquare,
   ShieldAlert,
   FileText,
+  EyeOff,
 } from 'lucide-react';
 
 const DISPLAY_MODE_OPTIONS = [
@@ -26,6 +27,7 @@ const DISPLAY_MODE_OPTIONS = [
   { value: 'popup', label: 'Popup', desc: 'A modal shown once; user can dismiss freely.', icon: MessageSquare },
   { value: 'forced', label: 'Forced popup', desc: 'A modal the user must explicitly acknowledge — no swipe/backdrop dismiss.', icon: ShieldAlert },
   { value: 'full_page', label: 'Full page', desc: 'Opens the full changelog page immediately on next app open.', icon: FileText },
+  { value: 'silent', label: 'Silent', desc: 'No banner or popup for anyone — only appears in the What\'s New history list.', icon: EyeOff },
 ];
 
 export default function WhatsNewPage() {
