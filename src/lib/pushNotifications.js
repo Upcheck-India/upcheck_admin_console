@@ -92,6 +92,10 @@ export async function sendPushNotification(userId, title, body, data = {}) {
 
     const { channelId, sound } = resolveNotificationRouting(user, data?.type);
     const categoryId = categoryIdForType(data?.type);
+    // Tag the payload with its intended recipient so the client can refuse
+    // to surface it if a different account is logged in on this device by
+    // the time it arrives (a stale/shared token from a previous logout).
+    const dataWithRecipient = { ...data, recipientUserId: user._id.toString() };
     const messages = tokens.map((token) => ({
       to: token,
       sound,
@@ -100,7 +104,7 @@ export async function sendPushNotification(userId, title, body, data = {}) {
       ...(categoryId ? { categoryId } : {}),
       title,
       body,
-      data,
+      data: dataWithRecipient,
     }));
 
     const response = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -172,6 +176,7 @@ export async function sendPushNotificationsBatch(items) {
 
       const { channelId, sound } = resolveNotificationRouting(user, item.data?.type);
       const categoryId = categoryIdForType(item.data?.type);
+      const dataWithRecipient = { ...(item.data || {}), recipientUserId: user._id.toString() };
       for (const token of tokens) {
         messages.push({
           to: token,
@@ -181,7 +186,7 @@ export async function sendPushNotificationsBatch(items) {
           ...(categoryId ? { categoryId } : {}),
           title: item.title,
           body: item.body,
-          data: item.data || {},
+          data: dataWithRecipient,
         });
         tokenOwners.push({ userId: item.userId, token });
       }
