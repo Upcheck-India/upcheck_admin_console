@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getAuthUser } from '../../../../../lib/auth';
 import { sendStatusLinkedMessage } from '../../../../../lib/status/dmBridge';
+import { canViewerSeeOwnersStatus } from '../../../../../lib/status/privacy';
 
 const MAX_REPLY_LENGTH = 2000;
 
@@ -31,6 +32,11 @@ export async function POST(request, { params }) {
     }
     if (status.userId === currentUser._id.toString()) {
       return NextResponse.json({ error: "Can't reply to your own status" }, { status: 400 });
+    }
+
+    // Defense in depth — see the equivalent check in view/route.js.
+    if (!(await canViewerSeeOwnersStatus(db, status.userId, currentUser._id.toString()))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const message = await sendStatusLinkedMessage({

@@ -47,12 +47,17 @@ export async function GET(req) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const skip = (page - 1) * limit;
+    // Opt-in: force membership-only results even for Admin/Console admin —
+    // used by the status privacy picker, where an admin choosing which of
+    // THEIR OWN teams to restrict their status to must never see (or be
+    // able to select) every team in the org.
+    const mineOnly = searchParams.get('mine') === 'true';
 
     // Build query based on role
     let query = {};
 
-    // Admins and Console admins can see all teams
-    if (userRole !== 'Admin' && userRole !== 'Console admin') {
+    // Admins and Console admins can see all teams (unless mineOnly is set)
+    if (mineOnly || (userRole !== 'Admin' && userRole !== 'Console admin')) {
       // Members/Interns can only see teams they belong to
       if (!userId) {
         return NextResponse.json({ error: 'User ID required' }, { status: 401 });

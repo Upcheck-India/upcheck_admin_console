@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getAuthUser } from '../../../../../lib/auth';
+import { canViewerSeeOwnersStatus } from '../../../../../lib/status/privacy';
 
 export async function POST(request, { params }) {
   try {
@@ -21,6 +22,14 @@ export async function POST(request, { params }) {
     // Owners don't "view" their own status — only record real audience views.
     if (status.userId === currentUser._id.toString()) {
       return NextResponse.json({ success: true, skipped: true });
+    }
+
+    // Defense in depth: a status ID that leaked (or was seen before the
+    // owner tightened their privacy) shouldn't let someone still record a
+    // view — the feed already filters this, but this endpoint must not be
+    // the softer path around it.
+    if (!(await canViewerSeeOwnersStatus(db, status.userId, currentUser._id.toString()))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     await db.collection('status_views').updateOne(

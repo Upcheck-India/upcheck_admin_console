@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getAuthUser } from '../../../../lib/auth';
+import { filterOwnersVisibleTo } from '../../../../lib/status/privacy';
 
 const BOT_ID = '600000000000000000000001';
 
 // Status visibility is scoped to your accepted DM connections — the same
 // set of people you can already message — rather than inventing a separate
-// contacts/visibility model.
+// contacts/visibility model. Within that base set, each owner's own privacy
+// setting further narrows who actually sees their updates.
 export async function GET(request) {
   try {
     const auth = await getAuthUser(request);
@@ -16,8 +18,13 @@ export async function GET(request) {
     const connections = await db.collection('chat_connections')
       .find({ userId: currentUser._id.toString(), status: 'accepted', peerId: { $ne: BOT_ID } })
       .toArray();
-    const peerIds = connections.map(c => c.peerId);
+    let peerIds = connections.map(c => c.peerId);
 
+    if (peerIds.length === 0) {
+      return NextResponse.json({ success: true, feed: [] });
+    }
+
+    peerIds = await filterOwnersVisibleTo(db, currentUser._id.toString(), peerIds);
     if (peerIds.length === 0) {
       return NextResponse.json({ success: true, feed: [] });
     }

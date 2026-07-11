@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { getAuthUser } from '../../../../../lib/auth';
 import { sendStatusLinkedMessage } from '../../../../../lib/status/dmBridge';
+import { canViewerSeeOwnersStatus } from '../../../../../lib/status/privacy';
 
 const MAX_EMOJI_LENGTH = 8; // generous cap for multi-codepoint emoji, not a real message
 
@@ -23,6 +24,11 @@ export async function POST(request, { params }) {
 
     const status = await db.collection('status_updates').findOne({ _id: new ObjectId(id), deletedAt: null });
     if (!status) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    // Defense in depth — see the equivalent check in view/route.js.
+    if (!(await canViewerSeeOwnersStatus(db, status.userId, currentUser._id.toString()))) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
