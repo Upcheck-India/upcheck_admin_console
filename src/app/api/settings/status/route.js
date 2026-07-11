@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../lib/auth';
 import { getStatusSettings, updateStatusSettings } from '../../../../lib/status/settings';
+import { isMusicConfigured } from '../../../../lib/music/jiosaavn';
 
 export async function GET(request) {
   try {
@@ -11,7 +12,7 @@ export async function GET(request) {
     const { db } = auth;
 
     const settings = await getStatusSettings(db);
-    return NextResponse.json({ success: true, settings });
+    return NextResponse.json({ success: true, settings, musicConfigured: isMusicConfigured() });
   } catch (error) {
     console.error('Status settings GET error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

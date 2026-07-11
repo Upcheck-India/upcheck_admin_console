@@ -40,6 +40,7 @@ export async function GET(request) {
         _id: s._id.toString(),
         mediaUrl: s.mediaUrl,
         mediaType: s.mediaType,
+        music: s.music || null,
         caption: s.caption,
         createdAt: s.createdAt,
         expiresAt: s.expiresAt,

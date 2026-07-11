@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Cloud, Save, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
+import { Cloud, Save, AlertTriangle, CheckCircle2, Clock, Music } from 'lucide-react';
 
 const FEATURE_LABELS = {
   avatar: 'Profile avatars',
@@ -12,6 +12,7 @@ export default function MediaSettingsPage() {
   const [settings, setSettings] = useState(null);
   const [cloudinaryConfigured, setCloudinaryConfigured] = useState(false);
   const [statusSettings, setStatusSettings] = useState(null);
+  const [musicConfigured, setMusicConfigured] = useState(false);
   const [retentionInput, setRetentionInput] = useState('24');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,6 +49,7 @@ export default function MediaSettingsPage() {
       if (data.success) {
         setStatusSettings(data.settings);
         setRetentionInput(String(data.settings.retentionHours));
+        setMusicConfigured(data.musicConfigured);
       }
     } catch (err) {
       console.error('Failed to load status settings:', err);
@@ -161,6 +163,36 @@ export default function MediaSettingsPage() {
           />
           <span className="text-sm text-gray-500">hours</span>
         </div>
+      </div>
+
+      {!musicConfigured && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg p-3 mb-4">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <span>
+            Music search isn&apos;t configured on this server (missing JIOSAAVN_API_URL).
+            Enabling it here will have no effect until that env var is set.
+          </span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between border border-gray-200 rounded-lg p-4 mb-6">
+        <div className="flex items-center gap-3">
+          <Music size={18} className="text-gray-400" />
+          <div>
+            <div className="font-medium text-gray-900">Music in Status</div>
+            <div className="text-sm text-gray-500">Let users attach a song clip to a status update</div>
+          </div>
+        </div>
+        <label className="relative inline-flex items-center cursor-pointer">
+          <input
+            type="checkbox"
+            className="sr-only peer"
+            checked={!!statusSettings?.musicEnabled}
+            disabled={statusSaving || !statusSettings || !statusSettings?.statusEnabled}
+            onChange={(e) => saveStatus({ musicEnabled: e.target.checked })}
+          />
+          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full" />
+        </label>
       </div>
 
       {statusMessage && (
