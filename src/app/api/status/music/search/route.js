@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../lib/auth';
-import { isMusicStatusEnabled } from '../../../../../lib/status/settings';
+import { getStatusSettings } from '../../../../../lib/status/settings';
 import { searchSongs, MusicServiceError } from '../../../../../lib/music/jiosaavn';
 
 export async function GET(request) {
@@ -9,7 +9,15 @@ export async function GET(request) {
     if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const { db } = auth;
 
-    if (!(await isMusicStatusEnabled(db))) {
+    // Checked (and reported) separately rather than one combined boolean —
+    // "Music in status is disabled" was surfacing even when the real
+    // blocker was the master Status switch being off, which sent admins
+    // looking in the wrong place.
+    const settings = await getStatusSettings(db);
+    if (!settings.statusEnabled) {
+      return NextResponse.json({ error: 'Status updates are currently disabled' }, { status: 403 });
+    }
+    if (!settings.musicEnabled) {
       return NextResponse.json({ error: 'Music in status is currently disabled' }, { status: 403 });
     }
 

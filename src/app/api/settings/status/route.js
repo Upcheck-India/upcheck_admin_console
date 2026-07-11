@@ -27,14 +27,19 @@ export async function PUT(request) {
     }
     const { user, db } = auth;
 
-    const userRole = (user.role || 'member').toLowerCase();
-    if (userRole !== 'admin' && userRole !== 'console admin' && userRole !== 'console_admin') {
+    // Matches the canonical console-admin access list (see
+    // console-admin/layout.js) — this route previously used a narrower,
+    // differently-normalized list that silently 403'd admins whose role was
+    // 'superadmin'/'administrator', making every settings save no-op.
+    const normalizedRole = (user.role || 'member').toString().toLowerCase().replace(/\s+/g, '_');
+    if (!['admin', 'console_admin', 'superadmin', 'administrator'].includes(normalizedRole)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
     const body = await request.json();
     const settings = await updateStatusSettings(db, {
       statusEnabled: body.statusEnabled,
+      musicEnabled: body.musicEnabled,
       retentionHours: body.retentionHours,
     });
 

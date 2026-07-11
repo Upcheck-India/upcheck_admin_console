@@ -36,8 +36,12 @@ export async function PUT(request) {
     }
     const { user, db } = auth;
 
-    const userRole = (user.role || 'member').toLowerCase();
-    if (userRole !== 'admin' && userRole !== 'console admin' && userRole !== 'console_admin') {
+    // Matches the canonical console-admin access list (see
+    // console-admin/layout.js) rather than a narrower, differently-normalized
+    // list that would silently 403 admins whose role is 'superadmin'/
+    // 'administrator'.
+    const normalizedRole = (user.role || 'member').toString().toLowerCase().replace(/\s+/g, '_');
+    if (!['admin', 'console_admin', 'superadmin', 'administrator'].includes(normalizedRole)) {
       return NextResponse.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
