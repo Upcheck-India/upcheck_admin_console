@@ -22,7 +22,9 @@ export const SYSTEM_DEFAULT_SOUND_KEY = 'system_default';
 function categoryForType(type) {
   if (!type) return null;
   if (type.startsWith('meeting')) return 'meeting';
-  if (type.endsWith('_message') || type === 'chat_message') return 'message';
+  // status_reply/status_reaction are DM messages under the hood (see
+  // lib/status/dmBridge.js) and should sound/route exactly like one.
+  if (type.endsWith('_message') || type === 'chat_message' || type.startsWith('status_')) return 'message';
   return null;
 }
 

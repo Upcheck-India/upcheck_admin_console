@@ -8,7 +8,7 @@
 export const MEDIA_SETTINGS_COLLECTION = 'media_settings';
 export const MEDIA_SETTINGS_ID = 'singleton';
 
-export const MEDIA_FEATURES = ['avatar', 'chatMedia'];
+export const MEDIA_FEATURES = ['avatar', 'chatMedia', 'status'];
 export const MEDIA_PROVIDERS = ['gridfs', 'cloudinary'];
 
 const DEFAULT_SETTINGS = {
@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   providers: {
     avatar: 'gridfs',
     chatMedia: 'gridfs',
+    status: 'gridfs',
   },
 };
 
