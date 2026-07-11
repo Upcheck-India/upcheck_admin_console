@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb.js';
 import { getAuthUser } from '../../../../lib/auth.js';
-import { GridFSBucket } from 'mongodb';
+import { deleteChatMedia } from '../../../../lib/media/chatMedia.js';
 
 export async function POST(request) {
   try {
@@ -47,8 +47,7 @@ export async function POST(request) {
       return NextResponse.json({ error: 'File is referenced by a sent message' }, { status: 403 });
     }
 
-    const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
-    await bucket.delete(file._id);
+    await deleteChatMedia(db, file._id);
 
     return NextResponse.json({ success: true, message: 'Upload cancelled and file deleted permanently' });
 

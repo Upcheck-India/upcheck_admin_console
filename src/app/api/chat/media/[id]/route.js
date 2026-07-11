@@ -14,6 +14,16 @@ export async function GET(req, { params }) {
 
     const client = await clientPromise;
     const db = client.db('resources');
+
+    const fileDoc = await db.collection('chat_media.files').findOne({ _id: new ObjectId(id) });
+    if (!fileDoc) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    if (fileDoc.metadata?.provider === 'cloudinary') {
+      return NextResponse.redirect(fileDoc.metadata.cloudinaryUrl, 302);
+    }
+
     const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
 
     // --- Find file metadata ---
