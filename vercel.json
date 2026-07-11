@@ -3,6 +3,10 @@
     {
       "path": "/api/chat/cleanup-media",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/status/cleanup-expired",
+      "schedule": "30 3 * * *"
     }
   ]
 }
