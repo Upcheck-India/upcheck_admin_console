@@ -5,6 +5,9 @@ import { Readable } from 'stream';
 import crypto from 'crypto';
 import sharp from 'sharp';
 import clientPromise from '../../../../lib/mongodb';
+import { isCloudinaryActive } from '../../../../lib/media/settings';
+import { uploadBufferToCloudinary, deleteFromCloudinary } from '../../../../lib/media/cloudinary';
+import { deleteChatMedia } from '../../../../lib/media/chatMedia';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -85,7 +88,14 @@ export async function POST(req) {
     if (hasCrop) {
       try {
         const isAnimatable = file.type === 'image/gif' || file.type === 'image/webp';
-        const pipeline = sharp(buffer, isAnimatable ? { animated: true } : undefined);
+        // .rotate() with no args auto-orients per the EXIF Orientation tag
+        // and strips it afterwards. Without this, sharp's metadata()/extract()
+        // use the raw encoded (pre-rotation) dimensions while the client's
+        // Image.getSize() reports the already-rotated display dimensions —
+        // for portrait phone photos (very common) that's a width/height swap
+        // between what the crop UI measured and what the server crops,
+        // silently cropping the wrong region.
+        const pipeline = sharp(buffer, isAnimatable ? { animated: true } : undefined).rotate();
         const meta = await pipeline.metadata();
         const naturalWidth = meta.width || 0;
         const naturalHeight = meta.pageHeight || meta.height || 0;
@@ -117,9 +127,6 @@ export async function POST(req) {
       });
     }
 
-    // --- Upload to GridFS ---
-    const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
-
     const metadata = {
       uploadedBy: user._id.toString(),
       chatType,
@@ -131,20 +138,68 @@ export async function POST(req) {
       refs: 0, // Reference counter for safe deletion
     };
 
-    const uploadStream = bucket.openUploadStream(file.name, {
-      contentType: file.type,
-      metadata,
-    });
+    // Every downstream consumer (dedup lookup above, ref-counting in
+    // chat/send + team-chat/messages + group-chats/messages, cancel-upload,
+    // cleanup-media, and the 3 message-delete routes) only ever cares about
+    // a `chat_media.files` document by _id and its `metadata` — it doesn't
+    // matter whether GridFS itself created that document (with matching
+    // chunks) or whether we inserted a Cloudinary-backed one by hand here,
+    // as long as the shape matches. This keeps the mediaUrl contract
+    // (`/api/chat/media/:id`) and every other route completely unchanged.
+    let fileId;
+    let usedCloudinary = false;
 
-    const readable = Readable.from(buffer);
+    if (await isCloudinaryActive(db, 'chatMedia')) {
+      const result = await uploadBufferToCloudinary(buffer, {
+        folder: `chat_media/${chatType}/${chatId}`,
+      });
+      if (result) {
+        const candidateId = new ObjectId();
+        try {
+          await db.collection('chat_media.files').insertOne({
+            _id: candidateId,
+            filename: file.name,
+            contentType: file.type,
+            length: result.bytes,
+            uploadDate: new Date(),
+            metadata: {
+              ...metadata,
+              provider: 'cloudinary',
+              cloudinaryPublicId: result.public_id,
+              cloudinaryUrl: result.secure_url,
+            },
+          });
+          fileId = candidateId;
+          usedCloudinary = true;
+        } catch (metaErr) {
+          // The asset made it to Cloudinary but we couldn't record it —
+          // without a DB row nothing (dedup, ref-counting, cleanup-media)
+          // will ever know it exists, so it would sit there forever as an
+          // invisible orphan. Delete it immediately instead of falling
+          // through and leaking it.
+          console.error('Failed to persist Cloudinary chat media metadata, deleting orphaned asset:', metaErr);
+          await deleteFromCloudinary(result.public_id);
+        }
+      }
+      // Falls through to GridFS below if the Cloudinary upload failed.
+    }
 
-    await new Promise((resolve, reject) => {
-      readable.pipe(uploadStream);
-      uploadStream.on('finish', resolve);
-      uploadStream.on('error', reject);
-    });
+    if (!usedCloudinary) {
+      const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
+      const uploadStream = bucket.openUploadStream(file.name, {
+        contentType: file.type,
+        metadata,
+      });
 
-    const fileId = uploadStream.id;
+      const readable = Readable.from(buffer);
+      await new Promise((resolve, reject) => {
+        readable.pipe(uploadStream);
+        uploadStream.on('finish', resolve);
+        uploadStream.on('error', reject);
+      });
+
+      fileId = uploadStream.id;
+    }
 
     // Check if it was cancelled during upload
     const cancellation = await db.collection('cancelled_uploads').findOne({
@@ -153,7 +208,7 @@ export async function POST(req) {
     });
 
     if (cancellation) {
-      await bucket.delete(fileId).catch(() => {});
+      await deleteChatMedia(db, fileId).catch(() => {});
       await db.collection('cancelled_uploads').deleteOne({ _id: cancellation._id });
       return NextResponse.json({ error: 'Upload was cancelled' }, { status: 400 });
     }

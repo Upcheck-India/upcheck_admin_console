@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb.js';
-import { GridFSBucket } from 'mongodb';
+import { deleteChatMedia } from '../../../../lib/media/chatMedia.js';
 
 export async function GET(request) {
   try {
@@ -11,11 +11,10 @@ export async function GET(request) {
 
     const client = await clientPromise;
     const db = client.db('resources');
-    const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
 
     // Find files where refs === 0 and uploadedAt is older than 24 hours
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
+
     const orphanedFiles = await db.collection('chat_media.files').find({
       'metadata.refs': 0,
       'metadata.uploadedAt': { $lt: oneDayAgo }
@@ -24,7 +23,7 @@ export async function GET(request) {
     let deletedCount = 0;
     for (const file of orphanedFiles) {
       try {
-        await bucket.delete(file._id);
+        await deleteChatMedia(db, file._id);
         deletedCount++;
       } catch (e) {
         console.error(`Failed to delete orphaned file ${file._id}:`, e);

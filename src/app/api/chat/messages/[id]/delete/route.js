@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../../lib/mongodb.js';
-import { ObjectId, GridFSBucket } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { getAuthUser } from '../../../../../../lib/auth.js';
+import { deleteChatMedia } from '../../../../../../lib/media/chatMedia.js';
 
 export async function POST(request, { params }) {
   try {
@@ -48,8 +49,7 @@ export async function POST(request, { params }) {
           const groupCount = await db.collection('group_chat_messages').countDocuments({ mediaUrl: message.mediaUrl, deletedForEveryone: { $ne: true } });
           
           if ((dmCount + teamCount + groupCount) <= 1) {
-            const bucket = new GridFSBucket(db, { bucketName: 'chat_media' });
-            await bucket.delete(fileId).catch(err => console.error('GridFS media deletion failed in DM delete:', err));
+            await deleteChatMedia(db, fileId).catch(err => console.error('Chat media deletion failed in DM delete:', err));
           }
         }
       }
