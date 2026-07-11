@@ -50,10 +50,14 @@ export async function searchSongs(query) {
   }
 
   return data
-    // Some results are JioSaavn-Pro/DRM-gated ("disabled":"true", is_drm:1)
-    // and their media_url won't actually play — filter them out rather than
-    // surfacing a track that silently fails during playback.
-    .filter((song) => song?.disabled !== 'true' && !song?.is_drm && song?.media_url)
+    // Every result from this API now comes back flagged "disabled":"true",
+    // "is_drm":1 — verified this does NOT actually block playback (helper.py
+    // decrypts the same encrypted_media_url regardless of this flag, and the
+    // resulting stream URL returns a real, range-fetchable 200 in practice).
+    // It's just JioSaavn's own app-side "Pro" paywall UI hint, not a signal
+    // this scraper's decrypted URL is unplayable — filtering on it excluded
+    // literally every search result. Only require an actual media_url.
+    .filter((song) => !!song?.media_url)
     .map((song) => ({
       id: song.id,
       title: song.song || song.title || 'Unknown title',
@@ -61,8 +65,10 @@ export async function searchSongs(query) {
       album: song.album || null,
       thumbnail: song.image || null,
       durationSec: parseInt(song.duration, 10) || null,
-      // Prefer the shorter preview clip over the full 320kbps track — this
-      // is a status update, not a music player.
-      streamUrl: song.media_preview_url || song.media_url,
+      // The full track, not media_preview_url — the preview CDN 429'd under
+      // light testing and, since our own clip trim always seeks + plays only
+      // a chosen 30s window (range-fetched, not a full download), there's no
+      // benefit to the shorter preview file anyway.
+      streamUrl: song.media_url,
     }));
 }
