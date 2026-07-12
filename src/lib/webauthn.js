@@ -17,15 +17,36 @@ export function getRpName() {
   return process.env.NEXT_PUBLIC_WEBAUTHN_RP_NAME || 'Upcheck Admin';
 }
 
+// The Android app's WebAuthn "origin" is NOT the https:// RP domain — the
+// Credential Manager API stamps clientDataJSON with `android:apk-key-hash:
+// <base64url SHA-256 of the app signing cert>` instead (see
+// https://developer.android.com/identity/sign-in/credential-manager#verify-origin).
+// Without this in the accepted list, every passkey ceremony from the Android
+// app fails origin verification even though the RP ID/domain matches.
+//
+// Kept as the EXACT SAME string published in
+// upcheck_admin/public/.well-known/assetlinks.json's sha256_cert_fingerprints
+// (colon-separated hex) — update both together if the app's signing cert
+// ever rotates. Converted to base64url of the raw bytes here since that's
+// the encoding Android's origin string uses.
+const ANDROID_SHA256_CERT_FINGERPRINT =
+  'CC:4A:21:73:39:23:46:8E:63:65:FD:B0:07:74:26:96:7E:BC:56:90:A6:05:42:5F:5F:61:7A:9F:8D:5B:C9:CE';
+
+function getAndroidAppOrigin() {
+  const bytes = Buffer.from(ANDROID_SHA256_CERT_FINGERPRINT.replace(/:/g, ''), 'hex');
+  return `android:apk-key-hash:${bytes.toString('base64url')}`;
+}
+
 // Origins that are accepted during verification. In development we allow the
 // common localhost variants so the flow works regardless of how the dev server
-// is reached. In production we trust NEXTAUTH_URL (falling back to https://rpId).
+// is reached. In production we trust NEXTAUTH_URL (falling back to https://rpId),
+// plus the Android app's own origin format so passkeys work from the mobile app.
 export function getExpectedOrigins(request) {
   const isProduction = process.env.NODE_ENV === 'production';
   const rpId = getRpId();
 
   if (isProduction) {
-    return [process.env.NEXTAUTH_URL || `https://${rpId}`];
+    return [process.env.NEXTAUTH_URL || `https://${rpId}`, getAndroidAppOrigin()];
   }
 
   const origins = [
@@ -33,6 +54,7 @@ export function getExpectedOrigins(request) {
     'http://127.0.0.1:3000',
     'https://localhost:3000',
     'https://127.0.0.1:3000',
+    getAndroidAppOrigin(),
   ];
 
   // Include the actual request origin too, so non-standard dev ports still work.

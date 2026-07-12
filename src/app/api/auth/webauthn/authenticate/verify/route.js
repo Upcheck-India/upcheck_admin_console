@@ -159,6 +159,10 @@ export async function POST(request) {
     return json({
       success: true,
       message: 'Authentication successful',
+      // Mobile can't read the httpOnly cookie set above — mirrors how the
+      // password login route (POST /api/auth) already returns sessionToken
+      // in the body for the app to store via expo-secure-store.
+      sessionToken,
       user: {
         id: user._id.toString(),
         username: user.username,

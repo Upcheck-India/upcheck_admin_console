@@ -71,12 +71,21 @@ export async function DELETE(request, { params }) {
   }
 }
 
-export async function GET() {
+export async function GET(request) {
   try {
-    // Get the token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    
+    // Bearer header first (mobile app), falling back to the admin_token
+    // cookie (web console) — mirrors lib/auth.js's extraction order.
+    let token = null;
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const parsed = authHeader.substring(7).trim();
+      if (parsed && parsed !== 'null' && parsed !== 'undefined') token = parsed;
+    }
+    if (!token) {
+      const cookieStore = await cookies();
+      token = cookieStore.get('admin_token')?.value;
+    }
+
     if (!token) {
       return new Response(JSON.stringify({ 
         error: 'Unauthorized',

@@ -11,8 +11,18 @@ const json = (body, status = 200) =>
 
 export async function POST(request) {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
+    // Bearer header first (mobile app), falling back to the admin_token
+    // cookie (web console) — mirrors lib/auth.js's extraction order.
+    let token = null;
+    const authHeader = request.headers.get('authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const parsed = authHeader.substring(7).trim();
+      if (parsed && parsed !== 'null' && parsed !== 'undefined') token = parsed;
+    }
+    if (!token) {
+      const cookieStore = await cookies();
+      token = cookieStore.get('admin_token')?.value;
+    }
 
     if (!token) {
       return json({ error: 'Unauthorized', message: 'No authentication token found' }, 401);

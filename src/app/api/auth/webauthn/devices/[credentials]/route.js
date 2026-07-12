@@ -2,25 +2,36 @@ import { cookies } from 'next/headers';
 import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 
+// Bearer header first (mobile app clients can't read the httpOnly cookie),
+// falling back to the admin_token cookie (web console). Mirrors the same
+// extraction order used in lib/auth.js / lib/reauth.js.
+async function extractAdminToken(request) {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const parsed = authHeader.substring(7).trim();
+    if (parsed && parsed !== 'null' && parsed !== 'undefined') return parsed;
+  }
+  const cookieStore = await cookies();
+  return cookieStore.get('admin_token')?.value || null;
+}
+
 export async function DELETE(request, { params }) {
   try {
     // Get the credential ID from the URL
     const { credentials: credentialId } = params;
-    
+
     if (!credentialId) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         success: false,
-        error: 'Missing credential ID' 
-      }), { 
+        error: 'Missing credential ID'
+      }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Get the token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('admin_token')?.value;
-    
+    const token = await extractAdminToken(request);
+
     if (!token) {
       return new Response(JSON.stringify({ 
         success: false,
