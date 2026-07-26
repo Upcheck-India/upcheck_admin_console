@@ -1,50 +1,47 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
-import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withFinanceTransaction, FinanceError, assertAccountExists } from '../../../../../lib/finance/tx';
+import { requireFinanceAdmin, capString } from '../../../../../lib/finance/auth';
+import { toMinor, moneyFields, fromMinor } from '../../../../../lib/finance/money';
+import { recordFinanceAudit, actorFromUser } from '../../../../../lib/finance/audit';
 
 export async function POST(request) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request, { mutation: true });
+    if (response) return response;
 
     const body = await request.json();
-    const { accountId, amount, date, title, notes } = body || {};
+    const { accountId, amount, date, title, notes, opId } = body || {};
     if (!accountId) return NextResponse.json({ error: 'accountId is required' }, { status: 400 });
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
-    if (!title || typeof title !== 'string') return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+    if (!opId || typeof opId !== 'string') return NextResponse.json({ error: 'opId is required' }, { status: 400 });
+    const cleanTitle = capString(title, 200);
+    if (!cleanTitle) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
+
+    let amtMinor;
+    try {
+      amtMinor = toMinor(amount);
+      if (amtMinor <= 0) throw new FinanceError('Valid amount is required', 400);
+    } catch (err) {
+      if (err && err.isFinanceError) return NextResponse.json({ error: err.message }, { status: err.status || 400 });
+      throw err;
+    }
+    const amt = fromMinor(amtMinor);
 
     const client = await clientPromise;
     const db = client.db('resources');
+    const funds = db.collection('org_funds');
+    const pool = db.collection('org_untransferred');
 
-    // Create outflow entry in funds (transfer)
+    const now = new Date();
+    const when = date ? new Date(date) : now;
+    const actor = actorFromUser(user);
+
     const fundsDoc = {
       kind: 'out',
-      amount: amt,
-      title: `Move to Untransferred: ${title.trim()}`,
-      date: date ? new Date(date) : new Date(),
-      notes: notes || 'Moved from billing account to untransferred pool',
+      ...moneyFields('amount', amt),
+      title: `Move to Untransferred: ${cleanTitle}`,
+      date: when,
+      notes: capString(notes, 2000) || 'Moved from billing account to untransferred pool',
       category: 'other',
       accountId,
       inflowType: null,
@@ -54,33 +51,56 @@ export async function POST(request) {
       counterparty: '',
       reference: 'untransferred:receive',
       tags: ['transfer'],
+      opId,
       isTransfer: true,
-      createdAt: new Date(),
-      createdBy: { id: user._id?.toString?.() || null, email: user.email, username: user.username, role: user.role },
+      createdAt: now,
+      createdBy: actor,
     };
 
-    await db.collection('org_funds').insertOne(fundsDoc);
-
-    // Create untransferred item
-    const unDoc = {
-      amount: amt,
+    const buildPoolDoc = () => ({
+      ...moneyFields('amount', amt),
       remainingAmount: amt,
-      title: title.trim(),
+      remainingAmountMinor: amtMinor,
+      title: cleanTitle,
       source: 'Internal move',
-      notes: notes || '',
-      receivedAt: date ? new Date(date) : new Date(),
+      notes: capString(notes, 2000),
+      receivedAt: when,
       relatedApplicationId: null,
-      history: [
-        { type: 'receive_from_account', accountId, amount: amt, at: new Date(), by: { id: user._id?.toString?.() || null, username: user.username } }
-      ],
-      createdAt: new Date(),
-      createdBy: { id: user._id?.toString?.() || null, email: user.email, username: user.username, role: user.role },
-    };
+      opId,
+      history: [{ type: 'receive_from_account', accountId, amount: amt, amountMinor: amtMinor, at: now, opId, by: { id: actor.id, username: actor.username } }],
+      createdAt: now,
+      createdBy: actor,
+    });
 
-    const res = await db.collection('org_untransferred').insertOne(unDoc);
+    const result = await withFinanceTransaction(client, async (session) => {
+      const poolExisting = await pool.findOne({ opId }, { session });
+      if (poolExisting) {
+        const led = await funds.findOne({ opId }, { session, projection: { _id: 1 } });
+        if (!led) await funds.insertOne(fundsDoc, { session });
+        return { replay: true, item: poolExisting };
+      }
 
-    return NextResponse.json({ _id: res.insertedId, ...unDoc }, { status: 201 });
+      await assertAccountExists(db, accountId, session);
+
+      const ledExisting = await funds.findOne({ opId }, { session, projection: { _id: 1 } });
+      if (!ledExisting) await funds.insertOne(fundsDoc, { session });
+
+      const doc = buildPoolDoc();
+      const res = await pool.insertOne(doc, { session });
+      await recordFinanceAudit(
+        db,
+        {
+          action: 'receive.post', collection: 'org_untransferred', documentId: res.insertedId,
+          actor, meta: { accountId, amountMinor: amtMinor, opId },
+        },
+        session
+      );
+      return { replay: false, item: { _id: res.insertedId, ...doc } };
+    });
+
+    return NextResponse.json(result.item, { status: result.replay ? 200 : 201 });
   } catch (e) {
+    if (e && e.isFinanceError) return NextResponse.json({ error: e.message }, { status: e.status || 400 });
     console.error('POST /api/organization/untransferred/receive-from-account error', e);
     return NextResponse.json({ error: 'Failed to receive from account' }, { status: 500 });
   }

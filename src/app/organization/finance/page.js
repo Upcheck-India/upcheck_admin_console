@@ -7,10 +7,13 @@ import UnauthorizedAccess from '../../../components/UnauthorizedAccess';
 import AvatarWithStatus from '../../../components/AvatarWithStatus';
 import useOnlineUsers from '../../../hooks/useOnlineUsers';
 import {
-  Wallet, 
-  Layers, 
-  Target, 
-  BarChart3, 
+  Wallet,
+  Layers,
+  Target,
+  BarChart3,
+  Building2,
+  Package,
+  CalendarCheck,
   LayoutDashboard, 
   Shield, 
   Mail, 
@@ -29,6 +32,7 @@ import {
 } from 'lucide-react';
 import useBillingAccount from '../funds/_hooks/useBillingAccount';
 import AccountSelector from '../funds/_components/AccountSelector';
+import { numberFmt } from '../funds/_components/constants';
 
 export default function FinancePage() {
   const { user, isLoading: authLoading } = useAuth(true);
@@ -37,11 +41,35 @@ export default function FinancePage() {
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [username, setUsername] = useState('');
   const { accounts, activeAccountId, selectAccount, addAccount } = useBillingAccount();
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
 
   useEffect(() => {
     const storedUsername = localStorage.getItem('username');
     if (storedUsername) setUsername(storedUsername);
   }, []);
+
+  // Real quick stats from the funds summary for the active account (this year).
+  useEffect(() => {
+    let cancelled = false;
+    const loadStats = async () => {
+      if (!activeAccountId || !isAdmin) { setStats(null); return; }
+      try {
+        setStatsLoading(true);
+        const params = new URLSearchParams({ accountId: activeAccountId, datePreset: 'thisYear', limit: '1' });
+        const res = await fetch(`/api/organization/funds?${params.toString()}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load stats');
+        const data = await res.json();
+        if (!cancelled) setStats(data.summary || null);
+      } catch {
+        if (!cancelled) setStats(null);
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    };
+    loadStats();
+    return () => { cancelled = true; };
+  }, [activeAccountId, isAdmin]);
 
   const handleLogout = async () => {
     try {
@@ -106,30 +134,63 @@ export default function FinancePage() {
     {
       title: 'Cost Centers',
       desc: 'Allocate spend to cost centers for reporting',
-      href: '#',
-      icon: <Layers className="w-6 h-6" />, 
+      href: '/organization/cost-centers',
+      icon: <Layers className="w-6 h-6" />,
       gradient: 'from-green-500 via-teal-500 to-cyan-500',
       bgGradient: 'from-green-50 to-teal-50',
       iconColor: 'text-green-600',
       hoverBorder: 'group-hover:border-green-300',
-      available: false
+      available: true
     },
     {
       title: 'Financial Reports',
-      desc: 'Financial summaries and export capabilities',
-      href: '#',
-      icon: <BarChart3 className="w-6 h-6" />, 
+      desc: 'P&L, cashflow and fund utilization with export',
+      href: '/organization/finance/reports',
+      icon: <BarChart3 className="w-6 h-6" />,
       gradient: 'from-purple-500 via-indigo-500 to-blue-500',
       bgGradient: 'from-purple-50 to-indigo-50',
       iconColor: 'text-purple-600',
       hoverBorder: 'group-hover:border-purple-300',
-      available: false
+      available: true
     },
-        {
+    {
+      title: 'Vendors & Bills',
+      desc: 'Vendor directory and accounts payable',
+      href: '/organization/vendors',
+      icon: <Building2 className="w-6 h-6" />,
+      gradient: 'from-sky-500 via-blue-500 to-indigo-500',
+      bgGradient: 'from-sky-50 to-blue-50',
+      iconColor: 'text-sky-600',
+      hoverBorder: 'group-hover:border-sky-300',
+      available: true
+    },
+    {
+      title: 'Fixed Assets',
+      desc: 'Asset register with depreciation tracking',
+      href: '/organization/assets',
+      icon: <Package className="w-6 h-6" />,
+      gradient: 'from-amber-500 via-orange-500 to-red-500',
+      bgGradient: 'from-amber-50 to-orange-50',
+      iconColor: 'text-amber-600',
+      hoverBorder: 'group-hover:border-amber-300',
+      available: true
+    },
+    {
+      title: 'Compliance Calendar',
+      desc: 'GST, TDS, FCRA and other statutory filings',
+      href: '/organization/compliance',
+      icon: <CalendarCheck className="w-6 h-6" />,
+      gradient: 'from-rose-500 via-pink-500 to-fuchsia-500',
+      bgGradient: 'from-rose-50 to-pink-50',
+      iconColor: 'text-rose-600',
+      hoverBorder: 'group-hover:border-rose-300',
+      available: true
+    },
+    {
       title: 'Untransferred Funds',
       desc: 'Received by org but not assigned to any billing account',
       href: '/organization/untransferred',
-      icon: <Wallet className="w-6 h-6" />, 
+      icon: <Wallet className="w-6 h-6" />,
       gradient: 'from-emerald-500 via-teal-500 to-green-500',
       bgGradient: 'from-emerald-50 to-green-50',
       iconColor: 'text-emerald-600',
@@ -138,38 +199,47 @@ export default function FinancePage() {
     }
   ];
 
+  // Quick stats are real numbers from the funds summary API for the active
+  // account (no account selected → dashes). Balance is cumulative; received/
+  // spent are for the current year; burn/runway use the last 3 complete months.
+  const fmtMoney = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : `₹${numberFmt.format(Number(v))}`);
+  const statValue = (v) => (statsLoading ? '…' : activeAccountId && stats ? v : '—');
   const quickStats = [
     {
-      label: 'Total Budget',
-      value: '₹12.5L',
-      change: '+12%',
+      label: 'Account Balance',
+      value: statValue(fmtMoney(stats && stats.balance)),
+      change: 'All time',
       icon: <DollarSign className="w-5 h-5" />,
       color: 'from-blue-500 to-indigo-500',
       bgColor: 'from-blue-50 to-indigo-50'
     },
     {
-      label: 'Monthly Spend',
-      value: '₹2.3L',
-      change: '-5%',
+      label: 'Received This Year',
+      value: statValue(fmtMoney(stats && stats.received)),
+      change: 'This year',
       icon: <TrendingUp className="w-5 h-5" />,
       color: 'from-teal-500 to-green-500',
       bgColor: 'from-teal-50 to-green-50'
     },
     {
-      label: 'Runway',
-      value: '18 months',
-      change: 'Stable',
-      icon: <Clock className="w-5 h-5" />,
-      color: 'from-purple-500 to-pink-500',
-      bgColor: 'from-purple-50 to-pink-50'
-    },
-    {
-      label: 'Categories',
-      value: '8 active',
-      change: '2 new',
+      label: 'Avg Monthly Burn',
+      value: statValue(fmtMoney(stats && stats.avgMonthlyBurn)),
+      change: 'Last 3 months',
       icon: <PieChart className="w-5 h-5" />,
       color: 'from-orange-500 to-amber-500',
       bgColor: 'from-orange-50 to-amber-50'
+    },
+    {
+      label: 'Runway',
+      value: statValue(
+        stats && stats.runwayMonths != null && Number.isFinite(Number(stats.runwayMonths))
+          ? `${Number(stats.runwayMonths).toFixed(1)} months`
+          : '—'
+      ),
+      change: 'At current burn',
+      icon: <Clock className="w-5 h-5" />,
+      color: 'from-purple-500 to-pink-500',
+      bgColor: 'from-purple-50 to-pink-50'
     }
   ];
 

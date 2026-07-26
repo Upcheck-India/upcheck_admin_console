@@ -61,8 +61,8 @@ export default function OrganizationPage() {
       hoverBorder: 'group-hover:border-indigo-300'
     },
     {
-      title: 'Vendors & Contracts',
-      desc: 'Vendor registry, contracts, renewals and cost centers',
+      title: 'Vendors & Bills',
+      desc: 'Vendor registry and accounts payable bills',
       href: '/organization/vendors',
       icon: <ClipboardList className="w-6 h-6" />,
       gradient: 'from-teal-500 via-green-500 to-emerald-500',
@@ -81,8 +81,8 @@ export default function OrganizationPage() {
       hoverBorder: 'group-hover:border-green-300'
     },
     {
-      title: 'Assets & Inventory',
-      desc: 'Assets, assignments, warranty and check-in/out',
+      title: 'Fixed Assets',
+      desc: 'Asset register, assignments and depreciation',
       href: '/organization/assets',
       icon: <Briefcase className="w-6 h-6" />,
       gradient: 'from-blue-500 via-indigo-500 to-purple-500',

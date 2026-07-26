@@ -11,6 +11,15 @@ const BUDGET_TYPES = {
   custom: 'Custom Budget',
 };
 
+// Approval workflow chip styles (STATIC tailwind class map)
+const WORKFLOW_STATUS_STYLES = {
+  draft: 'bg-slate-100 text-slate-600 border border-slate-200',
+  submitted: 'bg-blue-50 text-blue-700 border border-blue-200',
+  approved: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  locked: 'bg-purple-50 text-purple-700 border border-purple-200',
+};
+const WORKFLOW_STATUS_LABELS = { draft: 'Draft', submitted: 'Submitted', approved: 'Approved', locked: 'Locked' };
+
 export default function BudgetDetails({ budget, grants, onClose }) {
   if (!budget) return null;
 
@@ -20,19 +29,36 @@ export default function BudgetDetails({ budget, grants, onClose }) {
 
   const linkedGrantsTotal = linkedGrantDetails.reduce((sum, g) => sum + (g?.amount || 0), 0);
 
-  const chartData = (budget.categories || [])
+  // Budget-vs-actual totals (from the enriched API response; tolerate older
+  // objects that lack the actual/remaining fields).
+  const categories = Array.isArray(budget.categories) ? budget.categories : [];
+  const totalAllocated = Number(budget.totalAllocated) || 0;
+  const totalActual = Number(budget.totalActual) || 0;
+  const totalRemaining = budget.totalRemaining != null ? Number(budget.totalRemaining) : totalAllocated - totalActual;
+  const totalVariancePct = budget.totalVariancePct != null
+    ? Number(budget.totalVariancePct)
+    : (totalAllocated > 0 ? Math.round(((totalActual - totalAllocated) / totalAllocated) * 10000) / 100 : null);
+  const overBudget = totalActual > totalAllocated;
+  const workflowStatus = budget.workflowStatus || 'draft';
+
+  const visibleCategories = categories
+    .filter(c => (Number(c.allocated) || 0) > 0 || (Number(c.actual) || 0) > 0)
+    .sort((a, b) => (Number(b.allocated) || 0) - (Number(a.allocated) || 0));
+
+  const chartData = categories
     .filter(c => (Number(c.allocated) || 0) > 0)
-    .map(c => ({ 
-      name: c.categoryLabel || c.category, 
-      value: Number(c.allocated) || 0 
+    .map(c => ({
+      name: c.categoryLabel || c.category,
+      value: Number(c.allocated) || 0
     }))
     .sort((a, b) => b.value - a.value);
 
-  const barData = (budget.categories || [])
-    .filter(c => (Number(c.allocated) || 0) > 0)
-    .map(c => ({ 
-      category: (c.categoryLabel || c.category).slice(0, 15), 
-      allocated: Number(c.allocated) || 0 
+  const barData = categories
+    .filter(c => (Number(c.allocated) || 0) > 0 || (Number(c.actual) || 0) > 0)
+    .map(c => ({
+      category: (c.categoryLabel || c.category).slice(0, 15),
+      allocated: Number(c.allocated) || 0,
+      actual: Number(c.actual) || 0,
     }))
     .sort((a, b) => b.allocated - a.allocated)
     .slice(0, 10);
@@ -57,9 +83,17 @@ export default function BudgetDetails({ budget, grants, onClose }) {
                 {BUDGET_TYPES[budget.budgetType] || budget.budgetType}
               </span>
               <span className="text-sm px-3 py-1.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                FY {budget.fiscalYear}
+                {budget.fiscalYear}
+              </span>
+              <span className={`text-sm px-3 py-1.5 rounded-full ${WORKFLOW_STATUS_STYLES[workflowStatus] || WORKFLOW_STATUS_STYLES.draft}`}>
+                {WORKFLOW_STATUS_LABELS[workflowStatus] || 'Draft'}
               </span>
             </div>
+            {budget.carriedForwardFrom && (
+              <div className="mt-2 text-sm text-teal-700">
+                Carried forward from {budget.carriedForwardFrom.fiscalYear || 'a previous budget'}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -71,23 +105,51 @@ export default function BudgetDetails({ budget, grants, onClose }) {
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
-          {/* Amount Section */}
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-6 mb-6 border border-emerald-200">
-            <div className="flex items-center gap-2 text-emerald-700 mb-2">
-              <DollarSign className="w-5 h-5" />
-              <span className="text-sm font-medium">Total Allocated</span>
-            </div>
-            <div className="text-3xl font-bold text-emerald-900">
-              ₹{(budget.totalAllocated || 0).toLocaleString()}
-            </div>
-            <div className="mt-2 text-sm text-emerald-700">
-              Across {(budget.categories || []).length} categories
-            </div>
-            {(budget.baseAmount != null) && (
-              <div className="mt-3 text-sm text-emerald-800">
-                Scope amount: <span className="font-semibold">₹{Number(budget.baseAmount).toLocaleString()}</span>
+          {/* Amount Section — budget vs actual */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-5 border border-emerald-200">
+              <div className="flex items-center gap-2 text-emerald-700 mb-2">
+                <DollarSign className="w-5 h-5" />
+                <span className="text-sm font-medium">Total Allocated</span>
               </div>
-            )}
+              <div className="text-2xl font-bold text-emerald-900">
+                ₹{totalAllocated.toLocaleString()}
+              </div>
+              <div className="mt-2 text-sm text-emerald-700">
+                Across {categories.length} categories
+              </div>
+              {(budget.baseAmount != null) && (
+                <div className="mt-2 text-sm text-emerald-800">
+                  Scope amount: <span className="font-semibold">₹{Number(budget.baseAmount).toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            <div className={`rounded-xl p-5 border ${overBudget ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+              <div className={`flex items-center gap-2 mb-2 ${overBudget ? 'text-red-700' : 'text-slate-600'}`}>
+                <DollarSign className="w-5 h-5" />
+                <span className="text-sm font-medium">Actual Spent</span>
+              </div>
+              <div className={`text-2xl font-bold ${overBudget ? 'text-red-700' : 'text-slate-900'}`}>
+                ₹{totalActual.toLocaleString()}
+              </div>
+              {totalVariancePct != null && (
+                <div className={`mt-2 text-sm ${overBudget ? 'text-red-700 font-semibold' : 'text-slate-600'}`}>
+                  {totalVariancePct > 0 ? '+' : ''}{totalVariancePct}% vs allocated
+                </div>
+              )}
+            </div>
+            <div className={`rounded-xl p-5 border ${totalRemaining < 0 ? 'bg-red-50 border-red-200' : 'bg-teal-50 border-teal-200'}`}>
+              <div className={`flex items-center gap-2 mb-2 ${totalRemaining < 0 ? 'text-red-700' : 'text-teal-700'}`}>
+                <Target className="w-5 h-5" />
+                <span className="text-sm font-medium">Remaining</span>
+              </div>
+              <div className={`text-2xl font-bold ${totalRemaining < 0 ? 'text-red-700' : 'text-teal-900'}`}>
+                {totalRemaining < 0 ? `-₹${Math.abs(totalRemaining).toLocaleString()}` : `₹${totalRemaining.toLocaleString()}`}
+              </div>
+              <div className={`mt-2 text-sm ${totalRemaining < 0 ? 'text-red-700 font-semibold' : 'text-teal-700'}`}>
+                {totalRemaining < 0 ? 'Over budget' : 'Left to spend'}
+              </div>
+            </div>
           </div>
 
           {/* Linked Grants */}
@@ -143,16 +205,18 @@ export default function BudgetDetails({ budget, grants, onClose }) {
                   </ResponsiveContainer>
                 </div>
 
-                {/* Bar Chart */}
+                {/* Bar Chart — allocated vs actual */}
                 <div className="bg-slate-50 rounded-xl p-4">
-                  <div className="text-xs text-slate-500 mb-2 text-center">Top Categories</div>
+                  <div className="text-xs text-slate-500 mb-2 text-center">Top Categories: Allocated vs Actual</div>
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={barData} layout="vertical">
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis type="number" tickFormatter={(val) => `₹${(val/1000).toFixed(0)}k`} />
                       <YAxis dataKey="category" type="category" width={100} style={{ fontSize: '11px' }} />
                       <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
-                      <Bar dataKey="allocated" fill="#10b981" />
+                      <Legend />
+                      <Bar dataKey="allocated" name="Allocated" fill="#10b981" />
+                      <Bar dataKey="actual" name="Actual" fill="#ef4444" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -164,7 +228,7 @@ export default function BudgetDetails({ budget, grants, onClose }) {
           <div className="mb-6">
             <div className="flex items-center gap-2 text-slate-600 mb-3">
               <FileText className="w-4 h-4" />
-              <span className="text-sm font-semibold">Category Allocations</span>
+              <span className="text-sm font-semibold">Category Allocations vs Actuals</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -172,20 +236,36 @@ export default function BudgetDetails({ budget, grants, onClose }) {
                   <tr>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Category</th>
                     <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Allocated</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Actual</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Remaining</th>
+                    <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600">Variance</th>
                     <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600">Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {(budget.categories || [])
-                    .filter(c => (Number(c.allocated) || 0) > 0)
-                    .sort((a, b) => (Number(b.allocated) || 0) - (Number(a.allocated) || 0))
-                    .map((cat, idx) => (
+                  {visibleCategories.map((cat, idx) => {
+                    const alloc = Number(cat.allocated) || 0;
+                    const actual = Number(cat.actual) || 0;
+                    const remaining = cat.remaining != null ? Number(cat.remaining) : alloc - actual;
+                    const over = actual > alloc;
+                    const variancePct = cat.variancePct != null
+                      ? Number(cat.variancePct)
+                      : (alloc > 0 ? Math.round(((actual - alloc) / alloc) * 10000) / 100 : null);
+                    return (
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="px-4 py-2 font-medium text-slate-900">{cat.categoryLabel || cat.category}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-emerald-700">₹{(Number(cat.allocated) || 0).toLocaleString()}</td>
+                        <td className="px-4 py-2 text-right font-semibold text-emerald-700">₹{alloc.toLocaleString()}</td>
+                        <td className={`px-4 py-2 text-right font-semibold ${over ? 'text-red-600' : 'text-slate-700'}`}>₹{actual.toLocaleString()}</td>
+                        <td className={`px-4 py-2 text-right font-semibold ${remaining < 0 ? 'text-red-600' : 'text-teal-700'}`}>
+                          {remaining < 0 ? `-₹${Math.abs(remaining).toLocaleString()}` : `₹${remaining.toLocaleString()}`}
+                        </td>
+                        <td className={`px-4 py-2 text-right text-sm ${over ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
+                          {variancePct != null ? `${variancePct > 0 ? '+' : ''}${variancePct}%` : '—'}
+                        </td>
                         <td className="px-4 py-2 text-slate-600 text-sm">{cat.notes || '—'}</td>
                       </tr>
-                    ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -217,6 +297,24 @@ export default function BudgetDetails({ budget, grants, onClose }) {
                 <div>
                   Last updated: {new Date(budget.updatedAt).toLocaleString('en-IN')}
                   {budget.updatedBy?.username && ` by ${budget.updatedBy.username}`}
+                </div>
+              )}
+              {budget.submittedAt && (
+                <div>
+                  Submitted: {new Date(budget.submittedAt).toLocaleString('en-IN')}
+                  {budget.submittedBy?.username && ` by ${budget.submittedBy.username}`}
+                </div>
+              )}
+              {budget.approvedAt && (
+                <div className="text-emerald-700">
+                  Approved: {new Date(budget.approvedAt).toLocaleString('en-IN')}
+                  {budget.approvedBy?.username && ` by ${budget.approvedBy.username}`}
+                </div>
+              )}
+              {budget.lockedAt && (
+                <div className="text-purple-700">
+                  Locked: {new Date(budget.lockedAt).toLocaleString('en-IN')}
+                  {budget.lockedBy?.username && ` by ${budget.lockedBy.username}`}
                 </div>
               )}
             </div>

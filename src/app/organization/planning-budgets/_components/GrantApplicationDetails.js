@@ -1,4 +1,18 @@
-import { X, Calendar, DollarSign, Building2, User, Mail, FileText, Tag } from 'lucide-react';
+import { X, Calendar, DollarSign, Building2, User, Mail, FileText, Tag, Paperclip, ListChecks } from 'lucide-react';
+import { formatBusinessDate } from '../../../../lib/finance/dates';
+
+// Static class strings (dynamic `bg-${...}` templates are purged by Tailwind).
+const MILESTONE_CHIP = {
+  done: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  pending: 'bg-amber-50 text-amber-700 border-amber-200',
+  overdue: 'bg-red-50 text-red-700 border-red-200',
+};
+
+function isMilestoneOverdue(m) {
+  if (!m || m.status === 'done' || !m.dueDate) return false;
+  const due = new Date(m.dueDate);
+  return !Number.isNaN(due.getTime()) && due.getTime() < Date.now();
+}
 
 export default function GrantApplicationDetails({ application, onClose, statusOptions }) {
   if (!application) return null;
@@ -14,18 +28,15 @@ export default function GrantApplicationDetails({ application, onClose, statusOp
           <div className="flex-1">
             <h2 className="text-2xl font-bold text-slate-900 mb-2">{application.programName}</h2>
             <div className="flex items-center gap-3 flex-wrap">
-              <span className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full bg-${statusDef.color}-50 text-${statusDef.color}-700 border border-${statusDef.color}-200`}>
+              <span className={`inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border ${statusDef.badgeClass}`}>
                 <Icon className="w-4 h-4" />
                 {statusDef.label}
               </span>
+              {/* Unified received-to-org state (the legacy `transferred` flag is
+                  folded into receivedToOrg by the API, so one badge suffices). */}
               {application.receivedToOrg && (
                 <span className="text-sm px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
                   Received to Organization
-                </span>
-              )}
-              {application.transferred && (
-                <span className="text-sm px-3 py-1.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200">
-                  Transferred
                 </span>
               )}
             </div>
@@ -47,7 +58,7 @@ export default function GrantApplicationDetails({ application, onClose, statusOp
               <span className="text-sm font-medium">Grant Amount</span>
             </div>
             <div className="text-3xl font-bold text-emerald-900">
-              ₹{application.amount.toLocaleString()}
+              ₹{(application.amount || 0).toLocaleString('en-IN')}
             </div>
           </div>
 
@@ -87,15 +98,13 @@ export default function GrantApplicationDetails({ application, onClose, statusOp
                 <span className="text-sm font-semibold">Important Dates</span>
               </div>
               <div className="space-y-2">
+                {/* formatBusinessDate renders the stored calendar date in IST —
+                    a plain toLocaleDateString shifted the day for IST users. */}
                 {application.applicationDate && (
                   <div>
                     <div className="text-xs text-slate-500">Application Date</div>
                     <div className="font-medium text-slate-900">
-                      {new Date(application.applicationDate).toLocaleDateString('en-IN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
+                      {formatBusinessDate(application.applicationDate)}
                     </div>
                   </div>
                 )}
@@ -103,11 +112,7 @@ export default function GrantApplicationDetails({ application, onClose, statusOp
                   <div>
                     <div className="text-xs text-slate-500">Deadline</div>
                     <div className="font-medium text-slate-900">
-                      {new Date(application.deadline).toLocaleDateString('en-IN', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
+                      {formatBusinessDate(application.deadline)}
                     </div>
                   </div>
                 )}
@@ -137,6 +142,66 @@ export default function GrantApplicationDetails({ application, onClose, statusOp
                     </a>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Attachments */}
+          {(application.attachments || []).length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 text-slate-600 mb-3">
+                <Paperclip className="w-4 h-4" />
+                <span className="text-sm font-semibold">Attachments</span>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-4 space-y-2">
+                {application.attachments.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Paperclip className="w-4 h-4 text-slate-400 shrink-0" />
+                    <a
+                      href={a.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-indigo-600 hover:underline truncate"
+                    >
+                      {a.name || a.url}
+                    </a>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Milestones / reporting requirements */}
+          {(application.milestones || []).length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 text-slate-600 mb-3">
+                <ListChecks className="w-4 h-4" />
+                <span className="text-sm font-semibold">Milestones &amp; Reporting</span>
+              </div>
+              <div className="space-y-2">
+                {application.milestones.map((m, i) => {
+                  const overdue = isMilestoneOverdue(m);
+                  const chip = m.status === 'done' ? MILESTONE_CHIP.done : overdue ? MILESTONE_CHIP.overdue : MILESTONE_CHIP.pending;
+                  return (
+                    <div key={i} className={`rounded-lg border p-3 ${overdue ? 'border-red-200 bg-red-50/50' : 'border-slate-200 bg-slate-50'}`}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`font-medium ${overdue ? 'text-red-700' : 'text-slate-900'}`}>{m.title}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border ${chip}`}>
+                          {m.status === 'done' ? 'Done' : overdue ? 'Overdue' : 'Pending'}
+                        </span>
+                        {m.dueDate && (
+                          <span className={`text-xs ${overdue ? 'text-red-600' : 'text-slate-500'}`}>
+                            Due {formatBusinessDate(m.dueDate)}
+                          </span>
+                        )}
+                        {m.status === 'done' && m.doneAt && (
+                          <span className="text-xs text-emerald-600">Completed {formatBusinessDate(m.doneAt)}</span>
+                        )}
+                      </div>
+                      {m.notes && <div className="mt-1 text-sm text-slate-600 whitespace-pre-wrap">{m.notes}</div>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -1,32 +1,14 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
-import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { escapeRegex } from '../../../../lib/finance/tx';
+import { requireFinanceAdmin, capString } from '../../../../lib/finance/auth';
+import { moneyFields, readMinor, fromMinor } from '../../../../lib/finance/money';
+import { recordFinanceAudit, actorFromUser } from '../../../../lib/finance/audit';
 
 export async function GET(request) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { response } = await requireFinanceAdmin(request);
+    if (response) return response;
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
@@ -34,33 +16,33 @@ export async function GET(request) {
     const client = await clientPromise;
     const db = client.db('resources');
 
-    const filter = {};
+    const filter = { deletedAt: { $exists: false } };
     if (search) {
+      const safe = escapeRegex(search);
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { source: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } },
+        { title: { $regex: safe, $options: 'i' } },
+        { source: { $regex: safe, $options: 'i' } },
+        { notes: { $regex: safe, $options: 'i' } },
       ];
     }
 
-    // Only show items with remaining amount > 0
     const allItems = await db.collection('org_untransferred')
       .find(filter)
       .sort({ receivedAt: -1, createdAt: -1 })
       .toArray();
 
-    const items = allItems.filter(it => {
-      const remaining = it.remainingAmount ?? it.amount;
-      return remaining > 0;
-    });
+    // Only show items with a remaining (unassigned) balance.
+    const items = allItems.filter((it) => readMinor(it, 'remainingAmount') > 0);
 
-    // Summary should reflect only currently unassigned funds (remaining > 0)
-    const summary = items.reduce((acc, it) => {
-      const remaining = it.remainingAmount ?? it.amount ?? 0;
-      acc.total += it.amount || remaining;
-      acc.remaining += remaining;
+    // Summaries computed in integer paise for exactness, returned as rupees.
+    const totals = items.reduce((acc, it) => {
+      acc.remainingMinor += readMinor(it, 'remainingAmount');
+      // "total" should reflect only the unassigned portion, not the original amount.
+      acc.totalMinor += readMinor(it, 'remainingAmount');
       return acc;
-    }, { total: 0, remaining: 0 });
+    }, { remainingMinor: 0, totalMinor: 0 });
+
+    const summary = { total: fromMinor(totals.totalMinor), remaining: fromMinor(totals.remainingMinor) };
 
     return NextResponse.json({ items, summary });
   } catch (e) {
@@ -71,36 +53,39 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request, { mutation: true });
+    if (response) return response;
 
     const body = await request.json();
     const { amount, title, source, notes, receivedAt, relatedApplicationId } = body || {};
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
-      return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
-    }
-    if (!title || typeof title !== 'string') {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
-    }
+    const money = (() => {
+      try { return moneyFields('amount', amount); } catch { return null; }
+    })();
+    if (!money || money.amountMinor <= 0) return NextResponse.json({ error: 'Valid amount is required' }, { status: 400 });
+    const cleanTitle = capString(title, 200);
+    if (!cleanTitle) return NextResponse.json({ error: 'Title is required' }, { status: 400 });
 
     const doc = {
-      amount: amt,
-      remainingAmount: amt,
-      title: title.trim(),
-      source: source || '',
-      notes: notes || '',
+      ...money,
+      remainingAmount: money.amount,
+      remainingAmountMinor: money.amountMinor,
+      title: cleanTitle,
+      source: capString(source, 200),
+      notes: capString(notes, 2000),
       receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
       relatedApplicationId: relatedApplicationId || null,
       history: [],
       createdAt: new Date(),
-      createdBy: { id: user._id?.toString?.() || null, email: user.email, username: user.username, role: user.role },
+      createdBy: actorFromUser(user),
     };
 
     const client = await clientPromise;
     const db = client.db('resources');
     const res = await db.collection('org_untransferred').insertOne(doc);
+    await recordFinanceAudit(db, {
+      action: 'untransferred.create', collection: 'org_untransferred', documentId: res.insertedId,
+      actor: actorFromUser(user), after: doc,
+    });
     return NextResponse.json({ _id: res.insertedId, ...doc }, { status: 201 });
   } catch (e) {
     console.error('POST /api/organization/untransferred error', e);

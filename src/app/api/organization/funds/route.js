@@ -1,109 +1,53 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { escapeRegex, assertAccountExists, FinanceError } from '../../../../lib/finance/tx';
+import { requireFinanceAdmin, capString, capTags, parseLimit } from '../../../../lib/finance/auth';
+import { moneyFields, minorExpr, fromMinor } from '../../../../lib/finance/money';
+import { presetRange, groupIdForBucket } from '../../../../lib/finance/dates';
+import { recordFinanceAudit, actorFromUser } from '../../../../lib/finance/audit';
 
 export async function GET(request) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request);
+    if (response) return response;
 
     const client = await clientPromise;
     const db = client.db('resources');
 
-    // Parse query parameters
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const category = searchParams.get('category');
     const kind = searchParams.get('kind');
     const search = searchParams.get('search');
-    const limit = parseInt(searchParams.get('limit') || '500');
-    const groupBy = searchParams.get('groupBy') || 'month'; // day|week|month|year
-    const datePreset = searchParams.get('datePreset') || null; // today|last7|thisWeek|thisMonth|last30|thisQuarter|thisYear|custom
+    const limit = parseLimit(searchParams.get('limit'), { def: 500, max: 2000 });
+    const skip = Math.max(0, parseInt(searchParams.get('skip') || '0', 10) || 0);
+    const groupBy = searchParams.get('groupBy') || 'month';
+    const datePreset = searchParams.get('datePreset') || null;
     const accountId = searchParams.get('accountId');
     const inflowType = searchParams.get('inflowType');
     const expenseType = searchParams.get('expenseType');
     const excludeTransfers = searchParams.get('excludeTransfers') === 'true';
 
-    // Require billing account
     if (!accountId) {
       return NextResponse.json({ error: 'accountId is required' }, { status: 400 });
     }
 
-    // Compute effective date range based on preset if start/end not provided
+    // Effective date range — presets are resolved in the business timezone (IST)
+    // so period boundaries line up with the aggregation buckets below.
     let rangeStart = startDate ? new Date(startDate) : null;
     let rangeEnd = endDate ? new Date(endDate) : null;
     const now = new Date();
     if (!rangeStart && !rangeEnd && datePreset) {
-      const d = new Date();
-      const startOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate());
-      const startOfWeek = (x) => {
-        const day = x.getDay(); // 0 Sun
-        const diff = (day + 6) % 7; // make Monday start
-        const s = new Date(x);
-        s.setDate(x.getDate() - diff);
-        return startOfDay(s);
-      };
-      const startOfMonth = (x) => new Date(x.getFullYear(), x.getMonth(), 1);
-      const startOfQuarter = (x) => new Date(x.getFullYear(), Math.floor(x.getMonth() / 3) * 3, 1);
-      const startOfYear = (x) => new Date(x.getFullYear(), 0, 1);
-      const endOfDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate(), 23, 59, 59, 999);
-      switch (datePreset) {
-        case 'today':
-          rangeStart = startOfDay(d);
-          rangeEnd = endOfDay(d);
-          break;
-        case 'last7':
-          rangeStart = startOfDay(new Date(d.getTime() - 6 * 86400000));
-          rangeEnd = endOfDay(d);
-          break;
-        case 'thisWeek':
-          rangeStart = startOfWeek(d);
-          rangeEnd = endOfDay(d);
-          break;
-        case 'thisMonth':
-          rangeStart = startOfMonth(d);
-          rangeEnd = endOfDay(d);
-          break;
-        case 'last30':
-          rangeStart = startOfDay(new Date(d.getTime() - 29 * 86400000));
-          rangeEnd = endOfDay(d);
-          break;
-        case 'thisQuarter':
-          rangeStart = startOfQuarter(d);
-          rangeEnd = endOfDay(d);
-          break;
-        case 'thisYear':
-          rangeStart = startOfYear(d);
-          rangeEnd = endOfDay(d);
-          break;
-        default:
-          break;
-      }
+      const r = presetRange(datePreset, now);
+      rangeStart = r.start;
+      rangeEnd = r.end;
     }
 
-    // Build filter
-    const filter = {};
+    // ---- List filter (respects date range + all facets) ----
+    // `deletedAt: { $exists: false }` excludes soft-deleted entries from lists
+    // and every aggregation below, so computed balances stay correct.
+    const filter = { accountId, deletedAt: { $exists: false } };
     if (excludeTransfers) filter.isTransfer = { $ne: true };
     if (rangeStart || rangeEnd) {
       filter.date = {};
@@ -112,83 +56,113 @@ export async function GET(request) {
     }
     if (category) filter.category = category;
     if (kind) filter.kind = kind;
-    if (accountId) filter.accountId = accountId;
     if (inflowType) filter.inflowType = inflowType;
     if (expenseType) filter.expenseType = expenseType;
     if (search) {
+      const safe = escapeRegex(search);
       filter.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } }
+        { title: { $regex: safe, $options: 'i' } },
+        { notes: { $regex: safe, $options: 'i' } },
       ];
     }
 
-    // Get items
-    const items = await db
-      .collection('org_funds')
-      .find(filter)
-      .sort({ date: -1 })
-      .limit(limit)
-      .toArray();
+    const col = db.collection('org_funds');
+    const totalCount = await col.countDocuments(filter);
+    const items = await col.find(filter).sort({ date: -1 }).skip(skip).limit(limit).toArray();
 
-    // Summary aggregation
-    const summaryAgg = await db.collection('org_funds').aggregate([
+    // ---- Period activity (received/spent for the selected window) ----
+    const summaryAgg = await col.aggregate([
       { $match: filter },
-      { $group: { _id: null, 
-        received: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, '$amount', 0] } },
-        spent: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, '$amount', 0] } }
+      { $group: { _id: null,
+        receivedMinor: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, minorExpr('amount'), 0] } },
+        spentMinor: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, minorExpr('amount'), 0] } },
       } },
-      { $project: { _id: 0, received: 1, spent: 1, balance: { $subtract: ['$received', '$spent'] } } }
     ]).toArray();
+    const periodReceivedMinor = summaryAgg[0]?.receivedMinor || 0;
+    const periodSpentMinor = summaryAgg[0]?.spentMinor || 0;
 
-    const summary = summaryAgg[0] || { received: 0, spent: 0, balance: 0 };
+    // ---- Cumulative account balance (all-time, filter-independent) ----
+    const balanceMatch = { accountId, deletedAt: { $exists: false } };
+    if (excludeTransfers) balanceMatch.isTransfer = { $ne: true };
+    const balanceAgg = await col.aggregate([
+      { $match: balanceMatch },
+      { $group: { _id: null,
+        inMinor: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, minorExpr('amount'), 0] } },
+        outMinor: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, minorExpr('amount'), 0] } },
+      } },
+    ]).toArray();
+    const balanceMinor = (balanceAgg[0]?.inMinor || 0) - (balanceAgg[0]?.outMinor || 0);
 
-    // Category breakdown
-    const categoryBreakdown = await db.collection('org_funds').aggregate([
+    // ---- Average monthly burn over the last 3 complete IST months → runway ----
+    const three = presetRange('thisMonth', now).start; // start of current IST month
+    const burnStart = new Date(three);
+    burnStart.setMonth(burnStart.getMonth() - 3);
+    const burnAgg = await col.aggregate([
+      { $match: { accountId, kind: 'out', isTransfer: { $ne: true }, deletedAt: { $exists: false }, date: { $gte: burnStart, $lt: three } } },
+      { $group: { _id: groupIdForBucket('month'), total: { $sum: minorExpr('amount') } } },
+    ]).toArray();
+    const avgMonthlyBurnMinor = burnAgg.length ? Math.round(burnAgg.reduce((s, b) => s + b.total, 0) / burnAgg.length) : 0;
+    const runwayMonths = balanceMinor > 0 && avgMonthlyBurnMinor > 0 ? Math.floor(balanceMinor / avgMonthlyBurnMinor) : null;
+
+    const summary = {
+      received: fromMinor(periodReceivedMinor),
+      spent: fromMinor(periodSpentMinor),
+      balance: fromMinor(balanceMinor),
+      avgMonthlyBurn: fromMinor(avgMonthlyBurnMinor),
+      runwayMonths,
+    };
+
+    // ---- Category breakdown (period, account-scoped) ----
+    const categoryBreakdown = (await col.aggregate([
       { $match: filter },
       { $group: {
-        _id: { 
-          group: { $ifNull: ['$inflowType', { $ifNull: ['$expenseType', '$category'] }] },
-          kind: '$kind' 
-        },
-        total: { $sum: '$amount' },
-        count: { $sum: 1 }
+        _id: { group: { $ifNull: ['$inflowType', { $ifNull: ['$expenseType', '$category'] }] }, kind: '$kind' },
+        totalMinor: { $sum: minorExpr('amount') },
+        count: { $sum: 1 },
       } },
-      { $sort: { total: -1 } }
-    ]).toArray();
+      { $sort: { totalMinor: -1 } },
+    ]).toArray()).map((c) => ({ _id: c._id, total: fromMinor(c.totalMinor), count: c.count }));
 
-    // Time trends based on groupBy within effective date range or default last 12 months
-    const trendMatch = excludeTransfers ? { isTransfer: { $ne: true } } : {};
+    // ---- Time trends (scoped to account + active facets, grouped in IST) ----
+    const trendMatch = { accountId, deletedAt: { $exists: false } };
+    if (excludeTransfers) trendMatch.isTransfer = { $ne: true };
+    if (category) trendMatch.category = category;
+    if (kind) trendMatch.kind = kind;
+    if (inflowType) trendMatch.inflowType = inflowType;
+    if (expenseType) trendMatch.expenseType = expenseType;
+    if (search) {
+      const safe = escapeRegex(search);
+      trendMatch.$or = [
+        { title: { $regex: safe, $options: 'i' } },
+        { notes: { $regex: safe, $options: 'i' } },
+      ];
+    }
     if (rangeStart || rangeEnd) {
       trendMatch.date = {};
       if (rangeStart) trendMatch.date.$gte = rangeStart;
       if (rangeEnd) trendMatch.date.$lte = rangeEnd;
     } else {
-      trendMatch.date = { $gte: new Date(new Date().setMonth(now.getMonth() - 12)) };
+      const twelveMonthsAgo = new Date(now);
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+      trendMatch.date = { $gte: twelveMonthsAgo };
     }
 
-    let groupId;
-    if (groupBy === 'day') {
-      groupId = { year: { $year: '$date' }, month: { $month: '$date' }, day: { $dayOfMonth: '$date' }, kind: '$kind' };
-    } else if (groupBy === 'week') {
-      groupId = { isoWeekYear: { $isoWeekYear: '$date' }, isoWeek: { $isoWeek: '$date' }, kind: '$kind' };
-    } else if (groupBy === 'year') {
-      groupId = { year: { $year: '$date' }, kind: '$kind' };
-    } else {
-      // month default
-      groupId = { year: { $year: '$date' }, month: { $month: '$date' }, kind: '$kind' };
-    }
-
-    const timeTrends = await db.collection('org_funds').aggregate([
+    const timeTrends = (await col.aggregate([
       { $match: trendMatch },
-      { $group: { _id: groupId, total: { $sum: '$amount' } } },
-      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.isoWeekYear': 1, '_id.isoWeek': 1 } }
-    ]).toArray();
+      { $group: { _id: groupIdForBucket(groupBy, '$date', { kind: '$kind' }), totalMinor: { $sum: minorExpr('amount') } } },
+      { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.isoWeekYear': 1, '_id.isoWeek': 1 } },
+    ]).toArray()).map((t) => ({ _id: t._id, total: fromMinor(t.totalMinor) }));
 
-    // Backward compatibility alias
-    const monthlyTrends = timeTrends;
-
-    return NextResponse.json({ items, summary, categoryBreakdown, monthlyTrends, timeTrends });
+    return NextResponse.json({
+      items,
+      summary,
+      categoryBreakdown,
+      monthlyTrends: timeTrends,
+      timeTrends,
+      pagination: { total: totalCount, skip, limit, returned: items.length },
+    });
   } catch (e) {
+    if (e && e.isFinanceError) return NextResponse.json({ error: e.message }, { status: e.status || 400 });
     console.error('GET /api/organization/funds error', e);
     return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 });
   }
@@ -196,51 +170,58 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request, { mutation: true });
+    if (response) return response;
 
     const body = await request.json();
     const { kind, amount, title, date, notes, category, source, counterparty, reference, tags, accountId, inflowType, expenseType, fundRestriction, allocations, isTransfer } = body || {};
 
-    if (!['in', 'out'].includes(kind)) {
-      return NextResponse.json({ error: 'Invalid kind' }, { status: 400 });
-    }
-    if (!accountId) {
-      return NextResponse.json({ error: 'accountId is required' }, { status: 400 });
-    }
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
-      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
-    }
-    if (!title || typeof title !== 'string') {
-      return NextResponse.json({ error: 'Title is required' }, { status: 400 });
-    }
-
-    const doc = {
-      kind,
-      amount: amt,
-      title: title.trim(),
-      date: date ? new Date(date) : new Date(),
-      notes: notes || '',
-      category: category || 'other',
-      accountId: accountId || null,
-      inflowType: kind === 'in' ? (inflowType || null) : null,
-      expenseType: kind === 'out' ? (expenseType || null) : null,
-      fundRestriction: kind === 'in' ? (fundRestriction || 'unrestricted') : undefined,
-      allocations: Array.isArray(allocations) ? allocations.filter(a => a && (a.amount || a.percent)).slice(0, 50) : [],
-      source: source || '',
-      counterparty: counterparty || '',
-      reference: reference || '',
-      tags: Array.isArray(tags) ? tags.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim()) : [],
-      isTransfer: isTransfer === true,
-      createdAt: new Date(),
-      createdBy: { id: user._id?.toString?.() || null, email: user.email, username: user.username, role: user.role },
-    };
+    if (!['in', 'out'].includes(kind)) return NextResponse.json({ error: 'Invalid kind' }, { status: 400 });
+    if (!accountId) return NextResponse.json({ error: 'accountId is required' }, { status: 400 });
+    if (!title || typeof title !== 'string') return NextResponse.json({ error: 'Title is required' }, { status: 400 });
 
     const client = await clientPromise;
     const db = client.db('resources');
+
+    let money;
+    try {
+      await assertAccountExists(db, accountId);
+      money = moneyFields('amount', amount); // validates & rounds to paise
+      if (money.amountMinor <= 0) throw new FinanceError('Invalid amount', 400);
+    } catch (err) {
+      if (err && err.isFinanceError) return NextResponse.json({ error: err.message }, { status: err.status || 400 });
+      throw err;
+    }
+
+    const resolvedInflow = kind === 'in' ? (inflowType || null) : null;
+    const resolvedExpense = kind === 'out' ? (expenseType || null) : null;
+    const doc = {
+      kind,
+      ...money,
+      title: capString(title, 200),
+      date: date ? new Date(date) : new Date(),
+      notes: capString(notes, 2000),
+      // Default category from the real type so the category facet isn't dead.
+      category: category || resolvedInflow || resolvedExpense || 'other',
+      accountId,
+      inflowType: resolvedInflow,
+      expenseType: resolvedExpense,
+      fundRestriction: kind === 'in' ? (fundRestriction || 'unrestricted') : undefined,
+      allocations: Array.isArray(allocations) ? allocations.filter((a) => a && (a.amount || a.percent)).slice(0, 50) : [],
+      source: capString(source, 200),
+      counterparty: capString(counterparty, 200),
+      reference: capString(reference, 200),
+      tags: capTags(tags),
+      isTransfer: isTransfer === true,
+      createdAt: new Date(),
+      createdBy: actorFromUser(user),
+    };
+
     const res = await db.collection('org_funds').insertOne(doc);
+    await recordFinanceAudit(db, {
+      action: 'fund.create', collection: 'org_funds', documentId: res.insertedId,
+      actor: actorFromUser(user), after: doc, meta: { accountId, kind, amountMinor: money.amountMinor },
+    });
 
     return NextResponse.json({ _id: res.insertedId, ...doc }, { status: 201 });
   } catch (e) {

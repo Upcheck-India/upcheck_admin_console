@@ -8,6 +8,16 @@ import { AlertCircle, ArrowLeft, ArrowRightLeft, Download, Loader2, Plus, Refres
 import useBillingAccount from '../funds/_hooks/useBillingAccount';
 import AccountSelector from '../funds/_components/AccountSelector';
 
+// Idempotency key for a single money-move intent. Generated when a modal opens
+// so that a double-click / retry of the same action is replayed by the server,
+// not applied twice.
+function genOpId() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  } catch {}
+  return `op_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+}
+
 export default function UntransferredPage() {
   const { user, isLoading: authLoading } = useAuth(true);
   const isAdmin = user && (user.role === 'Admin' || user.role === 'Console admin');
@@ -96,7 +106,7 @@ export default function UntransferredPage() {
   const openTransfer = (item) => {
     setSelectedItem(item);
     const baseAmt = (item.remainingAmount ?? item.amount);
-    setTransferForm({ accountId: activeAccountId || '', amount: String(baseAmt != null ? baseAmt : ''), date: new Date().toISOString().split('T')[0], notes: '', inflowType: 'grant' });
+    setTransferForm({ accountId: activeAccountId || '', amount: String(baseAmt != null ? baseAmt : ''), date: new Date().toISOString().split('T')[0], notes: '', inflowType: 'grant', opId: genOpId() });
     setShowTransferModal(true);
   };
 
@@ -135,7 +145,7 @@ export default function UntransferredPage() {
   };
 
   const openReceive = () => {
-    setReceiveForm({ accountId: activeAccountId || '', amount: '', title: '', date: new Date().toISOString().split('T')[0], notes: '' });
+    setReceiveForm({ accountId: activeAccountId || '', amount: '', title: '', date: new Date().toISOString().split('T')[0], notes: '', opId: genOpId() });
     setShowReceiveModal(true);
   };
 

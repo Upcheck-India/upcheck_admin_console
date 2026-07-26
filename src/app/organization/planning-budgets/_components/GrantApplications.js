@@ -1,20 +1,24 @@
 import { useState, useCallback, useEffect } from 'react';
-import { Plus, Edit2, Trash2, ArrowRight, CheckCircle, XCircle, Clock, AlertCircle, Loader2, Inbox, Eye } from 'lucide-react';
+import { Plus, Edit2, Trash2, ArrowRight, CheckCircle, XCircle, Clock, AlertCircle, Loader2, Inbox, Eye, Bell } from 'lucide-react';
+import { formatBusinessDate } from '../../../../lib/finance/dates';
 import GrantApplicationDetails from './GrantApplicationDetails';
 
+// badgeClass must be a full static string — Tailwind purges dynamically built
+// class names like `bg-${color}-50`, which left the badges silently unstyled.
 const STATUS_OPTIONS = [
-  { value: 'need_to_apply', label: 'Need to Apply', color: 'slate', icon: AlertCircle },
-  { value: 'pending', label: 'Application Pending', color: 'blue', icon: Clock },
-  { value: 'waiting', label: 'Waiting for Result', color: 'amber', icon: Clock },
-  { value: 'granted', label: 'Granted', color: 'emerald', icon: CheckCircle },
+  { value: 'need_to_apply', label: 'Need to Apply', icon: AlertCircle, badgeClass: 'bg-slate-50 text-slate-700 border-slate-200' },
+  { value: 'pending', label: 'Application Pending', icon: Clock, badgeClass: 'bg-blue-50 text-blue-700 border-blue-200' },
+  { value: 'waiting', label: 'Waiting for Result', icon: Clock, badgeClass: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { value: 'granted', label: 'Granted', icon: CheckCircle, badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   // Pending Transfer: Granted by funder but not yet received by organization
-  { value: 'pending_transfer', label: 'Pending Transfer (from funder)', color: 'teal', icon: ArrowRight },
-  { value: 'rejected', label: 'Rejected', color: 'red', icon: XCircle },
+  { value: 'pending_transfer', label: 'Pending Transfer (from funder)', icon: ArrowRight, badgeClass: 'bg-teal-50 text-teal-700 border-teal-200' },
+  { value: 'rejected', label: 'Rejected', icon: XCircle, badgeClass: 'bg-red-50 text-red-700 border-red-200' },
 ];
 
 export default function GrantApplications({ accountId, disabled }) {
   const [applications, setApplications] = useState([]);
   const [summary, setSummary] = useState({});
+  const [reminders, setReminders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -35,6 +39,8 @@ export default function GrantApplications({ accountId, disabled }) {
     fundingPeriod: '',
     contactPerson: '',
     contactEmail: '',
+    attachments: [],
+    milestones: [],
   });
 
   const load = useCallback(async () => {
@@ -49,6 +55,7 @@ export default function GrantApplications({ accountId, disabled }) {
       const data = await res.json();
       setApplications(data.applications || []);
       setSummary(data.summary || {});
+      setReminders(data.reminders || []);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -74,6 +81,8 @@ export default function GrantApplications({ accountId, disabled }) {
       fundingPeriod: '',
       contactPerson: '',
       contactEmail: '',
+      attachments: [],
+      milestones: [],
     });
     setShowModal(true);
   };
@@ -92,9 +101,21 @@ export default function GrantApplications({ accountId, disabled }) {
       fundingPeriod: item.fundingPeriod || '',
       contactPerson: item.contactPerson || '',
       contactEmail: item.contactEmail || '',
+      attachments: (item.attachments || []).map((a) => ({ name: a?.name || '', url: a?.url || '' })),
+      milestones: (item.milestones || []).map((m) => ({
+        title: m?.title || '',
+        dueDate: m?.dueDate ? new Date(m.dueDate).toISOString().slice(0, 10) : '',
+        status: m?.status === 'done' ? 'done' : 'pending',
+        notes: m?.notes || '',
+      })),
     });
     setShowModal(true);
   };
+
+  const setAttachmentRow = (idx, key, value) =>
+    setForm((f) => ({ ...f, attachments: f.attachments.map((a, i) => (i === idx ? { ...a, [key]: value } : a)) }));
+  const setMilestoneRow = (idx, key, value) =>
+    setForm((f) => ({ ...f, milestones: f.milestones.map((m, i) => (i === idx ? { ...m, [key]: value } : m)) }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -104,6 +125,10 @@ export default function GrantApplications({ accountId, disabled }) {
         ...form,
         amount: Number(form.amount),
         accountId,
+        attachments: form.attachments.filter((a) => (a.name || '').trim() || (a.url || '').trim()),
+        milestones: form.milestones
+          .filter((m) => (m.title || '').trim())
+          .map((m) => ({ title: m.title, dueDate: m.dueDate || null, status: m.status || 'pending', notes: m.notes || '' })),
       };
       const url = editingItem ? `/api/organization/grant-applications/${editingItem._id}` : '/api/organization/grant-applications';
       const method = editingItem ? 'PUT' : 'POST';
@@ -134,7 +159,7 @@ export default function GrantApplications({ accountId, disabled }) {
 
   const handleMarkReceived = async (item) => {
     // Mark granted funds as received to organization (goes to Untransferred pool)
-    if (!confirm(`Mark ₹${item.amount.toLocaleString()} from "${item.programName}" as received to organization?`)) return;
+    if (!confirm(`Mark ₹${(item.amount || 0).toLocaleString('en-IN')} from "${item.programName}" as received to organization?`)) return;
     try {
       // Create untransferred record
       const unPayload = {
@@ -176,6 +201,34 @@ export default function GrantApplications({ accountId, disabled }) {
         </div>
       )}
 
+      {/* Reminders — overdue in red, upcoming (next 30 days) in amber */}
+      {reminders.length > 0 && (
+        <div className="mb-6 bg-white rounded-2xl border border-slate-200 p-4">
+          <div className="flex items-center gap-2 mb-2 text-sm font-semibold text-slate-800">
+            <Bell className="w-4 h-4 text-amber-600" /> Reminders
+          </div>
+          <div className="space-y-1.5">
+            {reminders.slice(0, 6).map((r, i) => (
+              <div
+                key={`${r.applicationId}-${r.kind}-${i}`}
+                className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border ${r.overdue ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-800 border-amber-200'}`}
+              >
+                <span className="font-medium whitespace-nowrap">{r.programName}</span>
+                <span className="flex-1 truncate">
+                  {r.kind === 'application_deadline' ? 'Application deadline' : `Milestone: ${r.title}`}
+                </span>
+                <span className="text-xs whitespace-nowrap">
+                  {r.overdue ? 'Overdue since' : 'Due'} {formatBusinessDate(r.dueDate)}
+                </span>
+              </div>
+            ))}
+            {reminders.length > 6 && (
+              <div className="text-xs text-slate-500">+ {reminders.length - 6} more</div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-xl p-4 border border-slate-200">
@@ -185,11 +238,16 @@ export default function GrantApplications({ accountId, disabled }) {
         <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
           <div className="text-sm text-emerald-700">Granted</div>
           <div className="text-2xl font-bold text-emerald-900">{summary.granted || 0}</div>
-          <div className="text-xs text-emerald-600">₹{(summary.totalGranted || 0).toLocaleString()}</div>
+          <div className="text-xs text-emerald-600">₹{(summary.totalGranted || 0).toLocaleString('en-IN')}</div>
+          {(summary.pendingTransfer || 0) > 0 && (
+            <div className="text-xs text-teal-600">
+              + {summary.pendingTransfer} pending transfer (₹{(summary.totalPendingTransfer || 0).toLocaleString('en-IN')})
+            </div>
+          )}
         </div>
         <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
           <div className="text-sm text-amber-700">Untransferred</div>
-          <div className="text-2xl font-bold text-amber-900">₹{(summary.untransferred || 0).toLocaleString()}</div>
+          <div className="text-2xl font-bold text-amber-900">₹{(summary.untransferred || 0).toLocaleString('en-IN')}</div>
         </div>
         <div className="bg-blue-50 rounded-xl p-4 border border-blue-200">
           <div className="text-sm text-blue-700">Pending/Waiting</div>
@@ -224,7 +282,7 @@ export default function GrantApplications({ accountId, disabled }) {
         {loading ? (
           <div className="p-8 text-center text-slate-500">Loading...</div>
         ) : filteredApps.length === 0 ? (
-          <div className="p-8 text-center text-slate-500">No grant applications yet. Click "Add Grant Application" to start tracking.</div>
+          <div className="p-8 text-center text-slate-500">No grant applications yet. Click &quot;Add Grant Application&quot; to start tracking.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -248,14 +306,19 @@ export default function GrantApplications({ accountId, disabled }) {
                     <tr key={app._id} className="hover:bg-slate-50">
                       <td className="px-4 py-3 font-medium text-slate-900">{app.programName}</td>
                       <td className="px-4 py-3 text-slate-700">{app.organizationName}</td>
-                      <td className="px-4 py-3 text-right font-semibold">₹{app.amount.toLocaleString()}</td>
+                      <td className="px-4 py-3 text-right font-semibold">₹{(app.amount || 0).toLocaleString('en-IN')}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full bg-${statusDef.color}-50 text-${statusDef.color}-700 border border-${statusDef.color}-200`}>
+                        <span className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full border ${statusDef.badgeClass}`}>
                           <Icon className="w-3 h-3" /> {statusDef.label}
                         </span>
                         {app.receivedToOrg && <span className="ml-1 text-xs text-emerald-600">(Received to org)</span>}
+                        {(app.milestonesOverdue || 0) > 0 && (
+                          <span className="ml-1 inline-flex items-center text-xs px-1.5 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200" title="Overdue milestones">
+                            {app.milestonesOverdue} overdue
+                          </span>
+                        )}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-sm">{app.deadline ? new Date(app.deadline).toLocaleDateString() : '—'}</td>
+                      <td className="px-4 py-3 text-slate-600 text-sm">{app.deadline ? formatBusinessDate(app.deadline) : '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button onClick={() => { setDetailsItem(app); setShowDetails(true); }} className="p-1.5 rounded hover:bg-slate-50 text-slate-600" title="View details">
@@ -340,6 +403,73 @@ export default function GrantApplications({ accountId, disabled }) {
                 <div className="col-span-2">
                   <label className="block text-sm font-medium mb-1">Notes</label>
                   <textarea rows={3} className="w-full border rounded-lg px-3 py-2" value={form.notes} onChange={(e) => setForm({...form, notes: e.target.value})} />
+                </div>
+
+                {/* Attachments */}
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium">Attachments (links)</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, attachments: [...f.attachments, { name: '', url: '' }] }))}
+                      disabled={form.attachments.length >= 20}
+                      className="text-sm text-teal-700 hover:underline disabled:opacity-50"
+                    >
+                      + Add attachment
+                    </button>
+                  </div>
+                  {form.attachments.length === 0 ? (
+                    <div className="text-xs text-slate-500">No attachments. Link proposal documents, budgets, agreements…</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {form.attachments.map((a, idx) => (
+                        <div key={idx} className="flex gap-2">
+                          <input className="w-1/3 border rounded-lg px-3 py-2" placeholder="Name" value={a.name} onChange={(e) => setAttachmentRow(idx, 'name', e.target.value)} />
+                          <input className="flex-1 border rounded-lg px-3 py-2" placeholder="https://…" value={a.url} onChange={(e) => setAttachmentRow(idx, 'url', e.target.value)} />
+                          <button type="button" onClick={() => setForm((f) => ({ ...f, attachments: f.attachments.filter((_, i) => i !== idx) }))} className="p-2 rounded hover:bg-red-50 text-red-600" title="Remove attachment">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Milestones / reporting requirements */}
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-sm font-medium">Milestones / reporting requirements</label>
+                    <button
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, milestones: [...f.milestones, { title: '', dueDate: '', status: 'pending', notes: '' }] }))}
+                      disabled={form.milestones.length >= 50}
+                      className="text-sm text-teal-700 hover:underline disabled:opacity-50"
+                    >
+                      + Add milestone
+                    </button>
+                  </div>
+                  {form.milestones.length === 0 ? (
+                    <div className="text-xs text-slate-500">No milestones. Track reporting deadlines, disbursement conditions…</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {form.milestones.map((m, idx) => (
+                        <div key={idx} className="border rounded-lg p-2 space-y-2">
+                          <div className="flex gap-2">
+                            <input className="flex-1 border rounded-lg px-3 py-2" placeholder="Milestone title *" value={m.title} onChange={(e) => setMilestoneRow(idx, 'title', e.target.value)} />
+                            <input type="date" className="border rounded-lg px-3 py-2" value={m.dueDate} onChange={(e) => setMilestoneRow(idx, 'dueDate', e.target.value)} />
+                            <select className="border rounded-lg px-2 py-2" value={m.status} onChange={(e) => setMilestoneRow(idx, 'status', e.target.value)}>
+                              <option value="pending">Pending</option>
+                              <option value="done">Done</option>
+                            </select>
+                            <button type="button" onClick={() => setForm((f) => ({ ...f, milestones: f.milestones.filter((_, i) => i !== idx) }))} className="p-2 rounded hover:bg-red-50 text-red-600" title="Remove milestone">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <input className="w-full border rounded-lg px-3 py-2 text-sm" placeholder="Notes" value={m.notes} onChange={(e) => setMilestoneRow(idx, 'notes', e.target.value)} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex justify-end gap-2 mt-4 pt-4 border-t">

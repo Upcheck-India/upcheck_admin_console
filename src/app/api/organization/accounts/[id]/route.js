@@ -1,48 +1,35 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { requireFinanceAdmin, capString } from '../../../../../lib/finance/auth';
+import { recordFinanceAudit, actorFromUser } from '../../../../../lib/finance/audit';
 
 export async function PUT(request, { params }) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request, { mutation: true });
+    if (response) return response;
 
     const { id } = params;
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
-    }
+    if (!ObjectId.isValid(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
+
     const body = await request.json();
-    const { name } = body || {};
-    if (!name || typeof name !== 'string' || !name.trim()) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
+    const name = capString(body?.name, 120);
+    if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
 
     const client = await clientPromise;
     const db = client.db('resources');
-    const res = await db.collection('finance_accounts').updateOne({ _id: new ObjectId(id) }, { $set: { name: name.trim(), updatedAt: new Date() } });
-    if (!res.matchedCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json({ _id: id, name: name.trim() });
+    const existing = await db.collection('finance_accounts').findOne({ _id: new ObjectId(id) });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    await db.collection('finance_accounts').updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { name, updatedAt: new Date(), updatedBy: actorFromUser(user) } }
+    );
+    await recordFinanceAudit(db, {
+      action: 'account.update', collection: 'finance_accounts', documentId: id,
+      actor: actorFromUser(user), before: existing, after: { ...existing, name },
+    });
+    return NextResponse.json({ _id: id, name });
   } catch (e) {
     console.error('PUT /api/organization/accounts/[id] error', e);
     return NextResponse.json({ error: 'Failed to update account' }, { status: 500 });
@@ -51,19 +38,32 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request, { mutation: true });
+    if (response) return response;
 
     const { id } = params;
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
-    }
+    if (!ObjectId.isValid(id)) return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
 
     const client = await clientPromise;
     const db = client.db('resources');
-    const res = await db.collection('finance_accounts').deleteOne({ _id: new ObjectId(id) });
-    if (!res.deletedCount) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const existing = await db.collection('finance_accounts').findOne({ _id: new ObjectId(id) });
+    if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    // Referential integrity: never orphan financial records. If any live ledger
+    // entry references this account, refuse to delete and report the count.
+    const txCount = await db.collection('org_funds').countDocuments({ accountId: id, deletedAt: { $exists: false } });
+    if (txCount > 0) {
+      return NextResponse.json(
+        { error: `Account has ${txCount} transaction(s). Reassign or delete them first.`, transactionCount: txCount },
+        { status: 409 }
+      );
+    }
+
+    await db.collection('finance_accounts').deleteOne({ _id: new ObjectId(id) });
+    await recordFinanceAudit(db, {
+      action: 'account.delete', collection: 'finance_accounts', documentId: id,
+      actor: actorFromUser(user), before: existing,
+    });
     return NextResponse.json({ success: true, id });
   } catch (e) {
     console.error('DELETE /api/organization/accounts/[id] error', e);

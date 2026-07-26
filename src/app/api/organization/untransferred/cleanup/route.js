@@ -1,75 +1,51 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { requireFinanceAdmin } from '../../../../../lib/finance/auth';
+import { recordFinanceAudit, actorFromUser } from '../../../../../lib/finance/audit';
 
 export async function POST(request) {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const { user, response } = await requireFinanceAdmin(request, { mutation: true });
+    if (response) return response;
 
     const client = await clientPromise;
     const db = client.db('resources');
 
-    const items = await db.collection('org_untransferred').find({}).toArray();
+    const items = await db.collection('org_untransferred').find({ deletedAt: { $exists: false } }).toArray();
 
+    // Cleanup is a NON-DESTRUCTIVE repair. It never deletes records (that would
+    // erase the audit trail) and never rewrites remainingAmount UPWARD (that
+    // would resurrect already-transferred money — the old behavior, made worse
+    // by corrupted history). It only clamps clearly-invalid states downward.
+    // Fully-cleared entries (remaining === 0) are already hidden by the list
+    // endpoint's `remaining > 0` filter, so there is nothing to "remove".
     let fixedNegative = 0;
     let normalized = 0;
-    let removedZero = 0;
-    let removedCleared = 0;
 
     for (const it of items) {
       const amount = Number(it.amount) || 0;
-      const history = it.history || [];
-      const transferred = history
-        .filter((h) => h && typeof h.amount === 'number' && (h.type?.includes('transfer') || h.type === 'transfer_to_account'))
-        .reduce((s, h) => s + (h.amount || 0), 0);
-      let remaining = it.remainingAmount != null ? Number(it.remainingAmount) : amount;
-      const expectedRemaining = Math.max(0, amount - transferred);
+      const remaining = it.remainingAmount != null ? Number(it.remainingAmount) : amount;
 
-      // Normalize remaining to expected
-      if (remaining !== expectedRemaining) {
-        await db.collection('org_untransferred').updateOne({ _id: it._id }, { $set: { remainingAmount: expectedRemaining } });
+      if (!Number.isFinite(remaining)) {
+        // Missing/corrupt remaining — reset to the original amount (never higher).
+        await db.collection('org_untransferred').updateOne(
+          { _id: it._id },
+          { $set: { remainingAmount: amount, updatedAt: new Date() } }
+        );
         normalized += 1;
-        remaining = expectedRemaining;
-      }
-
-      // Fix negative remains
-      if (remaining < 0) {
-        await db.collection('org_untransferred').updateOne({ _id: it._id }, { $set: { remainingAmount: 0 } });
+      } else if (remaining < 0) {
+        await db.collection('org_untransferred').updateOne(
+          { _id: it._id },
+          { $set: { remainingAmount: 0, updatedAt: new Date() } }
+        );
         fixedNegative += 1;
-        remaining = 0;
-      }
-
-      // Remove entries that have zero amount and zero remaining and no meaningful history
-      if ((amount <= 0 || Number.isNaN(amount)) && remaining === 0 && history.length === 0) {
-        await db.collection('org_untransferred').deleteOne({ _id: it._id });
-        removedZero += 1;
-      }
-
-      // Remove fully cleared entries (remaining 0) to avoid polluting totals
-      if (remaining === 0) {
-        await db.collection('org_untransferred').deleteOne({ _id: it._id });
-        removedCleared += 1;
+      } else if (remaining > amount) {
+        // remaining can never legitimately exceed the original amount — clamp down.
+        await db.collection('org_untransferred').updateOne(
+          { _id: it._id },
+          { $set: { remainingAmount: amount, updatedAt: new Date() } }
+        );
+        normalized += 1;
       }
     }
 
@@ -92,7 +68,12 @@ export async function POST(request) {
       ]
     );
 
-    return NextResponse.json({ success: true, normalized, fixedNegative, removedZero, removedCleared, danglingCleared: updateDangling.modifiedCount || 0 });
+    await recordFinanceAudit(db, {
+      action: 'untransferred.cleanup', collection: 'org_untransferred', documentId: null,
+      actor: actorFromUser(user), meta: { normalized, fixedNegative, danglingCleared: updateDangling.modifiedCount || 0 },
+    });
+
+    return NextResponse.json({ success: true, normalized, fixedNegative, danglingCleared: updateDangling.modifiedCount || 0 });
   } catch (e) {
     console.error('POST /api/organization/untransferred/cleanup error', e);
     return NextResponse.json({ error: 'Failed to cleanup untransferred' }, { status: 500 });

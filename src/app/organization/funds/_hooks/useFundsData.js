@@ -153,14 +153,10 @@ export default function useFundsData() {
     return Object.entries(totals).map(([name, value]) => ({ name, value }));
   }, [categoryBreakdown]);
 
-  const runway = useMemo(() => {
-    const outs = monthlyTrends.filter((t) => t._id.kind === 'out');
-    const last3 = outs.slice(-3);
-    if (last3.length === 0) return null;
-    const avgBurn = last3.reduce((s, m) => s + m.total, 0) / last3.length;
-    if (!avgBurn) return null;
-    return Math.floor((summary.balance || 0) / avgBurn);
-  }, [monthlyTrends, summary.balance]);
+  // Runway is now computed server-side (balance ÷ avg monthly burn over the last
+  // 3 complete IST months), so it no longer depends on the display groupBy and
+  // doesn't mix in other accounts. See funds GET `summary.runwayMonths`.
+  const runway = useMemo(() => (summary && summary.runwayMonths != null ? summary.runwayMonths : null), [summary]);
 
   return {
     loading,

@@ -77,6 +77,22 @@ clientPromise.then(async (resolvedClient) => {
       // What's New / changelogs
       db.collection('changelogs').createIndex({ isPublished: 1, createdAt: -1 }),
       db.collection('changelog_seen').createIndex({ userId: 1, changelogId: 1 }, { unique: true }),
+      // Finance — idempotency keys for money moves (unique so a replayed
+      // transfer/receive can never post a second ledger entry), plus account
+      // scoping for balance/trend aggregations.
+      db.collection('org_funds').createIndex({ opId: 1 }, { unique: true, sparse: true }),
+      db.collection('org_funds').createIndex({ accountId: 1, date: -1 }),
+      db.collection('org_untransferred').createIndex({ opId: 1 }, { sparse: true }),
+      db.collection('org_untransferred').createIndex({ 'history.opId': 1 }),
+      // Append-only finance audit trail
+      db.collection('finance_audit_log').createIndex({ at: -1 }),
+      db.collection('finance_audit_log').createIndex({ collection: 1, documentId: 1, at: -1 }),
+      // Phase 2 modules
+      db.collection('vendors').createIndex({ name: 1 }),
+      db.collection('vendor_bills').createIndex({ vendorId: 1, status: 1, dueDate: 1 }),
+      db.collection('cost_centers').createIndex({ code: 1 }, { unique: true, sparse: true }),
+      db.collection('fixed_assets').createIndex({ accountId: 1, status: 1 }),
+      db.collection('compliance_items').createIndex({ dueDate: 1, status: 1 }),
     ]);
   } catch (err) {
     console.error('Failed to ensure messaging indexes on startup:', err);

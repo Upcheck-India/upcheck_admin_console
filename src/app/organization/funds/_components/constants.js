@@ -10,10 +10,11 @@ export const CATEGORIES = [
 ];
 
 export const numberFmt = (n) =>
-  new Intl.NumberFormat(undefined, {
+  new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(n || 0);
 
 export const INFLOW_TYPES = [
