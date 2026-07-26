@@ -56,17 +56,31 @@ Goal: make money movement safe and the headline numbers correct. No schema migra
 - ☑ **2.9 Grant lifecycle depth.** Attachments (sanitized, http(s)-only URLs) and milestones (server-stamped `doneAt`, pending/done) on grant applications; read-time deadline reminders (application deadlines + pending milestone due dates, IST day boundaries, account-wide — not per-page) surfaced as a red/amber banner, with overdue-milestone badges on rows and full sections in the details modal.
 - ◐ **2.10 Approval workflow — budget lifecycle DONE.** Budget `draft→submitted→approved→locked` enforced server-side (400 invalid / 409 illegal transition listing allowed targets), server-stamped submitted/approved/locked by+at, content edits and delete 409 on approved/locked ("Reopen the budget to edit"), full audit with workflowFrom/To, per-state UI actions. Deferred: maker-checker on money moves / segregation of duties — requires a role split beyond the current "all admins equal" model (same rationale as 1.12).
 - ☑ **2.11 Multi-year budgeting.** Structured `fiscalYearStart` (int) + canonical India label `FY2025-26` kept in sync (accepts int/`2025`/`FY2025`/`2025-26`/`FY2025-26`; legacy free-text tolerated); carryforward creates a new budget from a source budget's per-category remaining (allocated − actual, floored, integer paise) with `carriedForwardFrom` provenance; FY filter + FY-aware sort in list and UI.
-- ⊘ **2.12 Multi-currency + FX — deferred.** Org operates in INR only (foreign grants land in INR at the bank); the paise ledger assumes a single currency. Revisit only if a genuine foreign-currency account/entry need appears.
+- ☑ **2.12 Multi-currency + FX — DONE** (see the "Phase 3+" section below): INR base, foreign entries store a frozen FX rate + INR-equivalent, free rate providers with fallback/cache, `/api/organization/fx` + converter + entry-modal live rate.
 
 ---
 
-## Phase 3 — Accounting foundation (structural, longer-term)
+## Phase 3 — Accounting foundation
 
-- ☐ **3.1 Double-entry general ledger** with a chart of accounts (asset/liability/equity/income/expense) and journal entries/posting.
-- ☐ **3.2 Persisted balances + fiscal periods + period close / year-end lock** (immutable posted transactions; reversals via contra entries only).
-- ☐ **3.3 Bank reconciliation / statement import.**
-- ☐ **3.4 Tax handling** (GST/TDS/VAT) with proper journal treatment; accruals; depreciation schedules.
-- ☐ **3.5 AR / invoicing / receipts; payroll / stipends** as needed.
+- ☑ **3.1 Double-entry general ledger.** Chart of accounts (asset/liability/equity/income/expense) in `gl_accounts`; balanced `journal_entries` (debits == credits enforced in `postJournal`); GL is a **layer alongside** the org_funds cashbook — every money event is mirrored as a cash-basis journal (Bank vs Income/Expense/Untransferred). Real-time posting is wired into funds create/edit/delete (versioned: an edit reverses the prior journal and posts a corrected one) and into every money-move route (transfer/receive/bill-pay/pool-reversal), best-effort post-commit so a GL hiccup never breaks a money move; an **idempotent backfill** (`/api/organization/gl/backfill`) reconciles history and any gaps. Trial balance + chart + manual journal-entry UI at `/organization/finance/ledger`. Libs: `src/lib/finance/gl.js`.
+- ☑ **3.2 Fiscal periods + period close/lock.** `fiscal_periods` (India FY Apr–Mar, monthly); closing a period makes it immutable — `postJournal` calls `assertPeriodOpen` and rejects (409) any posting dated into a closed period (manual journals, reversals, and backfill all route through it). Reopen allowed for admin correction. UI at `/organization/finance/periods`. Lib: `src/lib/finance/periods.js`.
+- ☑ **3.3 Bank reconciliation / statement import.** `bank_statements` + `bank_txns`; reconcile the GL bank-account (1000) subledger for a billing account against entered/imported statement lines, with match / unmatch / auto-match and a book-vs-bank difference summary. UI at `/organization/finance/reconciliation`.
+- ⊘ **3.4 Tax handling (GST/TDS) as ledger postings — deferred.** GST Payable / TDS Payable accounts exist in the chart, but automated tax journals + returns are India-specific and were explicitly out of this batch (the compliance calendar tracks the filing deadlines meanwhile). Revisit with the tax-journal design.
+- ⊘ **3.5 AR / invoicing / receipts; payroll / stipends — deferred.** "As needed" and not requested; AR account exists in the chart for when invoicing is built.
+
+---
+
+## Phase 3+ — Multi-currency, secure billing accounts, master reset (this batch)
+
+- ☑ **2.12 → done: Multi-currency + FX.** INR base/reporting currency. Foreign-currency fund entries store the original amount + currency + the **FX rate frozen at entry time** + the INR-equivalent (`inrMinor`), so historical reports never shift when rates move. Free keyless rate providers with fallback + cache (`frankfurter.dev` → `open.er-api.com` → `@fawazahmed0/currency-api`, persisted to `fx_rates`). `/api/organization/fx` endpoint + a currency-converter widget + a currency selector with live "as of" rate in the entry modal. Funds GET aggregations sum INR (`inrExpr`) so currencies never mix. Lib: `src/lib/finance/currency.js`.
+- ☑ **Secure billing-account bank details.** Billing accounts (`finance_accounts`) gain a base currency + bank details: account number stored **AES-256-GCM encrypted at rest**, never returned by any API and never logged (only last-4 + masked shown), with a keyed **HMAC fingerprint** for de-duplication and a `verify-bank` endpoint that confirms "the account in hand matches the one on file" (`{match}` only) without ever revealing the number. Manage/switch UI at `/organization/finance/accounts`. Requires `FINANCE_ENC_KEY` (32 bytes) in the server env. Lib: `src/lib/finance/crypto.js`.
+- ☑ **Master finance reset (test/production modes).** Admin-only, destructive, reusable module reset to end a test run and start clean: pick which data sets to wipe, takes a restorable **backup first** by default, re-seeds the chart of accounts, and sets the finance **mode** (test ⇄ production). Backups list + one-click **restore** (which itself snapshots current state first). Typed-phrase confirmation (`RESET FINANCE` / `RESTORE FINANCE`); every action logged to a protected, never-wiped `finance_admin_log`. UI at `/organization/finance/settings`. Lib: `src/lib/finance/maintenance.js`.
+
+### Deferred with reasons (unchanged)
+- **3.4 / 3.5** tax journals, AR/invoicing, payroll — see above.
+- **1.13** rate limiting — needs an infra decision (middleware/edge vs per-route).
+- **2.8** 80G receipts + donor utilization statements — need org registration details (80G no., signatory, receipt numbering).
+- **2.10** maker-checker on money moves — needs a role split beyond "all admins equal" (same rationale as 1.12).
 
 ---
 

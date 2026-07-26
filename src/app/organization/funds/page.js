@@ -34,6 +34,7 @@ import TopLists from './_components/TopLists';
 import TransactionsTable from './_components/TransactionsTable';
 import EntryModal from './_components/EntryModal';
 import ExportModal from './_components/ExportModal';
+import CurrencyConverter from './_components/CurrencyConverter';
 import { CATEGORIES } from './_components/constants';
 import useFundsData from './_hooks/useFundsData';
 import DetailsDrawer from './_components/DetailsDrawer';
@@ -43,6 +44,8 @@ import AccountSelector from './_components/AccountSelector';
 const INITIAL_FORM = {
   kind: 'in',
   amount: '',
+  currency: 'INR',
+  fxRate: 1,
   title: '',
   date: '',
   notes: '',
@@ -176,6 +179,8 @@ export default function OrgFundsPage() {
     setForm({
       kind: item.kind,
       amount: String(item.amount || ''),
+      currency: item.currency || 'INR',
+      fxRate: item.fxRate != null ? item.fxRate : (item.currency && item.currency !== 'INR' ? null : 1),
       title: item.title || '',
       date: item.date ? new Date(item.date).toISOString().split('T')[0] : '',
       notes: item.notes || '',
@@ -582,6 +587,8 @@ export default function OrgFundsPage() {
                     </div>
                   )}
                 </div>
+
+                <CurrencyConverter />
               </div>
             )}
           </>

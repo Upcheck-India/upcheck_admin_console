@@ -2,9 +2,51 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { escapeRegex, assertAccountExists, FinanceError } from '../../../../lib/finance/tx';
 import { requireFinanceAdmin, capString, capTags, parseLimit } from '../../../../lib/finance/auth';
-import { moneyFields, minorExpr, fromMinor } from '../../../../lib/finance/money';
+import { moneyFields, fromMinor } from '../../../../lib/finance/money';
 import { presetRange, groupIdForBucket } from '../../../../lib/finance/dates';
 import { recordFinanceAudit, actorFromUser } from '../../../../lib/finance/audit';
+import { normalizeCurrency, assertValidRate, getRate, convertMinor } from '../../../../lib/finance/currency';
+import { postFundJournal } from '../../../../lib/finance/gl';
+
+// Canonical INR paise for any org_funds row. Prefer the frozen `inrMinor`
+// (foreign-currency entries store their INR-equivalent at entry time); fall back
+// to `amountMinor`, then to round(amount * 100) for legacy INR-only rows. Every
+// money aggregation below sums THIS so multi-currency totals never mix units.
+const inrExpr = {
+  $ifNull: [
+    '$inrMinor',
+    { $ifNull: ['$amountMinor', { $round: [{ $multiply: ['$amount', 100] }, 0] }] },
+  ],
+};
+
+/**
+ * Resolve the currency + frozen FX for a money entry.
+ * - currency defaults to INR; unsupported → FinanceError 400 (via normalizeCurrency).
+ * - INR: fxRate = 1, inrMinor = amountMinor.
+ * - Foreign: use the client-supplied fxRate when present (freezes exactly what
+ *   the user saw in the form); otherwise fetch the current rate server-side.
+ * Returns { currency, fxRate, fxRateDate, fxSource, inrMinor }.
+ */
+async function resolveFx(db, currencyRaw, clientRate, amountMinor) {
+  const currency = normalizeCurrency(currencyRaw);
+  if (currency === 'INR') {
+    return { currency, fxRate: 1, fxRateDate: null, fxSource: 'identity', inrMinor: amountMinor };
+  }
+  let fxRate;
+  let fxRateDate;
+  let fxSource;
+  if (clientRate != null && clientRate !== '') {
+    fxRate = assertValidRate(clientRate);
+    fxRateDate = new Date().toISOString().slice(0, 10);
+    fxSource = 'client';
+  } else {
+    const r = await getRate(currency, 'INR', { db });
+    fxRate = r.rate;
+    fxRateDate = r.date;
+    fxSource = r.source;
+  }
+  return { currency, fxRate, fxRateDate, fxSource, inrMinor: convertMinor(amountMinor, fxRate) };
+}
 
 export async function GET(request) {
   try {
@@ -68,14 +110,26 @@ export async function GET(request) {
 
     const col = db.collection('org_funds');
     const totalCount = await col.countDocuments(filter);
-    const items = await col.find(filter).sort({ date: -1 }).skip(skip).limit(limit).toArray();
+    const rawItems = await col.find(filter).sort({ date: -1 }).skip(skip).limit(limit).toArray();
+    // Enrich each item with its canonical INR figures so the UI can render both
+    // the original amount ("US$100") and the INR-equivalent ("₹8,300") without
+    // re-deriving it. Legacy INR rows get inrMinor === amountMinor.
+    const items = rawItems.map((it) => {
+      const inrMinor =
+        it.inrMinor != null
+          ? it.inrMinor
+          : it.amountMinor != null
+            ? it.amountMinor
+            : Math.round((Number(it.amount) || 0) * 100);
+      return { ...it, currency: it.currency || 'INR', inrMinor, inr: fromMinor(inrMinor) };
+    });
 
     // ---- Period activity (received/spent for the selected window) ----
     const summaryAgg = await col.aggregate([
       { $match: filter },
       { $group: { _id: null,
-        receivedMinor: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, minorExpr('amount'), 0] } },
-        spentMinor: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, minorExpr('amount'), 0] } },
+        receivedMinor: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, inrExpr, 0] } },
+        spentMinor: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, inrExpr, 0] } },
       } },
     ]).toArray();
     const periodReceivedMinor = summaryAgg[0]?.receivedMinor || 0;
@@ -87,8 +141,8 @@ export async function GET(request) {
     const balanceAgg = await col.aggregate([
       { $match: balanceMatch },
       { $group: { _id: null,
-        inMinor: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, minorExpr('amount'), 0] } },
-        outMinor: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, minorExpr('amount'), 0] } },
+        inMinor: { $sum: { $cond: [{ $eq: ['$kind', 'in'] }, inrExpr, 0] } },
+        outMinor: { $sum: { $cond: [{ $eq: ['$kind', 'out'] }, inrExpr, 0] } },
       } },
     ]).toArray();
     const balanceMinor = (balanceAgg[0]?.inMinor || 0) - (balanceAgg[0]?.outMinor || 0);
@@ -99,7 +153,7 @@ export async function GET(request) {
     burnStart.setMonth(burnStart.getMonth() - 3);
     const burnAgg = await col.aggregate([
       { $match: { accountId, kind: 'out', isTransfer: { $ne: true }, deletedAt: { $exists: false }, date: { $gte: burnStart, $lt: three } } },
-      { $group: { _id: groupIdForBucket('month'), total: { $sum: minorExpr('amount') } } },
+      { $group: { _id: groupIdForBucket('month'), total: { $sum: inrExpr } } },
     ]).toArray();
     const avgMonthlyBurnMinor = burnAgg.length ? Math.round(burnAgg.reduce((s, b) => s + b.total, 0) / burnAgg.length) : 0;
     const runwayMonths = balanceMinor > 0 && avgMonthlyBurnMinor > 0 ? Math.floor(balanceMinor / avgMonthlyBurnMinor) : null;
@@ -117,7 +171,7 @@ export async function GET(request) {
       { $match: filter },
       { $group: {
         _id: { group: { $ifNull: ['$inflowType', { $ifNull: ['$expenseType', '$category'] }] }, kind: '$kind' },
-        totalMinor: { $sum: minorExpr('amount') },
+        totalMinor: { $sum: inrExpr },
         count: { $sum: 1 },
       } },
       { $sort: { totalMinor: -1 } },
@@ -149,7 +203,7 @@ export async function GET(request) {
 
     const timeTrends = (await col.aggregate([
       { $match: trendMatch },
-      { $group: { _id: groupIdForBucket(groupBy, '$date', { kind: '$kind' }), totalMinor: { $sum: minorExpr('amount') } } },
+      { $group: { _id: groupIdForBucket(groupBy, '$date', { kind: '$kind' }), totalMinor: { $sum: inrExpr } } },
       { $sort: { '_id.year': 1, '_id.month': 1, '_id.day': 1, '_id.isoWeekYear': 1, '_id.isoWeek': 1 } },
     ]).toArray()).map((t) => ({ _id: t._id, total: fromMinor(t.totalMinor) }));
 
@@ -174,7 +228,7 @@ export async function POST(request) {
     if (response) return response;
 
     const body = await request.json();
-    const { kind, amount, title, date, notes, category, source, counterparty, reference, tags, accountId, inflowType, expenseType, fundRestriction, allocations, isTransfer } = body || {};
+    const { kind, amount, currency, fxRate, title, date, notes, category, source, counterparty, reference, tags, accountId, inflowType, expenseType, fundRestriction, allocations, isTransfer } = body || {};
 
     if (!['in', 'out'].includes(kind)) return NextResponse.json({ error: 'Invalid kind' }, { status: 400 });
     if (!accountId) return NextResponse.json({ error: 'accountId is required' }, { status: 400 });
@@ -184,10 +238,13 @@ export async function POST(request) {
     const db = client.db('resources');
 
     let money;
+    let fx;
     try {
       await assertAccountExists(db, accountId);
-      money = moneyFields('amount', amount); // validates & rounds to paise
+      money = moneyFields('amount', amount); // validates & rounds to paise (in the entry's own currency)
       if (money.amountMinor <= 0) throw new FinanceError('Invalid amount', 400);
+      // Freeze currency + FX at entry time; inrMinor is the canonical INR figure.
+      fx = await resolveFx(db, currency, fxRate, money.amountMinor);
     } catch (err) {
       if (err && err.isFinanceError) return NextResponse.json({ error: err.message }, { status: err.status || 400 });
       throw err;
@@ -198,6 +255,11 @@ export async function POST(request) {
     const doc = {
       kind,
       ...money,
+      currency: fx.currency,
+      fxRate: fx.fxRate,
+      fxRateDate: fx.fxRateDate,
+      fxSource: fx.fxSource,
+      inrMinor: fx.inrMinor,
       title: capString(title, 200),
       date: date ? new Date(date) : new Date(),
       notes: capString(notes, 2000),
@@ -220,8 +282,16 @@ export async function POST(request) {
     const res = await db.collection('org_funds').insertOne(doc);
     await recordFinanceAudit(db, {
       action: 'fund.create', collection: 'org_funds', documentId: res.insertedId,
-      actor: actorFromUser(user), after: doc, meta: { accountId, kind, amountMinor: money.amountMinor },
+      actor: actorFromUser(user), after: doc,
+      meta: { accountId, kind, amountMinor: money.amountMinor, currency: fx.currency, fxRate: fx.fxRate, inrMinor: fx.inrMinor },
     });
+
+    // Mirror into the double-entry GL (best-effort; idempotent backfill reconciles).
+    try {
+      await postFundJournal(db, { _id: res.insertedId, ...doc }, { actor: actorFromUser(user) });
+    } catch (glErr) {
+      console.error('GL mirror deferred to backfill (fund create):', glErr && glErr.message);
+    }
 
     return NextResponse.json({ _id: res.insertedId, ...doc }, { status: 201 });
   } catch (e) {

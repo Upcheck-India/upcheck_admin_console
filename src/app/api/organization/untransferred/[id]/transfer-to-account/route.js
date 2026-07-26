@@ -5,6 +5,7 @@ import { withFinanceTransaction, FinanceError, assertAccountExists } from '../..
 import { requireFinanceAdmin } from '../../../../../../lib/finance/auth';
 import { toMinor, moneyFields, fromMinor } from '../../../../../../lib/finance/money';
 import { recordFinanceAudit, actorFromUser } from '../../../../../../lib/finance/audit';
+import { postFundJournal } from '../../../../../../lib/finance/gl';
 
 export async function POST(request, { params }) {
   try {
@@ -108,6 +109,15 @@ export async function POST(request, { params }) {
 
       return { replay: false, remaining: updatedDoc.remainingAmount };
     });
+
+    // Mirror the cashbook entry into the double-entry GL (best-effort, post-
+    // commit — the idempotent backfill reconciles if this ever fails).
+    try {
+      const glFund = await funds.findOne({ opId });
+      if (glFund) await postFundJournal(db, glFund, { actor });
+    } catch (glErr) {
+      console.error('GL mirror deferred to backfill (transfer opId):', glErr && glErr.message);
+    }
 
     return NextResponse.json({ success: true, remaining: result.remaining, replay: !!result.replay });
   } catch (e) {

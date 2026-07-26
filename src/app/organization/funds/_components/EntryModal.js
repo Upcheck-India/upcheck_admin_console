@@ -1,7 +1,61 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { X, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
-import { CATEGORIES, INFLOW_TYPES, EXPENSE_TYPES } from './constants';
+import { INFLOW_TYPES, EXPENSE_TYPES, CURRENCIES, getCurrency, numberFmt } from './constants';
 
 export default function EntryModal({ open, editingItem, form, setForm, onSubmit, onClose, isSaving }) {
+  const currencyCode = (form.currency || 'INR').toUpperCase();
+  const isINR = currencyCode === 'INR';
+  const currencyInfo = getCurrency(currencyCode);
+
+  // Live FX lookup for non-INR entries. `fx` holds the last successful response;
+  // `fxError` a soft note when the lookup fails (submit is still allowed — the
+  // server re-fetches). The fetched rate is pushed into `form.fxRate` so the
+  // rate frozen on the row is exactly what the user saw here.
+  const [fx, setFx] = useState(null);
+  const [fxLoading, setFxLoading] = useState(false);
+  const [fxError, setFxError] = useState(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    if (isINR) {
+      setFx(null);
+      setFxError(null);
+      setFxLoading(false);
+      setForm((f) => (f.fxRate === 1 ? f : { ...f, fxRate: 1 }));
+      return undefined;
+    }
+    const amt = Number(form.amount) || 0;
+    let cancelled = false;
+    setFxLoading(true);
+    setFxError(null);
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({ from: currencyCode, to: 'INR' });
+        if (amt > 0) params.set('amount', String(amt));
+        const res = await fetch(`/api/organization/fx?${params.toString()}`, { credentials: 'include' });
+        if (!res.ok) throw new Error('rate lookup failed');
+        const data = await res.json();
+        if (cancelled) return;
+        setFx(data);
+        setFxError(null);
+        setForm((f) => ({ ...f, fxRate: data.rate }));
+      } catch {
+        if (cancelled) return;
+        setFx(null);
+        setFxError('Could not fetch a live rate. You can still save — the current rate will be applied on the server.');
+        setForm((f) => ({ ...f, fxRate: null }));
+      } finally {
+        if (!cancelled) setFxLoading(false);
+      }
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, isINR, currencyCode, form.amount, setForm]);
+
   if (!open) return null;
   const isInflow = form.kind === 'in';
   const isOutflow = form.kind === 'out';
@@ -82,9 +136,44 @@ export default function EntryModal({ open, editingItem, form, setForm, onSubmit,
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Amount (INR)</label>
+              <label className="block text-sm font-medium text-slate-700">Amount ({currencyInfo.symbol})</label>
               <input type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="mt-1 w-full border rounded px-3 py-2" required />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Currency</label>
+              <select
+                value={currencyCode}
+                onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value, fxRate: e.target.value === 'INR' ? 1 : null }))}
+                className="mt-1 w-full border rounded px-3 py-2"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {!isINR && (
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs">
+              {fxLoading ? (
+                <span className="inline-flex items-center gap-1 text-indigo-700">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Fetching exchange rate…
+                </span>
+              ) : fxError ? (
+                <span className="inline-flex items-center gap-1 text-amber-700">
+                  <AlertTriangle className="w-3 h-3" /> {fxError}
+                </span>
+              ) : fx ? (
+                <span className="text-indigo-800">
+                  Rate 1 {currencyCode} = {numberFmt(fx.rate)}
+                  {fx.date ? ` (as of ${fx.date})` : ''}
+                  {fx.converted != null && (Number(form.amount) || 0) > 0 ? ` → ${numberFmt(fx.converted)}` : ''}
+                </span>
+              ) : (
+                <span className="text-slate-600">Enter an amount to preview the INR equivalent.</span>
+              )}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-700">Date</label>
               <input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} className="mt-1 w-full border rounded px-3 py-2" />

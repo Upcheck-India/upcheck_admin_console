@@ -5,6 +5,7 @@ import { withFinanceTransaction } from '../../../../../lib/finance/tx';
 import { requireFinanceAdmin } from '../../../../../lib/finance/auth';
 import { moneyFields, readMinor, fromMinor } from '../../../../../lib/finance/money';
 import { recordFinanceAudit, actorFromUser } from '../../../../../lib/finance/audit';
+import { postFundJournal } from '../../../../../lib/finance/gl';
 
 export async function DELETE(request, { params }) {
   try {
@@ -94,6 +95,14 @@ export async function DELETE(request, { params }) {
         session
       );
     });
+
+    // Mirror the contra (reversal) entry into the GL, if one was posted.
+    try {
+      const glFund = await funds.findOne({ opId });
+      if (glFund) await postFundJournal(db, glFund, { actor });
+    } catch (glErr) {
+      console.error('GL mirror deferred to backfill (pool reversal opId):', glErr && glErr.message);
+    }
 
     return NextResponse.json({
       success: true,

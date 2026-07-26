@@ -93,6 +93,27 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('cost_centers').createIndex({ code: 1 }, { unique: true, sparse: true }),
       db.collection('fixed_assets').createIndex({ accountId: 1, status: 1 }),
       db.collection('compliance_items').createIndex({ dueDate: 1, status: 1 }),
+      // Phase 3 — double-entry general ledger, fiscal periods, bank reconciliation
+      db.collection('gl_accounts').createIndex({ code: 1 }, { unique: true }),
+      db.collection('journal_entries').createIndex({ date: -1 }),
+      db.collection('journal_entries').createIndex({ 'lines.accountCode': 1, date: -1 }),
+      db.collection('journal_entries').createIndex({ 'meta.accountId': 1, date: -1 }),
+      db.collection('journal_entries').createIndex({ source: 1, reference: 1 }, { unique: true, sparse: true }),
+      db.collection('journal_entries').createIndex({ opId: 1 }, { unique: true, sparse: true }),
+      db.collection('fiscal_periods').createIndex({ key: 1 }, { unique: true }),
+      db.collection('fiscal_periods').createIndex({ start: 1, end: 1 }),
+      db.collection('bank_statements').createIndex({ accountId: 1, statementDate: -1 }),
+      db.collection('bank_txns').createIndex({ accountId: 1, date: -1 }),
+      db.collection('bank_txns').createIndex({ statementId: 1 }),
+      db.collection('bank_txns').createIndex({ reconciled: 1, accountId: 1 }),
+      // Multi-currency rate cache (persisted fallback when providers are down)
+      db.collection('fx_rates').createIndex({ pair: 1 }, { unique: true }),
+      // Bank-detail fingerprint on billing accounts (verify / de-dupe; never the number itself)
+      db.collection('finance_accounts').createIndex({ 'bank.accountNumberHash': 1 }, { sparse: true }),
+      // Finance maintenance: mode/settings, master-reset backups, protected admin log
+      db.collection('finance_backups').createIndex({ createdAt: -1 }),
+      db.collection('finance_backup_items').createIndex({ backupId: 1, coll: 1 }),
+      db.collection('finance_admin_log').createIndex({ at: -1 }),
     ]);
   } catch (err) {
     console.error('Failed to ensure messaging indexes on startup:', err);

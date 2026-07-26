@@ -14,6 +14,11 @@ import {
   Building2,
   Package,
   CalendarCheck,
+  BookOpen,
+  CalendarRange,
+  Scale,
+  Settings,
+  FlaskConical,
   LayoutDashboard, 
   Shield, 
   Mail, 
@@ -43,11 +48,23 @@ export default function FinancePage() {
   const { accounts, activeAccountId, selectAccount, addAccount } = useBillingAccount();
   const [stats, setStats] = useState(null);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [financeMode, setFinanceMode] = useState(null);
 
   useEffect(() => {
     const storedUsername = localStorage.getItem('username');
     if (storedUsername) setUsername(storedUsername);
   }, []);
+
+  // Finance mode (test/production) for the banner.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    fetch('/api/organization/finance/settings', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d?.settings) setFinanceMode(d.settings.mode); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isAdmin]);
 
   // Real quick stats from the funds summary for the active account (this year).
   useEffect(() => {
@@ -187,6 +204,39 @@ export default function FinancePage() {
       available: true
     },
     {
+      title: 'General Ledger',
+      desc: 'Double-entry ledger, chart of accounts & trial balance',
+      href: '/organization/finance/ledger',
+      icon: <BookOpen className="w-6 h-6" />,
+      gradient: 'from-slate-500 via-gray-500 to-zinc-500',
+      bgGradient: 'from-slate-50 to-gray-50',
+      iconColor: 'text-slate-600',
+      hoverBorder: 'group-hover:border-slate-300',
+      available: true
+    },
+    {
+      title: 'Fiscal Periods',
+      desc: 'Open/close accounting periods and lock the ledger',
+      href: '/organization/finance/periods',
+      icon: <CalendarRange className="w-6 h-6" />,
+      gradient: 'from-cyan-500 via-sky-500 to-blue-500',
+      bgGradient: 'from-cyan-50 to-sky-50',
+      iconColor: 'text-cyan-600',
+      hoverBorder: 'group-hover:border-cyan-300',
+      available: true
+    },
+    {
+      title: 'Bank Reconciliation',
+      desc: 'Match ledger movements against bank statements',
+      href: '/organization/finance/reconciliation',
+      icon: <Scale className="w-6 h-6" />,
+      gradient: 'from-fuchsia-500 via-purple-500 to-violet-500',
+      bgGradient: 'from-fuchsia-50 to-purple-50',
+      iconColor: 'text-fuchsia-600',
+      hoverBorder: 'group-hover:border-fuchsia-300',
+      available: true
+    },
+    {
       title: 'Untransferred Funds',
       desc: 'Received by org but not assigned to any billing account',
       href: '/organization/untransferred',
@@ -283,6 +333,9 @@ export default function FinancePage() {
                   onAdd={(name) => addAccount(name)}
                 />
                 <Link href="/organization/finance/accounts" className="px-2 py-1.5 text-xs rounded-lg border bg-white hover:bg-slate-50 text-slate-700">Manage account</Link>
+                <Link href="/organization/finance/settings" className="p-1.5 rounded-lg border bg-white hover:bg-slate-50 text-slate-700" title="Finance settings & reset">
+                  <Settings className="w-4 h-4" />
+                </Link>
               </div>
               {/* Online Users */}
               <button className="relative flex -space-x-2 hover:scale-105 transition-transform">

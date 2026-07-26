@@ -5,6 +5,7 @@ import { withFinanceTransaction, FinanceError } from '../../../../../../lib/fina
 import { requireFinanceAdmin, capString } from '../../../../../../lib/finance/auth';
 import { readMinor, fromMinor } from '../../../../../../lib/finance/money';
 import { recordFinanceAudit, actorFromUser } from '../../../../../../lib/finance/audit';
+import { postFundJournal } from '../../../../../../lib/finance/gl';
 
 // Pay an approved vendor bill: atomically flip the bill to 'paid' and post the
 // matching outflow to the org_funds ledger. Idempotent on the client-supplied
@@ -144,6 +145,14 @@ export async function POST(request, { params }) {
 
       return { replay: false, paidFundId: String(ledgerId) };
     });
+
+    // Mirror the AP payment outflow into the GL (best-effort, post-commit).
+    try {
+      const glFund = await funds.findOne({ opId });
+      if (glFund) await postFundJournal(db, glFund, { actor });
+    } catch (glErr) {
+      console.error('GL mirror deferred to backfill (bill pay opId):', glErr && glErr.message);
+    }
 
     return NextResponse.json({ success: true, paidFundId: result.paidFundId, replay: !!result.replay });
   } catch (e) {
