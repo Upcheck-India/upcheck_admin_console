@@ -155,9 +155,15 @@ export async function POST(request) {
 
     const vendor = await db.collection('vendors').findOne(
       { _id: new ObjectId(vendorId) },
-      { projection: { name: 1, deletedAt: 1 } }
+      { projection: { name: 1, deletedAt: 1, status: 1 } }
     );
     if (!vendor || vendor.deletedAt) return NextResponse.json({ error: 'Vendor not found' }, { status: 400 });
+
+    // Optional linkage to a recurring template. Manual entry usually omits these;
+    // the generator supplies them. periodKey + subscriptionId are de-duped by a
+    // unique sparse index, so a manual bill that collides throws E11000.
+    const subscriptionId = capString(body?.subscriptionId, 40) || null;
+    const periodKey = capString(body?.periodKey, 20) || null;
 
     const doc = {
       vendorId,
@@ -169,18 +175,31 @@ export async function POST(request) {
       dueDate,
       status,
       expenseType: capString(body?.expenseType, 60) || null,
+      subscriptionId,
+      periodKey,
       createdAt: new Date(),
       createdBy: actorFromUser(user),
     };
 
-    const res = await db.collection('vendor_bills').insertOne(doc);
+    let res;
+    try {
+      res = await db.collection('vendor_bills').insertOne(doc);
+    } catch (err) {
+      if (err && err.code === 11000) {
+        return NextResponse.json({ error: 'A bill already exists for this subscription period' }, { status: 409 });
+      }
+      throw err;
+    }
     await recordFinanceAudit(db, {
       action: 'bill.create', collection: 'vendor_bills', documentId: res.insertedId,
       actor: actorFromUser(user), after: doc,
       meta: { vendorId, accountId, amountMinor: money.amountMinor, status },
     });
 
-    return NextResponse.json({ _id: res.insertedId, ...doc, vendorName: vendor.name || '' }, { status: 201 });
+    // Suspension is a soft flag: creating a manual bill for a suspended vendor is
+    // allowed, but we surface a warning so the UI can nudge the user.
+    const warning = (vendor.status || 'active') === 'suspended' ? 'Vendor is suspended' : undefined;
+    return NextResponse.json({ _id: res.insertedId, ...doc, vendorName: vendor.name || '', warning }, { status: 201 });
   } catch (e) {
     if (e && e.isFinanceError) return NextResponse.json({ error: e.message }, { status: e.status || 400 });
     console.error('POST /api/organization/vendor-bills error', e);

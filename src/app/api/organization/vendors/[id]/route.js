@@ -20,7 +20,7 @@ export async function GET(request, { params }) {
     const db = client.db('resources');
     const item = await db.collection('vendors').findOne({ _id: new ObjectId(id) });
     if (!item || item.deletedAt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    return NextResponse.json(item);
+    return NextResponse.json({ ...item, status: item.status || 'active' });
   } catch (e) {
     console.error('GET /api/organization/vendors/[id] error', e);
     return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 });
@@ -43,6 +43,27 @@ export async function PUT(request, { params }) {
     if (!existing || existing.deletedAt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const body = await request.json();
+
+    // Status-only toggle (suspend/activate). Kept separate from soft-delete and
+    // from the full-edit path so the UI can flip status without resending the
+    // whole vendor payload. Legacy vendors without a status are treated active.
+    if (body && body.status !== undefined && body.name === undefined) {
+      const newStatus = String(body.status);
+      if (!['active', 'suspended'].includes(newStatus)) {
+        return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+      }
+      const curStatus = existing.status || 'active';
+      const set = { status: newStatus, updatedAt: new Date(), updatedBy: actorFromUser(user) };
+      await col.updateOne({ _id: new ObjectId(id) }, { $set: set });
+      await recordFinanceAudit(db, {
+        action: newStatus === 'suspended' ? 'vendor.suspend' : 'vendor.activate',
+        collection: 'vendors', documentId: id,
+        actor: actorFromUser(user), before: existing, after: { ...existing, ...set },
+        meta: { statusFrom: curStatus, statusTo: newStatus },
+      });
+      return NextResponse.json({ ...existing, ...set, _id: id });
+    }
+
     const name = capString(body?.name, 200);
     if (!name) return NextResponse.json({ error: 'Vendor name is required' }, { status: 400 });
 
@@ -64,6 +85,7 @@ export async function PUT(request, { params }) {
       address: capString(body?.address, 500),
       notes: capString(body?.notes, 2000),
       tags: capTags(body?.tags),
+      status: existing.status || 'active',
       updatedAt: new Date(),
       updatedBy: actorFromUser(user),
     };

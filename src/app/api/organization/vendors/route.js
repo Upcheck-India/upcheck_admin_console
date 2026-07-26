@@ -22,11 +22,16 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get('search');
     const category = searchParams.get('category');
+    const status = searchParams.get('status');
     const limit = parseLimit(searchParams.get('limit'), { def: 200, max: 1000 });
     const skip = Math.max(0, parseInt(searchParams.get('skip') || '0', 10) || 0);
 
     const filter = { deletedAt: { $exists: false } };
     if (category) filter.category = category;
+    // status is a soft flag ('active'|'suspended'); legacy docs without it are
+    // treated as active, so filter on that with an $or when 'active' is asked.
+    if (status === 'suspended') filter.status = 'suspended';
+    else if (status === 'active') filter.$and = [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }];
     if (search) {
       const safe = escapeRegex(search);
       filter.$or = [
@@ -67,6 +72,7 @@ export async function GET(request) {
       },
       {
         $addFields: {
+          status: { $ifNull: ['$status', 'active'] },
           outstandingMinor: { $ifNull: [{ $arrayElemAt: ['$ap.outstandingMinor', 0] }, 0] },
           outstandingCount: { $ifNull: [{ $arrayElemAt: ['$ap.count', 0] }, 0] },
         },
@@ -119,6 +125,7 @@ export async function POST(request) {
       address: capString(body?.address, 500),
       notes: capString(body?.notes, 2000),
       tags: capTags(body?.tags),
+      status: 'active',
       createdAt: new Date(),
       createdBy: actorFromUser(user),
     };

@@ -10,19 +10,24 @@ import { numberFmt, EXPENSE_TYPES } from '../funds/_components/constants';
 import {
   AlertCircle,
   ArrowLeft,
+  Ban,
   Banknote,
   Building2,
   CheckCircle2,
   Clock,
   FileText,
   Loader2,
+  Pause,
   Pencil,
+  Play,
   Plus,
+  Repeat,
   RefreshCw,
   Search,
   Trash2,
   Wallet,
   X,
+  Zap,
 } from 'lucide-react';
 
 // Idempotency key for a payment intent. Generated when the pay modal OPENS so a
@@ -41,6 +46,24 @@ const STATUS_STYLES = {
 };
 const STATUS_LABELS = { draft: 'Draft', approved: 'Approved', paid: 'Paid', cancelled: 'Cancelled' };
 
+// Vendor active/suspended + subscription active/paused/cancelled chips.
+const VENDOR_STATUS_STYLES = {
+  active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  suspended: 'bg-amber-50 text-amber-700 border-amber-200',
+};
+const SUB_STATUS_STYLES = {
+  active: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  paused: 'bg-amber-50 text-amber-700 border-amber-200',
+  cancelled: 'bg-slate-100 text-slate-600 border-slate-200',
+};
+const FREQUENCY_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'annual', label: 'Annual' },
+];
+const FREQUENCY_LABELS = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', annual: 'Annual' };
+
 const INITIAL_VENDOR_FORM = {
   name: '', contactPerson: '', email: '', phone: '', gstin: '', pan: '',
   category: '', address: '', notes: '', tagsText: '',
@@ -49,11 +72,35 @@ const INITIAL_BILL_FORM = {
   vendorId: '', billNumber: '', description: '', amount: '',
   billDate: '', dueDate: '', expenseType: '',
 };
+const INITIAL_SUB_FORM = {
+  vendorId: '', description: '', amount: '', expenseType: '',
+  frequency: 'monthly', anchorDay: '', startDate: '', dueInDays: '0',
+  endDate: '', autoApprove: false,
+};
 
 function StatusChip({ status }) {
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLES[status] || STATUS_STYLES.draft}`}>
       {STATUS_LABELS[status] || status}
+    </span>
+  );
+}
+
+function VendorStatusChip({ status }) {
+  const s = status || 'active';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${VENDOR_STATUS_STYLES[s] || VENDOR_STATUS_STYLES.active}`}>
+      {s === 'suspended' ? 'Suspended' : 'Active'}
+    </span>
+  );
+}
+
+function SubStatusChip({ status }) {
+  const s = status || 'active';
+  const label = s.charAt(0).toUpperCase() + s.slice(1);
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${SUB_STATUS_STYLES[s] || SUB_STATUS_STYLES.active}`}>
+      {label}
     </span>
   );
 }
@@ -92,6 +139,20 @@ export default function VendorsPage() {
   const [billForm, setBillForm] = useState(INITIAL_BILL_FORM);
   const [deletingBillId, setDeletingBillId] = useState(null);
   const [actingBillId, setActingBillId] = useState(null);
+
+  // ---- Subscriptions ----
+  const [subs, setSubs] = useState([]);
+  const [subsLoading, setSubsLoading] = useState(false);
+  const [subDueCount, setSubDueCount] = useState(0);
+  const [subStatusFilter, setSubStatusFilter] = useState('');
+  const [subVendorFilter, setSubVendorFilter] = useState('');
+  const [showSubModal, setShowSubModal] = useState(false);
+  const [editingSub, setEditingSub] = useState(null);
+  const [subForm, setSubForm] = useState(INITIAL_SUB_FORM);
+  const [actingSubId, setActingSubId] = useState(null);
+  const [deletingSubId, setDeletingSubId] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generateResult, setGenerateResult] = useState(null);
 
   // ---- Pay modal ----
   const [payModal, setPayModal] = useState(null); // { bill, opId, date, notes }
@@ -135,10 +196,51 @@ export default function VendorsPage() {
     }
   }, [activeAccountId, billStatusFilter, billVendorFilter]);
 
+  const loadSubs = useCallback(async () => {
+    try {
+      setSubsLoading(true);
+      const params = new URLSearchParams({ limit: '500' });
+      if (activeAccountId) params.append('accountId', activeAccountId);
+      if (subStatusFilter) params.append('status', subStatusFilter);
+      if (subVendorFilter) params.append('vendorId', subVendorFilter);
+      const res = await fetch(`/api/organization/vendor-subscriptions?${params.toString()}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed to load subscriptions');
+      const data = await res.json();
+      setSubs(data.items || []);
+      setSubDueCount(data.dueCount || 0);
+    } catch (e) {
+      setError(e.message || 'Failed to load subscriptions');
+    } finally {
+      setSubsLoading(false);
+    }
+  }, [activeAccountId, subStatusFilter, subVendorFilter]);
+
   useEffect(() => { if (isAdmin) loadVendors(); }, [isAdmin, loadVendors]);
   useEffect(() => { if (isAdmin) loadBills(); }, [isAdmin, loadBills]);
+  useEffect(() => { if (isAdmin) loadSubs(); }, [isAdmin, loadSubs]);
 
   // ---- Vendor actions ----
+  const toggleVendorStatus = async (v) => {
+    const next = (v.status || 'active') === 'suspended' ? 'active' : 'suspended';
+    if (next === 'suspended' && !confirm(`Suspend "${v.name}"? Its subscriptions will stop generating bills until reactivated.`)) return;
+    try {
+      setActingSubId(null);
+      const res = await fetch(`/api/organization/vendors/${v._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: next }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to update vendor status');
+      }
+      await Promise.all([loadVendors(), loadSubs()]);
+    } catch (e2) {
+      setError(e2.message);
+    }
+  };
+
   const openNewVendor = () => {
     setEditingVendor(null);
     setVendorForm(INITIAL_VENDOR_FORM);
@@ -331,6 +433,133 @@ export default function VendorsPage() {
     }
   };
 
+  // ---- Subscription actions ----
+  const openNewSub = (vendorId = '') => {
+    setEditingSub(null);
+    setSubForm({ ...INITIAL_SUB_FORM, vendorId: vendorId || '', startDate: todayStr() });
+    setShowSubModal(true);
+    setTab('subscriptions');
+  };
+
+  const openEditSub = (s) => {
+    setEditingSub(s);
+    setSubForm({
+      vendorId: s.vendorId || '',
+      description: s.description || '',
+      amount: String(s.amount ?? ''),
+      expenseType: s.expenseType || '',
+      frequency: s.frequency || 'monthly',
+      anchorDay: s.anchorDay != null ? String(s.anchorDay) : '',
+      startDate: s.startDate ? new Date(s.startDate).toISOString().split('T')[0] : '',
+      dueInDays: String(s.dueInDays ?? '0'),
+      endDate: s.endDate ? new Date(s.endDate).toISOString().split('T')[0] : '',
+      autoApprove: s.autoApprove === true,
+    });
+    setShowSubModal(true);
+  };
+
+  const submitSub = async (e) => {
+    e.preventDefault();
+    if (!activeAccountId && !editingSub) {
+      setError('Select a billing account before creating a subscription');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const body = {
+        ...subForm,
+        amount: Number(subForm.amount),
+        anchorDay: subForm.frequency === 'weekly' ? '' : subForm.anchorDay,
+        ...(editingSub ? {} : { accountId: activeAccountId }),
+      };
+      const url = editingSub
+        ? `/api/organization/vendor-subscriptions/${editingSub._id}`
+        : '/api/organization/vendor-subscriptions';
+      const res = await fetch(url, {
+        method: editingSub ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to save subscription');
+      }
+      setShowSubModal(false);
+      setEditingSub(null);
+      await loadSubs();
+    } catch (e2) {
+      setError(e2.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const setSubStatus = async (sub, status, confirmMsg) => {
+    if (confirmMsg && !confirm(confirmMsg)) return;
+    try {
+      setActingSubId(sub._id);
+      const res = await fetch(`/api/organization/vendor-subscriptions/${sub._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to update subscription');
+      }
+      await loadSubs();
+    } catch (e2) {
+      setError(e2.message);
+    } finally {
+      setActingSubId(null);
+    }
+  };
+
+  const deleteSub = async (sub) => {
+    if (!confirm('Delete this subscription template? Already-generated bills are kept.')) return;
+    try {
+      setDeletingSubId(sub._id);
+      const res = await fetch(`/api/organization/vendor-subscriptions/${sub._id}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to delete subscription');
+      }
+      await loadSubs();
+    } catch (e2) {
+      setError(e2.message);
+    } finally {
+      setDeletingSubId(null);
+    }
+  };
+
+  // The generator is safe to call repeatedly (idempotent per period). Optionally
+  // scoped to a single subscription via subscriptionId.
+  const runGenerate = async (subscriptionId) => {
+    try {
+      setGenerating(true);
+      setGenerateResult(null);
+      const res = await fetch('/api/organization/vendor-subscriptions/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(subscriptionId ? { subscriptionId } : {}),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Failed to generate bills');
+      }
+      const data = await res.json();
+      setGenerateResult({ count: data.count || 0, skipped: (data.skipped || []).length });
+      await Promise.all([loadSubs(), loadBills(), loadVendors()]);
+    } catch (e2) {
+      setError(e2.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
@@ -421,6 +650,7 @@ export default function VendorsPage() {
           {[
             { key: 'vendors', label: 'Vendors', icon: <Building2 className="w-4 h-4" /> },
             { key: 'bills', label: 'Bills', icon: <FileText className="w-4 h-4" /> },
+            { key: 'subscriptions', label: 'Subscriptions', icon: <Repeat className="w-4 h-4" /> },
           ].map((t) => (
             <button
               key={t.key}
@@ -482,6 +712,7 @@ export default function VendorsPage() {
                     <thead className="bg-slate-50 border-b border-slate-200">
                       <tr>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Vendor</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Contact</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Category</th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">GSTIN / PAN</th>
@@ -491,9 +722,12 @@ export default function VendorsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {vendors.map((v) => (
-                        <tr key={v._id} className="hover:bg-slate-50">
+                        <tr key={v._id} className={`hover:bg-slate-50 ${(v.status || 'active') === 'suspended' ? 'bg-amber-50/40' : ''}`}>
                           <td className="px-4 py-3">
-                            <div className="font-medium text-slate-900">{v.name}</div>
+                            <div className={`font-medium ${(v.status || 'active') === 'suspended' ? 'text-slate-500' : 'text-slate-900'}`}>{v.name}</div>
+                            {(v.status || 'active') === 'suspended' && (
+                              <div className="text-[11px] text-amber-700 mt-0.5">Suspended — subscriptions won&apos;t generate bills</div>
+                            )}
                             {Array.isArray(v.tags) && v.tags.length > 0 && (
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {v.tags.slice(0, 4).map((t) => (
@@ -502,6 +736,7 @@ export default function VendorsPage() {
                               </div>
                             )}
                           </td>
+                          <td className="px-4 py-3"><VendorStatusChip status={v.status} /></td>
                           <td className="px-4 py-3 text-sm text-slate-700">
                             <div>{v.contactPerson || '—'}</div>
                             <div className="text-xs text-slate-500">{v.email || v.phone || ''}</div>
@@ -534,6 +769,23 @@ export default function VendorsPage() {
                               <button onClick={() => openEditVendor(v)} className="px-3 py-1.5 rounded-lg border text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
                                 <Pencil className="w-4 h-4" /> Edit
                               </button>
+                              {(v.status || 'active') === 'suspended' ? (
+                                <button
+                                  onClick={() => toggleVendorStatus(v)}
+                                  className="px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5"
+                                  title="Reactivate vendor"
+                                >
+                                  <Play className="w-4 h-4" /> Activate
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => toggleVendorStatus(v)}
+                                  className="px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 flex items-center gap-1.5"
+                                  title="Suspend vendor"
+                                >
+                                  <Ban className="w-4 h-4" /> Suspend
+                                </button>
+                              )}
                               <button
                                 onClick={() => deleteVendor(v)}
                                 disabled={deletingVendorId === v._id}
@@ -635,7 +887,14 @@ export default function VendorsPage() {
                       {bills.map((b) => (
                         <tr key={b._id} className="hover:bg-slate-50">
                           <td className="px-4 py-3">
-                            <div className="font-medium text-slate-900">{b.billNumber || '(no number)'}</div>
+                            <div className="font-medium text-slate-900 flex items-center gap-1.5">
+                              {b.billNumber || '(no number)'}
+                              {b.subscriptionId && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-violet-50 text-violet-700 border border-violet-200" title="Generated from a recurring subscription">
+                                  <Repeat className="w-3 h-3" /> recurring
+                                </span>
+                              )}
+                            </div>
                             {b.description && <div className="text-xs text-slate-500 max-w-[260px] truncate">{b.description}</div>}
                           </td>
                           <td className="px-4 py-3 text-sm text-slate-700">{b.vendorName || '—'}</td>
@@ -703,6 +962,206 @@ export default function VendorsPage() {
 
             <div className="mt-4 p-3 rounded-xl bg-blue-50 text-blue-700 text-sm border border-blue-200">
               <strong>Note:</strong> Paying a bill posts a matching outflow entry to the Funds ledger of the bill&apos;s billing account (tagged <span className="font-semibold">ap</span>). Paid bills are locked and cannot be edited or deleted.
+            </div>
+          </>
+        )}
+
+        {/* ===================== SUBSCRIPTIONS TAB ===================== */}
+        {tab === 'subscriptions' && (
+          <>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  className="border rounded-xl px-3 py-2 text-sm bg-white"
+                  value={subStatusFilter}
+                  onChange={(e) => setSubStatusFilter(e.target.value)}
+                  title="Filter by status"
+                >
+                  <option value="">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <select
+                  className="border rounded-xl px-3 py-2 text-sm bg-white max-w-[220px]"
+                  value={subVendorFilter}
+                  onChange={(e) => setSubVendorFilter(e.target.value)}
+                  title="Filter by vendor"
+                >
+                  <option value="">All vendors</option>
+                  {vendors.map((v) => (
+                    <option key={v._id} value={String(v._id)}>{v.name}</option>
+                  ))}
+                </select>
+                <button onClick={loadSubs} className="px-3 py-2 rounded-xl border bg-white hover:bg-slate-50 flex items-center gap-2">
+                  <RefreshCw className={`w-4 h-4 ${subsLoading ? 'animate-spin' : ''}`} /> Refresh
+                </button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => runGenerate()}
+                  disabled={generating}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:from-amber-600 hover:to-orange-600 flex items-center gap-2 shadow-sm disabled:opacity-50"
+                  title="Generate all due bills from active subscriptions"
+                >
+                  {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  Generate due bills
+                  {subDueCount > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-white/25 text-xs font-semibold">{subDueCount}</span>
+                  )}
+                </button>
+                <button
+                  onClick={() => openNewSub()}
+                  disabled={!activeAccountId || vendors.length === 0}
+                  className="px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={vendors.length === 0 ? 'Add a vendor first' : 'Create a recurring subscription'}
+                >
+                  <Plus className="w-4 h-4" /> New Subscription
+                </button>
+              </div>
+            </div>
+
+            {generateResult && (
+              <div className="mb-4 p-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1">
+                  Generated {generateResult.count} bill(s){generateResult.skipped > 0 ? `, skipped ${generateResult.skipped} (already generated, suspended, or completed)` : ''}.
+                </span>
+                <button className="hover:bg-emerald-100 rounded-lg p-1" onClick={() => setGenerateResult(null)} aria-label="Dismiss">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              {subsLoading ? (
+                <div className="p-8 text-center text-slate-500 flex items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 animate-spin" /> Loading subscriptions...
+                </div>
+              ) : subs.length === 0 ? (
+                <div className="p-12 text-center">
+                  <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3">
+                    <Repeat className="w-7 h-7 text-slate-400" />
+                  </div>
+                  <h3 className="font-semibold text-slate-900 mb-1">No subscriptions yet</h3>
+                  <p className="text-slate-500 text-sm mb-4">
+                    {subStatusFilter || subVendorFilter ? 'Try clearing the filters.' : 'Set up recurring bill templates (rent, SaaS, retainers) and generate their bills on a schedule.'}
+                  </p>
+                  {!subStatusFilter && !subVendorFilter && vendors.length > 0 && activeAccountId && (
+                    <button onClick={() => openNewSub()} className="px-4 py-2 rounded-xl bg-violet-600 text-white hover:bg-violet-700 inline-flex items-center gap-2">
+                      <Plus className="w-4 h-4" /> New Subscription
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Vendor / Description</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Frequency</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Next Due</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600">Status</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {subs.map((s) => {
+                        const vendorSuspended = (s.vendorStatus || 'active') === 'suspended';
+                        return (
+                          <tr key={s._id} className="hover:bg-slate-50">
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-slate-900">{s.vendorName || '—'}</div>
+                              {s.description && <div className="text-xs text-slate-500 max-w-[280px] truncate">{s.description}</div>}
+                              <div className="flex items-center gap-1.5 mt-1">
+                                {s.autoApprove && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                    <CheckCircle2 className="w-3 h-3" /> auto-approve
+                                  </span>
+                                )}
+                                {vendorSuspended && s.status === 'active' && (
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] rounded bg-amber-50 text-amber-700 border border-amber-200" title="Vendor is suspended; the generator will skip this subscription">
+                                    <Ban className="w-3 h-3" /> vendor suspended — won&apos;t generate
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold text-slate-900">{numberFmt(s.amount)}</td>
+                            <td className="px-4 py-3 text-sm text-slate-700">
+                              {FREQUENCY_LABELS[s.frequency] || s.frequency}
+                              {s.anchorDay ? <span className="text-xs text-slate-500 block">day {s.anchorDay}</span> : null}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-600">
+                              {fmtDate(s.nextDueDate)}
+                              {s.endDate && <span className="block text-[10px] text-slate-400">ends {fmtDate(s.endDate)}</span>}
+                            </td>
+                            <td className="px-4 py-3"><SubStatusChip status={s.status} /></td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-2 flex-wrap">
+                                {s.status !== 'cancelled' && (
+                                  <button
+                                    onClick={() => runGenerate(s._id)}
+                                    disabled={generating}
+                                    className="px-3 py-1.5 rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50 flex items-center gap-1.5 disabled:opacity-50"
+                                    title="Generate this subscription's due bills now"
+                                  >
+                                    <Zap className="w-4 h-4" /> Generate
+                                  </button>
+                                )}
+                                {s.status === 'active' && (
+                                  <button
+                                    onClick={() => setSubStatus(s, 'paused')}
+                                    disabled={actingSubId === s._id}
+                                    className="px-3 py-1.5 rounded-lg border text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 disabled:opacity-50"
+                                  >
+                                    {actingSubId === s._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pause className="w-4 h-4" />} Pause
+                                  </button>
+                                )}
+                                {s.status === 'paused' && (
+                                  <button
+                                    onClick={() => setSubStatus(s, 'active')}
+                                    disabled={actingSubId === s._id}
+                                    className="px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5 disabled:opacity-50"
+                                  >
+                                    {actingSubId === s._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />} Resume
+                                  </button>
+                                )}
+                                {s.status !== 'cancelled' && (
+                                  <>
+                                    <button onClick={() => openEditSub(s)} className="px-3 py-1.5 rounded-lg border text-slate-700 hover:bg-slate-50 flex items-center gap-1.5">
+                                      <Pencil className="w-4 h-4" /> Edit
+                                    </button>
+                                    <button
+                                      onClick={() => setSubStatus(s, 'cancelled', 'Cancel this subscription? This is permanent — it will stop generating bills.')}
+                                      disabled={actingSubId === s._id}
+                                      className="px-3 py-1.5 rounded-lg border text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                )}
+                                <button
+                                  onClick={() => deleteSub(s)}
+                                  disabled={deletingSubId === s._id}
+                                  className="px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 flex items-center gap-1.5 disabled:opacity-50"
+                                >
+                                  {deletingSubId === s._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 p-3 rounded-xl bg-blue-50 text-blue-700 text-sm border border-blue-200">
+              <strong>How it works:</strong> Each subscription is a template. &quot;Generate due bills&quot; creates one vendor bill per due period up to today (catching up any missed periods), skipping periods already generated and any subscription whose vendor is suspended. It is safe to run repeatedly, or to wire to a scheduled job. Bills are created as {' '}
+              <span className="font-semibold">draft</span> unless auto-approve is on.
             </div>
           </>
         )}
@@ -838,6 +1297,95 @@ export default function VendorsPage() {
                 <button type="button" className="px-4 py-2 rounded-lg border" onClick={() => setShowBillModal(false)}>Cancel</button>
                 <button type="submit" disabled={isSaving} className="px-4 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 flex items-center gap-2">
                   {isSaving && <Loader2 className="w-4 h-4 animate-spin" />} {isSaving ? 'Saving...' : editingBill ? 'Save Changes' : 'Create Bill'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== SUBSCRIPTION MODAL ===================== */}
+      {showSubModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="p-4 border-b font-semibold flex items-center justify-between">
+              <span>{editingSub ? 'Edit Subscription' : 'New Subscription'}</span>
+              <button className="p-1 rounded-lg hover:bg-slate-100" onClick={() => setShowSubModal(false)} aria-label="Close">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={submitSub} className="p-4 space-y-3 overflow-y-auto">
+              <div>
+                <label className="block text-sm font-medium mb-1">Vendor *</label>
+                <select
+                  required
+                  disabled={!!editingSub}
+                  className="w-full border rounded-xl px-3 py-2 disabled:bg-slate-50 disabled:text-slate-500"
+                  value={subForm.vendorId}
+                  onChange={(e) => setSubForm({ ...subForm, vendorId: e.target.value })}
+                >
+                  <option value="">Select vendor</option>
+                  {vendors.map((v) => (
+                    <option key={v._id} value={String(v._id)}>{v.name}{(v.status || 'active') === 'suspended' ? ' (suspended)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Amount (₹) *</label>
+                  <input required type="number" min="0.01" step="0.01" className="w-full border rounded-xl px-3 py-2" value={subForm.amount} onChange={(e) => setSubForm({ ...subForm, amount: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Frequency *</label>
+                  <select className="w-full border rounded-xl px-3 py-2" value={subForm.frequency} onChange={(e) => setSubForm({ ...subForm, frequency: e.target.value })}>
+                    {FREQUENCY_OPTIONS.map((f) => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Start Date *</label>
+                  <input required type="date" className="w-full border rounded-xl px-3 py-2" value={subForm.startDate} onChange={(e) => setSubForm({ ...subForm, startDate: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">End Date</label>
+                  <input type="date" className="w-full border rounded-xl px-3 py-2" value={subForm.endDate} onChange={(e) => setSubForm({ ...subForm, endDate: e.target.value })} />
+                </div>
+                {subForm.frequency !== 'weekly' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Anchor Day (1-31)</label>
+                    <input type="number" min="1" max="31" className="w-full border rounded-xl px-3 py-2" value={subForm.anchorDay} onChange={(e) => setSubForm({ ...subForm, anchorDay: e.target.value })} placeholder="e.g., 1" />
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium mb-1">Due In (days)</label>
+                  <input type="number" min="0" className="w-full border rounded-xl px-3 py-2" value={subForm.dueInDays} onChange={(e) => setSubForm({ ...subForm, dueInDays: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Expense Type</label>
+                <select className="w-full border rounded-xl px-3 py-2" value={subForm.expenseType} onChange={(e) => setSubForm({ ...subForm, expenseType: e.target.value })}>
+                  <option value="">Select type</option>
+                  {EXPENSE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea rows={2} className="w-full border rounded-xl px-3 py-2" value={subForm.description} onChange={(e) => setSubForm({ ...subForm, description: e.target.value })} placeholder="e.g., Office rent, SaaS licence" />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="rounded" checked={subForm.autoApprove} onChange={(e) => setSubForm({ ...subForm, autoApprove: e.target.checked })} />
+                Auto-approve generated bills (skip the draft step, ready to pay)
+              </label>
+              {!editingSub && (
+                <p className="text-xs text-slate-500">Bills are generated on the currently selected billing account. The first bill is due on the start date{subForm.frequency !== 'weekly' ? ' (normalized to the anchor day if set)' : ''}.</p>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" className="px-4 py-2 rounded-lg border" onClick={() => setShowSubModal(false)}>Cancel</button>
+                <button type="submit" disabled={isSaving} className="px-4 py-2 rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 flex items-center gap-2">
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin" />} {isSaving ? 'Saving...' : editingSub ? 'Save Changes' : 'Create Subscription'}
                 </button>
               </div>
             </form>

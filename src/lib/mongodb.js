@@ -90,6 +90,10 @@ clientPromise.then(async (resolvedClient) => {
       // Phase 2 modules
       db.collection('vendors').createIndex({ name: 1 }),
       db.collection('vendor_bills').createIndex({ vendorId: 1, status: 1, dueDate: 1 }),
+      // Recurring/subscription bills: schedules + generation idempotency
+      db.collection('vendor_subscriptions').createIndex({ vendorId: 1, status: 1 }),
+      db.collection('vendor_subscriptions').createIndex({ status: 1, nextDueDate: 1 }),
+      db.collection('vendor_bills').createIndex({ subscriptionId: 1, periodKey: 1 }, { unique: true, sparse: true }),
       db.collection('cost_centers').createIndex({ code: 1 }, { unique: true, sparse: true }),
       db.collection('fixed_assets').createIndex({ accountId: 1, status: 1 }),
       db.collection('compliance_items').createIndex({ dueDate: 1, status: 1 }),
