@@ -8,7 +8,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../../../hooks/useAuth';
 import UnauthorizedAccess from '../../../../components/UnauthorizedAccess';
-import { CURRENCIES } from '../../../../lib/finance/currency';
+// Client-safe currency list (importing lib/finance/currency here would pull the
+// server-only currency→tx→mongodb chain into the browser bundle and break the build).
+import { CURRENCIES } from '../../funds/_components/constants';
 import useBillingAccount from '../../funds/_hooks/useBillingAccount';
 
 const ACCOUNT_TYPES = [
