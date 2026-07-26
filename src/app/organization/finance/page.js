@@ -202,7 +202,7 @@ export default function FinancePage() {
   // Quick stats are real numbers from the funds summary API for the active
   // account (no account selected → dashes). Balance is cumulative; received/
   // spent are for the current year; burn/runway use the last 3 complete months.
-  const fmtMoney = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : `₹${numberFmt.format(Number(v))}`);
+  const fmtMoney = (v) => (v == null || !Number.isFinite(Number(v)) ? '—' : numberFmt(Number(v)));
   const statValue = (v) => (statsLoading ? '…' : activeAccountId && stats ? v : '—');
   const quickStats = [
     {
