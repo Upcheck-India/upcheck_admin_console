@@ -7,7 +7,7 @@ import { useAuth } from '../../hooks/useAuth';
 import UnauthorizedAccess from '../../components/UnauthorizedAccess';
 import AvatarWithStatus from '../../components/AvatarWithStatus';
 import useOnlineUsers from '../../hooks/useOnlineUsers';
-import { Wallet, ClipboardList, Calendar, Briefcase, BarChart3, Shield, Mail, MessageCircle, ChevronDown, ArrowRight } from 'lucide-react';
+import { Wallet, ClipboardList, Calendar, Briefcase, BarChart3, Shield, Mail, MessageCircle, ChevronDown, ArrowRight, KeyRound } from 'lucide-react';
 
 export default function OrganizationPage() {
   const { user, isLoading: authLoading } = useAuth(true);
@@ -99,6 +99,16 @@ export default function OrganizationPage() {
       bgGradient: 'from-purple-50 to-indigo-50',
       iconColor: 'text-purple-600',
       hoverBorder: 'group-hover:border-purple-300'
+    },
+    {
+      title: 'API / Developer',
+      desc: 'Upcheck ERP Data OAuth — register apps and grant read-only data access',
+      href: '/organization/api',
+      icon: <KeyRound className="w-6 h-6" />,
+      gradient: 'from-violet-500 via-indigo-500 to-blue-500',
+      bgGradient: 'from-violet-50 to-indigo-50',
+      iconColor: 'text-violet-600',
+      hoverBorder: 'group-hover:border-violet-300'
     }
   ];
 

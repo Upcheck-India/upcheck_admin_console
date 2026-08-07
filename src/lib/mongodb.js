@@ -118,6 +118,34 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('finance_backups').createIndex({ createdAt: -1 }),
       db.collection('finance_backup_items').createIndex({ backupId: 1, coll: 1 }),
       db.collection('finance_admin_log').createIndex({ at: -1 }),
+      // Upcheck ERP Data OAuth — authorization server + resource server.
+      // Registered apps (clientId unique for the lookup on every token/authorize).
+      db.collection('oauth_clients').createIndex({ clientId: 1 }, { unique: true }),
+      db.collection('oauth_clients').createIndex({ status: 1 }),
+      // Pending consent requests — single-use + TTL auto-cleanup.
+      db.collection('oauth_auth_requests').createIndex({ requestId: 1 }, { unique: true }),
+      db.collection('oauth_auth_requests').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      // Authorization codes — hashed, single-use, short TTL.
+      db.collection('oauth_authorization_codes').createIndex({ codeHash: 1 }, { unique: true }),
+      db.collection('oauth_authorization_codes').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      // Access tokens — hashed lookup on every resource call; TTL clears expired.
+      db.collection('oauth_access_tokens').createIndex({ tokenHash: 1 }, { unique: true }),
+      db.collection('oauth_access_tokens').createIndex({ grantId: 1 }),
+      db.collection('oauth_access_tokens').createIndex({ clientId: 1 }),
+      db.collection('oauth_access_tokens').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      // Refresh tokens — hashed; kept until expiry for rotation/reuse detection.
+      db.collection('oauth_refresh_tokens').createIndex({ tokenHash: 1 }, { unique: true }),
+      db.collection('oauth_refresh_tokens').createIndex({ grantId: 1 }),
+      db.collection('oauth_refresh_tokens').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      // Grants (connected apps) — one active per client.
+      db.collection('oauth_grants').createIndex({ grantId: 1 }, { unique: true }),
+      db.collection('oauth_grants').createIndex({ clientId: 1, status: 1 }),
+      // Append-only OAuth audit trail.
+      db.collection('oauth_audit_log').createIndex({ at: -1 }),
+      db.collection('oauth_audit_log').createIndex({ clientId: 1, at: -1 }),
+      db.collection('oauth_audit_log').createIndex({ action: 1, at: -1 }),
+      // Rate-limiter fixed windows — TTL sweeps old buckets.
+      db.collection('oauth_rate_limits').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
     ]);
   } catch (err) {
     console.error('Failed to ensure messaging indexes on startup:', err);
