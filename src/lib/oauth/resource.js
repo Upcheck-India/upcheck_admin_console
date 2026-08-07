@@ -5,9 +5,12 @@
 // ALLOWLIST — a Mongo projection that names only safe fields, plus a shaping
 // function that re-emits a stable external contract. A field can only be exposed
 // by being added here explicitly; nothing is exposed by omission. Sensitive data
-// (PAN/Aadhaar, bank details, salary, personal contact info, address, DOB,
-// emergency contacts, HR notes/exit reasons, credentials, and the portal
-// permission `role`) is therefore structurally unreachable through this API.
+// (PAN/Aadhaar, bank details, personal contact info, address, DOB, emergency
+// contacts, HR notes/exit reasons, credentials, and the portal permission
+// `role`) is therefore structurally unreachable through this API. Salary is the
+// one deliberately-gated exception: it is exposed ONLY under the sensitive
+// `hr.compensation:read` scope, via the dedicated compensation endpoint, using
+// the COMPENSATION_PROJECTION allowlist below.
 import { NextResponse } from 'next/server';
 import clientPromise from '../mongodb';
 import { extractBearer, resolveBearer } from './service';
@@ -56,6 +59,19 @@ export const PEOPLE_PROJECTION = {
   updatedAt: 1,
 };
 
+// admin_users → compensation. SENSITIVE: reachable only with the
+// `hr.compensation:read` scope, via the dedicated compensation endpoint. Reads a
+// `compensation` sub-object on the employee record. These HR fields are not yet
+// populated in the schema, so values may be null until HR begins storing them —
+// the allowlist is intentionally scaffolded so no other field can leak through.
+export const COMPENSATION_PROJECTION = {
+  _id: 1,
+  username: 1,
+  firstName: 1,
+  lastName: 1,
+  compensation: 1,
+};
+
 // ---------------------------------------------------------------------------
 // Shapers (what we WRITE to the response) — stable, versioned external contract
 // ---------------------------------------------------------------------------
@@ -67,6 +83,13 @@ const iso = (v) => {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 };
 const name = (f, l) => [f, l].filter(Boolean).join(' ').trim() || null;
+// Coerce to a finite number or null (never NaN in a response).
+const num = (v) => {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 export function shapeEmployee(doc) {
   if (!doc) return null;
@@ -108,6 +131,27 @@ export function shapePerson(doc) {
     joinDate: iso(doc.joinDate),
     createdAt: iso(doc.createdAt),
     updatedAt: iso(doc.updatedAt),
+  };
+}
+
+// Employee compensation — served only under hr.compensation:read. The shape is
+// stable even when the underlying `compensation` object is absent (all-null),
+// so consumers can code against it before HR starts populating salary data.
+export function shapeCompensation(doc) {
+  if (!doc) return null;
+  const c = doc.compensation && typeof doc.compensation === 'object' ? doc.compensation : {};
+  return {
+    employee: {
+      id: str(doc._id),
+      username: doc.username || null,
+      fullName: name(doc.firstName, doc.lastName) || doc.username || null,
+    },
+    amount: num(c.amount),
+    currency: c.currency || null,
+    payFrequency: c.payFrequency || null, // e.g. 'monthly' | 'annual'
+    ctc: num(c.ctc),
+    effectiveDate: iso(c.effectiveDate),
+    grade: c.grade || null,
   };
 }
 

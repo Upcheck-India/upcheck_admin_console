@@ -115,6 +115,7 @@ Authorization server (${origin}/api/oauth/v1):
 Resource server (${origin}/api/data/v1) — Bearer + scope required:
 - \`GET /me\` — token context
 - \`GET /hr/employees\`, \`/hr/employees/:id\` — directory (hr.employees:read)
+- \`GET /hr/employees/:id/compensation\` — salary/CTC (SENSITIVE · hr.compensation:read)
 - \`GET /hr/people\` — roster (hr.people:read)
 - \`GET /hr/departments\` — departments (hr.departments:read)
 - \`GET /hr/holidays\`, \`/hr/leave-types\` — calendar (hr.calendar:read)
@@ -141,8 +142,11 @@ Errors follow the OAuth format \`{ "error": "...", "error_description": "..." }\
 - Redirect URIs are matched exactly against your registration.
 - Tokens are opaque and stored only as hashes — keep your \`client_secret\`
   server-side; never ship it in a browser/mobile bundle.
-- Only non-sensitive HR fields are exposed. Salary, bank details, PAN/Aadhaar,
-  personal contact info, addresses, DOB, HR notes and documents are never returned.
+- The directory exposes only non-sensitive fields. Salary/compensation is
+  available separately under the sensitive \`hr.compensation:read\` scope
+  (admin-granted, via the dedicated compensation endpoint). Bank details,
+  PAN/Aadhaar, personal contact info, addresses, DOB, HR notes and documents are
+  never returned.
 - Access can be revoked instantly by an admin (per-app or per-connection).
 
 ---
@@ -204,6 +208,7 @@ ${SCOPES.map((s) => `- ${s.id} — ${s.description}`).join('\n')}
 - GET ${origin}/api/data/v1/me — token context (any valid token)
 - GET ${origin}/api/data/v1/hr/employees[?department=&status=&q=&limit=&offset=] — scope hr.employees:read
 - GET ${origin}/api/data/v1/hr/employees/:id — scope hr.employees:read
+- GET ${origin}/api/data/v1/hr/employees/:id/compensation — scope hr.compensation:read (SENSITIVE; salary/CTC. Returns { employee, amount, currency, payFrequency, ctc, effectiveDate, grade })
 - GET ${origin}/api/data/v1/hr/people[?type=&status=&department=&q=&limit=&offset=] — scope hr.people:read
 - GET ${origin}/api/data/v1/hr/departments — scope hr.departments:read
 - GET ${origin}/api/data/v1/hr/holidays[?year=&type=&limit=&offset=] — scope hr.calendar:read
@@ -222,9 +227,11 @@ temporarily_unavailable (429).
 GET ${origin}/api/oauth/v1/metadata returns endpoints, supported scopes and PKCE methods.
 
 ## Reminder
-Only non-sensitive HR fields are returned. Do not attempt to derive or request
-salary, bank details, government IDs (PAN/Aadhaar), personal contact info,
-addresses, dates of birth, HR notes, or documents — they are not exposed.
+The directory returns only non-sensitive fields. Salary/compensation is available
+ONLY via GET /hr/employees/:id/compensation and ONLY if the token holds the
+sensitive hr.compensation:read scope — request it only if the app genuinely needs
+payroll data. Bank details, government IDs (PAN/Aadhaar), personal contact info,
+addresses, dates of birth, HR notes and documents are never exposed.
 `;
 }
 
@@ -352,6 +359,7 @@ grant_type=refresh_token&refresh_token=REFRESH_TOKEN`}</Code>
           <li><code>POST /api/oauth/v1/introspect</code> — inspect a token (RFC 7662)</li>
           <li className="pt-2"><code>GET  /api/data/v1/me</code> — token context</li>
           <li><code>GET  /api/data/v1/hr/employees</code> · <code>/employees/:id</code> — directory</li>
+          <li><code>GET  /api/data/v1/hr/employees/:id/compensation</code> — salary <span className="text-amber-600 font-semibold">(sensitive · hr.compensation:read)</span></li>
           <li><code>GET  /api/data/v1/hr/people</code> — roster</li>
           <li><code>GET  /api/data/v1/hr/departments</code> — departments</li>
           <li><code>GET  /api/data/v1/hr/holidays</code> · <code>/leave-types</code> — calendar</li>
@@ -378,7 +386,7 @@ grant_type=refresh_token&refresh_token=REFRESH_TOKEN`}</Code>
           <li>PKCE (S256) is <b>mandatory</b>; <code>plain</code> is rejected.</li>
           <li>Redirect URIs are matched exactly against your registration.</li>
           <li>Tokens are opaque and stored only as hashes — keep your <code>client_secret</code> server-side; never ship it in a browser/mobile bundle.</li>
-          <li>Only non-sensitive HR fields are exposed. Salary, bank details, PAN/Aadhaar, personal contact info, addresses, DOB, HR notes and documents are never returned.</li>
+          <li>The directory exposes only non-sensitive fields. <b>Salary/compensation is available separately</b> under the sensitive <code>hr.compensation:read</code> scope (admin-granted, dedicated endpoint). Bank details, PAN/Aadhaar, personal contact info, addresses, DOB, HR notes and documents are never returned.</li>
           <li>Access can be revoked instantly by an admin (per-app or per-connection).</li>
         </ul>
 
