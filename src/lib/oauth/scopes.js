@@ -19,8 +19,8 @@ export const SCOPES = [
     description:
       'Read the staff directory: name, work email, role, department, job title, employment type & status, manager, start/end dates, location, timezone, avatar.',
     // Fields intentionally excluded are documented in resource.js; no PII,
-    // government IDs, bank details, personal contact info or salary are ever
-    // included in this scope.
+    // government IDs, bank details, personal contact info or salary are included
+    // in this scope. Salary is available separately via hr.compensation:read.
   },
   {
     id: 'hr.people:read',
@@ -43,6 +43,14 @@ export const SCOPES = [
     description:
       'Read the holiday calendar and the leave-type catalogue (org-wide reference/config data). No individual leave records.',
   },
+  {
+    id: 'hr.compensation:read',
+    label: 'Compensation (salary)',
+    resource: 'HR',
+    sensitive: true,
+    description:
+      'Read employee compensation: salary / CTC amount, currency, pay frequency and effective date. SENSITIVE — grant only to apps that genuinely need payroll data. Served only via the dedicated compensation endpoint.',
+  },
 ];
 
 const SCOPE_IDS = new Set(SCOPES.map((s) => s.id));
@@ -54,6 +62,13 @@ export function isKnownScope(id) {
 
 export function getScope(id) {
   return SCOPE_BY_ID.get(id) || null;
+}
+
+// Scopes flagged sensitive get an extra warning on the consent screen and in the
+// registration UI so an admin never grants payroll access by reflex.
+export function isSensitiveScope(id) {
+  const s = SCOPE_BY_ID.get(id);
+  return !!(s && s.sensitive);
 }
 
 export function allScopeIds() {

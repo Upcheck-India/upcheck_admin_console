@@ -59,11 +59,14 @@ under `/api/data/v1/*`. The admin console + consent UI live under
 | `hr.people:read` | People roster: employee ID, type, status, department, job title, manager, join date. |
 | `hr.departments:read` | Department list with headcount (org structure). |
 | `hr.calendar:read` | Holiday calendar and leave-type catalogue. |
+| `hr.compensation:read` | **Sensitive.** Employee compensation: salary/CTC amount, currency, pay frequency, effective date. Served only via the dedicated compensation endpoint. Grant only to apps that genuinely need payroll data. |
 
-**Never exposed by any scope:** salary/bank details, PAN/Aadhaar/UAN/PF/ESI,
-personal phone/email, address, date of birth, gender/marital/blood group,
-emergency contacts, HR notes / exit reasons / timeline, employee documents, login
-credentials/session tokens, and the portal permission `role`.
+**Never exposed by any scope:** bank details, PAN/Aadhaar/UAN/PF/ESI, personal
+phone/email, address, date of birth, gender/marital/blood group, emergency
+contacts, HR notes / exit reasons / timeline, employee documents, login
+credentials/session tokens, and the portal permission `role`. (Salary is the one
+gated exception — reachable only under the sensitive `hr.compensation:read` scope
+above.)
 
 ---
 
@@ -185,6 +188,7 @@ Authorization: Basic base64(client_id:client_secret)
 |--------|------|-------|
 | GET | `/me` | any valid token |
 | GET | `/hr/employees`, `/hr/employees/:id` | `hr.employees:read` |
+| GET | `/hr/employees/:id/compensation` | `hr.compensation:read` **(sensitive)** |
 | GET | `/hr/people` | `hr.people:read` |
 | GET | `/hr/departments` | `hr.departments:read` |
 | GET | `/hr/holidays`, `/hr/leave-types` | `hr.calendar:read` |
@@ -230,7 +234,9 @@ Resource-server 401/403 responses also set the `WWW-Authenticate: Bearer …` he
 - **Client secrets** are high-entropy, hashed, and shown once. Keep them
   server-side — never ship a secret in a browser or mobile bundle.
 - **Least privilege data** — responses are built from a field **allowlist**;
-  sensitive HR data is structurally unreachable through this API.
+  sensitive HR data is structurally unreachable, except salary, which is gated
+  behind the dedicated, admin-granted `hr.compensation:read` scope and its own
+  endpoint.
 - **Full audit trail** in `oauth_audit_log` (register, verify, consent, issue,
   refresh, revoke).
 - **Rate limiting** on `authorize` and `token`.

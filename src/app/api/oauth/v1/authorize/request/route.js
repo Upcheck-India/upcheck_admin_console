@@ -50,7 +50,7 @@ export async function GET(request) {
       redirectUri: req.redirectUri,
       scopes: (req.scopes || []).map((id) => {
         const s = getScope(id);
-        return { id, label: s?.label || id, description: s?.description || '', resource: s?.resource || '' };
+        return { id, label: s?.label || id, description: s?.description || '', resource: s?.resource || '', sensitive: !!s?.sensitive };
       }),
     });
   } catch (e) {

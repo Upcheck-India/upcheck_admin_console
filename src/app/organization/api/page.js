@@ -359,10 +359,14 @@ function RegisterModal({ onClose, onCreated }) {
         <Field label="Scopes" required hint="What the app may read. Grant the minimum it needs.">
           <div className="space-y-2">
             {SCOPES.map((s) => (
-              <label key={s.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer ${scopes.includes(s.id) ? 'border-indigo-300 bg-indigo-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+              <label key={s.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer ${scopes.includes(s.id) ? (s.sensitive ? 'border-amber-300 bg-amber-50/60' : 'border-indigo-300 bg-indigo-50/50') : 'border-slate-200 hover:border-slate-300'}`}>
                 <input type="checkbox" checked={scopes.includes(s.id)} onChange={(e) => setScopes(e.target.checked ? [...scopes, s.id] : scopes.filter((x) => x !== s.id))} className="mt-0.5" />
                 <div>
-                  <div className="flex items-center gap-2"><span className="font-medium text-sm text-slate-800">{s.label}</span><code className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{s.id}</code></div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-sm text-slate-800">{s.label}</span>
+                    <code className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">{s.id}</code>
+                    {s.sensitive && <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200"><AlertTriangle className="w-3 h-3" />Sensitive</span>}
+                  </div>
                   <p className="text-xs text-slate-500 mt-0.5">{s.description}</p>
                 </div>
               </label>
