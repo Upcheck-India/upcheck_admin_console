@@ -1,67 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
-import { hasPermission } from '../../../../../../lib/dataroom/permission-checker';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const adminToken = request.cookies.get('admin_token')?.value;
-    const client = await clientPromise;
-    const db = client.db('resources');
-
-    if (adminToken) {
-      const user = await db.collection('admin_users').findOne(
-        { sessionToken: adminToken },
-        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-      );
-      if (user) return user;
-    }
-
-    // Check external user authentication
-    const externalToken = request.cookies.get('external_user_token')?.value;
-    if (externalToken) {
-      const externalUser = await db.collection('dataroom_external_users').findOne(
-        { sessionToken: externalToken },
-        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
-      );
-      if (externalUser) {
-        return {
-          _id: externalUser._id,
-          id: externalUser._id.toString(),
-          email: externalUser.email,
-          username: externalUser.name,
-          role: externalUser.role || 'External User',
-          isExternal: true
-        };
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error fetching user from token:', error);
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/view - Stream document securely for viewing
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = await params;
+//
+// Identity, the `view` grant, room expiry and the room IP whitelist are all
+// enforced by the wrapper before this handler runs.
+export const GET = withDataroomAuth(
+  async (request, { user, db, params, room, capabilities }) => {
+    const { id } = params;
     const { searchParams } = new URL(request.url);
     const chunk = searchParams.get('chunk'); // For chunk-based streaming
-
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: 'Invalid document ID' }, { status: 400 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Get document
     const document = await db.collection('dataroom_documents').findOne({
@@ -72,24 +22,6 @@ export async function GET(request, { params }) {
     if (!document) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
-
-    // Check view permission
-    const canView = await hasPermission({
-      user,
-      resourceType: 'document',
-      resourceId: id,
-      permission: 'view',
-      roomId: document.roomId,
-    });
-
-    if (!canView) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // Get room settings
-    const room = await db.collection('dataroom_rooms').findOne({
-      _id: document.roomId,
-    });
 
     // Track view
     await db.collection('dataroom_documents').updateOne(
@@ -193,6 +125,14 @@ export async function GET(request, { params }) {
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'X-Content-Type-Options': 'nosniff',
           'X-Frame-Options': 'SAMEORIGIN',
+          // Effective capabilities for this viewer on this document, so the UI
+          // can hide controls it must not offer. These are advisory while the
+          // viewer still delegates rendering to the browser's native PDF
+          // plugin, whose own Download and Print buttons ignore them — see
+          // CAPABILITY_PERMISSIONS in lib/dataroom/withDataroomAuth.js.
+          'X-Dataroom-Can-Download': String(!!capabilities?.canDownload),
+          'X-Dataroom-Can-Print': String(!!capabilities?.canPrint),
+          'X-Dataroom-Can-Comment': String(!!capabilities?.canComment),
         },
       });
 
@@ -200,9 +140,11 @@ export async function GET(request, { params }) {
       console.error('GridFS streaming error:', gridfsError);
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 });
     }
-
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/view error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'document', param: 'id' },
+    allowExternal: true,
+    capabilities: true,
+  },
+);

@@ -1,61 +1,36 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
 import { hasPermission, PERMISSION_TYPES } from '../../../../lib/dataroom/permission-checker';
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 const SHAREABLE_RESOURCE_TYPES = ['document', 'folder', 'room'];
 
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
+/**
+ * Both handlers act on a resource named by (resourceType, resourceId) rather
+ * than by a route param, so the type is resolved dynamically. The wrapper
+ * rejects any type outside its known set, so an unexpected value fails closed.
+ */
+function resourceFromQuery(request) {
+  const sp = new URL(request.url).searchParams;
+  const type = sp.get('resourceType');
+  const id = sp.get('resourceId');
+  return type && id ? { type, id } : null;
 }
 
 // GET /api/dataroom/share - List shares for a resource
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+//
+// These records contain live `shareToken` values — listing them was previously
+// open to any authenticated account for any resource, which handed out working
+// access tokens on request. `admin` on the resource is now required.
+export const GET = withDataroomAuth(
+  async (request, { db }) => {
     const { searchParams } = new URL(request.url);
     const resourceType = searchParams.get('resourceType');
     const resourceId = searchParams.get('resourceId');
 
     if (!resourceType || !resourceId || !ObjectId.isValid(resourceId)) {
       return NextResponse.json({ error: 'Valid resourceType and resourceId required' }, { status: 400 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
-
-    // ACCESS CONTROL. These records contain live `shareToken` values — listing
-    // them was previously open to any authenticated account for any resource,
-    // which handed out working access tokens on request. Only someone who
-    // administers the resource may enumerate its shares.
-    const canAdminister = await hasPermission({
-      user,
-      resourceType,
-      resourceId,
-      permission: 'admin',
-    });
-
-    if (!canAdminister) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const shares = await db.collection('dataroom_shares')
@@ -67,19 +42,17 @@ export async function GET(request) {
       .toArray();
 
     return NextResponse.json({ shares });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/share error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  { requires: 'admin', resolve: resourceFromQuery },
+);
 
 // POST /api/dataroom/share - Create a new share link
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+//
+// Previously created a working share token for any resourceId supplied, for any
+// authenticated caller. `admin` on the resource is now required by the wrapper,
+// and the delegated permissions are capped to what the sharer holds below.
+export const POST = withDataroomAuth(
+  async (request, { user, db }) => {
     const body = await request.json();
     const { resourceType, resourceId, roomId, targetEmail, permissions, expiresAt } = body;
 
@@ -103,24 +76,8 @@ export async function POST(request) {
       );
     }
 
-    // ACCESS CONTROL. This endpoint previously created a working share token
-    // for any resourceId supplied, for any authenticated caller — exfiltration
-    // without even needing to stay logged in.
-    const canAdminister = await hasPermission({
-      user,
-      resourceType,
-      resourceId,
-      permission: 'admin',
-      roomId: roomId || null,
-    });
-
-    if (!canAdminister) {
-      return NextResponse.json(
-        { error: 'You do not have permission to share this resource' },
-        { status: 403 },
-      );
-    }
-
+    // `admin` on the resource is enforced by the wrapper.
+    //
     // A share must never grant more than the sharer holds. Administering the
     // resource implies all of them today, but checking each delegated
     // permission explicitly means this stays correct if sharing is later opened
@@ -140,9 +97,6 @@ export async function POST(request) {
         );
       }
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Generate unique share token
     const shareToken = crypto.randomBytes(32).toString('hex');
@@ -194,9 +148,16 @@ export async function POST(request) {
       shareToken,
       message: 'Share link created successfully',
     });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/share error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    // resourceType/resourceId arrive in the JSON body; read a clone so the
+    // handler can still consume the request stream itself.
+    resolve: async (request) => {
+      const body = await request.clone().json().catch(() => ({}));
+      return body?.resourceType && body?.resourceId
+        ? { type: String(body.resourceType), id: String(body.resourceId) }
+        : null;
+    },
+  },
+);

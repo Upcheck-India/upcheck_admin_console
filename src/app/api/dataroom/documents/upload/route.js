@@ -1,28 +1,9 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { scanFile } from '../../../../../lib/dataroom/virus-scanner';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { hasPermission } from '../../../../../lib/dataroom/permission-checker';
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 
 // Allowed file types
 const ALLOWED_TYPES = [
@@ -44,12 +25,16 @@ const ALLOWED_TYPES = [
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 // POST /api/dataroom/documents/upload - Upload file to GridFS and create document
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
+//
+// selfScoped: the destination roomId arrives inside the multipart body. Having
+// the wrapper resolve it would mean parsing the whole upload twice — for a
+// 100 MB file that is not acceptable — so the room grant is checked here,
+// immediately after the form is parsed and before anything is written.
+//
+// Phase 3 rewrites this route to stream into lib/storage; at that point roomId
+// moves to a query parameter and this check moves back into the wrapper.
+export const POST = withDataroomAuth(
+  async (request, { user, db }) => {
     const formData = await request.formData();
     const file = formData.get('file');
     const roomId = formData.get('roomId');
@@ -65,6 +50,26 @@ export async function POST(request) {
 
     if (!roomId || !ObjectId.isValid(roomId)) {
       return NextResponse.json({ error: 'Valid roomId is required' }, { status: 400 });
+    }
+
+    // ACCESS CONTROL. Replaces a blanket admin-only gate: a room manager who is
+    // not a platform admin can now upload into rooms they administer, and an
+    // admin's access is a recorded grant rather than a role side-effect.
+    // Checked before the virus scan so an unauthorised caller cannot use this
+    // endpoint as a free scanning service.
+    const canUpload = await hasPermission({
+      user,
+      resourceType: 'room',
+      resourceId: roomId,
+      permission: 'edit',
+      roomId,
+    });
+
+    if (!canUpload) {
+      return NextResponse.json(
+        { error: 'You do not have permission to upload to this room' },
+        { status: 403 },
+      );
     }
 
     // Validate file size
@@ -103,9 +108,6 @@ export async function POST(request) {
         viruses: scanResult.viruses,
       }, { status: 403 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify room exists
     const room = await db.collection('dataroom_rooms').findOne({
@@ -267,9 +269,6 @@ export async function POST(request) {
         fileHash: scanResult.fileHash,
       }
     }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/documents/upload error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  { selfScoped: true },
+);

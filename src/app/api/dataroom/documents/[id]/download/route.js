@@ -1,41 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
-import { hasPermission } from '../../../../../../lib/dataroom/permission-checker';
-import { validateIpWhitelist, isRoomExpired, getClientIp } from '../../../../../../lib/dataroom/security';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/download - Download document file
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { id } = await params;
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: 'Invalid document ID' }, { status: 400 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
+//
+// Identity, the `download` grant, room expiry and the room IP whitelist are all
+// enforced by the wrapper before this handler runs. Only the room's own
+// allowDownload setting is left here, since it is a room policy rather than a
+// per-principal grant.
+export const GET = withDataroomAuth(
+  async (request, { user, db, params, room, isAdmin }) => {
+    const { id } = params;
 
     // Get document metadata
     const document = await db.collection('dataroom_documents').findOne({
@@ -51,55 +27,10 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'No file associated with this document' }, { status: 404 });
     }
 
-    // Get room and perform security checks
-    const room = await db.collection('dataroom_rooms').findOne({
-      _id: document.roomId,
-      isDeleted: { $ne: true },
-    });
-
-    if (!room) {
-      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
-    }
-
-    // SECURITY: Check if room has expired
-    if (isRoomExpired(room)) {
-      return NextResponse.json({ error: 'This room has expired' }, { status: 403 });
-    }
-
-    // SECURITY: Check IP whitelist
-    const clientIp = getClientIp(request);
-    if (!validateIpWhitelist(clientIp, room.ipWhitelist)) {
-      await logAudit({
-        action: 'IP_WHITELIST_VIOLATION',
-        resourceType: 'document',
-        resourceId: id,
-        roomId: document.roomId,
-        user,
-        details: { clientIp, deniedAccess: true },
-        request,
-      });
-      return NextResponse.json({ error: 'Access denied: IP not whitelisted' }, { status: 403 });
-    }
-
-    // SECURITY: Check granular permissions
-    const canDownload = await hasPermission({
-      user,
-      permission: 'download',
-      resourceType: 'document',
-      resourceId: id,
-      roomId: room._id.toString(),
-    });
-
-    if (!canDownload && user.role !== 'Admin' && user.role !== 'Console admin') {
-      return NextResponse.json({ error: 'You do not have download permission for this document' }, { status: 403 });
-    }
-
-    // Check room settings for download permission
-    if (room.settings && room.settings.allowDownload === false) {
-      // Check if user is admin (admins can always download)
-      if (user.role !== 'Admin' && user.role !== 'Console admin') {
-        return NextResponse.json({ error: 'Downloads are disabled for this room' }, { status: 403 });
-      }
+    // Room-wide download switch. Admins retain access so they can turn it back
+    // off if it was flipped by mistake.
+    if (room?.settings?.allowDownload === false && !isAdmin) {
+      return NextResponse.json({ error: 'Downloads are disabled for this room' }, { status: 403 });
     }
 
     // Get file from GridFS
@@ -161,9 +92,10 @@ export async function GET(request, { params }) {
     headers.set('Content-Length', buffer.length.toString());
 
     return new NextResponse(buffer, { headers });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/download error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'download',
+    resource: { type: 'document', param: 'id' },
+    allowExternal: true,
+  },
+);

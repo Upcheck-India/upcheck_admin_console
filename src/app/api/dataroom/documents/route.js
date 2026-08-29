@@ -1,35 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
 import { getAccessibleDocumentsFilter } from '../../../../lib/dataroom/permission-checker';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents - List documents
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+//
+// selfScoped: this endpoint filters its own results through
+// getAccessibleDocumentsFilter rather than checking a single resource, so the
+// wrapper's per-resource gate does not apply. The scoping lives in the query
+// below and must stay there.
+export const GET = withDataroomAuth(
+  async (request, { user, db }) => {
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
     const folderId = searchParams.get('folderId');
@@ -37,9 +19,6 @@ export async function GET(request) {
     const docType = searchParams.get('type');
     const limit = Math.min(Number.parseInt(searchParams.get('limit') || '50', 10), 200);
     const skip = Number.parseInt(searchParams.get('skip') || '0', 10);
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const filter = { isDeleted: { $ne: true } };
 
@@ -103,19 +82,18 @@ export async function GET(request) {
       limit,
       items: documents,
     });
-  } catch (error) {
-    console.error('GET /api/dataroom/documents error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  { selfScoped: true, allowExternal: true },
+);
 
 // POST /api/dataroom/documents - Create document metadata (file upload handled separately)
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
+//
+// Requires the `edit` grant on the destination room. This replaces a blanket
+// admin-only check: a room manager who is not a platform admin can now add
+// documents to rooms they administer, and access is decided by a recorded
+// grant rather than by role alone.
+export const POST = withDataroomAuth(
+  async (request, { user, db }) => {
     const body = await request.json();
     const {
       roomId,
@@ -138,9 +116,6 @@ export async function POST(request) {
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return NextResponse.json({ error: 'Document name is required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify room exists
     const room = await db.collection('dataroom_rooms').findOne({
@@ -257,9 +232,14 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ ...newDocument, _id: result.insertedId }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/documents error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    // roomId arrives in the JSON body. The wrapper must not consume the request
+    // stream the handler still needs, so read a clone.
+    resolve: async (request) => {
+      const body = await request.clone().json().catch(() => ({}));
+      return body?.roomId ? { type: 'room', id: String(body.roomId) } : null;
+    },
+  },
+);
