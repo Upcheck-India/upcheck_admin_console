@@ -139,15 +139,9 @@ export async function POST(request) {
       expiresAt: new Date(Date.now() + 10 * 60 * 1000), // Auto-expire after 10 minutes
     });
 
-    // Create TTL index if not exists
-    try {
-      await db.collection('dataroom_activity_heartbeat').createIndex(
-        { expiresAt: 1 },
-        { expireAfterSeconds: 0 }
-      );
-    } catch (e) {
-      // Index might already exist
-    }
+    // The TTL index is ensured once at startup in lib/mongodb.js. It used to
+    // be created here, meaning an extra round-trip on every heartbeat — one
+    // per viewer every 30 seconds.
 
     return NextResponse.json({ success: true });
 

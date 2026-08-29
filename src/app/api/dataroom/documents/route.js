@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
+import { getAccessibleDocumentsFilter } from '../../../../lib/dataroom/permission-checker';
 
 async function getUserFromToken(request) {
   try {
@@ -72,14 +73,27 @@ export async function GET(request) {
       filter.documentType = docType;
     }
 
+    // ACCESS CONTROL. Without this the endpoint returned every document in
+    // every room to any authenticated account — and with no `roomId`, the
+    // entire corpus. The filter mirrors hasPermission's additive grant
+    // semantics (room OR folder OR document grant, or authorship); it is null
+    // only for Admin / Console admin, who may see everything.
+    //
+    // Combined under $and so it can never be clobbered by the caller-supplied
+    // `search` clause, which also uses $or.
+    const accessFilter = await getAccessibleDocumentsFilter(user);
+    const scopedFilter = accessFilter
+      ? { $and: [filter, accessFilter] }
+      : filter;
+
     const [documents, total] = await Promise.all([
       db.collection('dataroom_documents')
-        .find(filter)
+        .find(scopedFilter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .toArray(),
-      db.collection('dataroom_documents').countDocuments(filter),
+      db.collection('dataroom_documents').countDocuments(scopedFilter),
     ]);
 
     return NextResponse.json({

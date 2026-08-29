@@ -50,7 +50,10 @@ clientPromise.then(async (resolvedClient) => {
 clientPromise.then(async (resolvedClient) => {
   try {
     const db = resolvedClient.db('resources');
-    await Promise.all([
+    // allSettled, not all: a single index that cannot be built (a unique index
+    // over data that already has duplicates, say) must not mask the outcome of
+    // the ~120 others. Each failure is reported on its own below.
+    const indexResults = await Promise.allSettled([
       // Auth — hit on every single API request
       db.collection('admin_sessions').createIndex({ token: 1 }),
       db.collection('admin_users').createIndex({ sessionToken: 1 }, { sparse: true }),
@@ -146,9 +149,93 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('oauth_audit_log').createIndex({ action: 1, at: -1 }),
       // Rate-limiter fixed windows — TTL sweeps old buckets.
       db.collection('oauth_rate_limits').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+
+      // ─── Data room ────────────────────────────────────────────────────
+      // These 20 collections had NO indexes at all: the only two in the
+      // codebase lived in /api/dataroom/init, which ran once, manually, and
+      // only if dataroom_folders did not yet exist. Every permission check
+      // was a COLLSCAN, and hasPermission fires up to a dozen of them per
+      // call — the single largest source of the module's latency.
+
+      // Permissions — the hottest path. Read on every access decision, both
+      // by resource (hasPermission) and by principal (getAccessibleDocumentsFilter).
+      db.collection('dataroom_permissions').createIndex({ resourceType: 1, resourceId: 1 }),
+      db.collection('dataroom_permissions').createIndex({ userId: 1 }),
+      db.collection('dataroom_permissions').createIndex({ userEmail: 1 }),
+      db.collection('dataroom_permissions').createIndex({ groupId: 1 }, { sparse: true }),
+      db.collection('dataroom_permissions').createIndex({ teamId: 1 }, { sparse: true }),
+      db.collection('dataroom_permissions').createIndex({ expiresAt: 1 }, { sparse: true }),
+
+      // Documents — listing, foldering, and the per-room index counter.
+      db.collection('dataroom_documents').createIndex({ roomId: 1, folderId: 1, isDeleted: 1 }),
+      db.collection('dataroom_documents').createIndex({ roomId: 1, indexNumber: -1 }),
+      db.collection('dataroom_documents').createIndex({ roomId: 1, createdAt: -1 }),
+      db.collection('dataroom_documents').createIndex({ 'createdBy.id': 1 }),
+      db.collection('dataroom_documents').createIndex({ name: 1 }),
+
+      // Folders — hierarchy walks and the materialized path.
+      // Name pinned to match the index /api/dataroom/init used to create —
+      // same keys under a different name is an error, not a no-op.
+      db.collection('dataroom_folders').createIndex(
+        { roomId: 1, path: 1 },
+        { unique: true, name: 'room_path_unique' },
+      ),
+      db.collection('dataroom_folders').createIndex({ roomId: 1, parentId: 1 }),
+
+      // Rooms — ownership filter on the room list, plus expiry sweeps.
+      db.collection('dataroom_rooms').createIndex({ ownerId: 1 }),
+      db.collection('dataroom_rooms').createIndex({ isDeleted: 1, expiresAt: 1 }),
+
+      // Audit trail — always read newest-first, scoped to a room or resource.
+      db.collection('dataroom_audit_log').createIndex({ timestamp: -1 }),
+      db.collection('dataroom_audit_log').createIndex({ roomId: 1, timestamp: -1 }),
+      db.collection('dataroom_audit_log').createIndex({ resourceType: 1, resourceId: 1, timestamp: -1 }),
+      db.collection('dataroom_audit_log').createIndex({ userId: 1, timestamp: -1 }),
+
+      // External users — sessionToken is hit on every external request.
+      db.collection('dataroom_external_users').createIndex({ sessionToken: 1 }, { sparse: true }),
+      db.collection('dataroom_external_users').createIndex({ email: 1 }, { unique: true }),
+
+      // Shares — token lookup must be unique and indexed; it is a credential.
+      db.collection('dataroom_shares').createIndex({ shareToken: 1 }, { unique: true }),
+      db.collection('dataroom_shares').createIndex({ resourceType: 1, resourceId: 1 }),
+      db.collection('dataroom_shares').createIndex({ targetEmail: 1 }),
+
+      // Versions, analytics, groups.
+      db.collection('dataroom_versions').createIndex({ documentId: 1, versionNumber: -1 }),
+      db.collection('dataroom_analytics').createIndex({ documentId: 1, userId: 1 }),
+      db.collection('dataroom_analytics').createIndex({ roomId: 1 }),
+      db.collection('dataroom_user_groups').createIndex({ 'members.userId': 1 }),
+      db.collection('dataroom_user_groups').createIndex({ 'members.email': 1 }),
+
+      // Per-room feature collections — all queried by room, newest first.
+      db.collection('dataroom_comments').createIndex({ documentId: 1, createdAt: -1 }),
+      db.collection('dataroom_tasks').createIndex({ roomId: 1, status: 1 }),
+      db.collection('dataroom_qa').createIndex({ roomId: 1, createdAt: -1 }),
+      db.collection('dataroom_workflows').createIndex({ roomId: 1, status: 1 }),
+      db.collection('dataroom_access_requests').createIndex({ roomId: 1, status: 1 }),
+      db.collection('dataroom_signatures').createIndex({ roomId: 1, userId: 1, type: 1 }),
+      db.collection('dataroom_metadata_templates').createIndex({ roomId: 1 }),
+      db.collection('dataroom_parties').createIndex({ roomId: 1 }),
+      db.collection('dataroom_ip_whitelist').createIndex({ roomId: 1 }),
+      db.collection('dataroom_activity_heartbeat').createIndex({ documentId: 1, updatedAt: -1 }),
+      // Presence rows self-expire. Previously created inside the heartbeat
+      // handler itself, costing a round-trip per beat, per viewer.
+      db.collection('dataroom_activity_heartbeat').createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0 },
+      ),
     ]);
+
+    const failed = indexResults.filter((r) => r.status === 'rejected');
+    if (failed.length) {
+      console.error(
+        `Failed to ensure ${failed.length} of ${indexResults.length} index(es) on startup:`,
+      );
+      for (const f of failed) console.error('  -', f.reason?.message || f.reason);
+    }
   } catch (err) {
-    console.error('Failed to ensure messaging indexes on startup:', err);
+    console.error('Failed to ensure indexes on startup:', err);
   }
 }).catch(() => {});
 

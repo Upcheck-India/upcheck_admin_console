@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
+import { hasPermission, PERMISSION_TYPES } from '../../../../lib/dataroom/permission-checker';
+
+const SHAREABLE_RESOURCE_TYPES = ['document', 'folder', 'room'];
 
 async function getUserFromToken(request) {
   try {
@@ -40,6 +43,21 @@ export async function GET(request) {
     const client = await clientPromise;
     const db = client.db('resources');
 
+    // ACCESS CONTROL. These records contain live `shareToken` values — listing
+    // them was previously open to any authenticated account for any resource,
+    // which handed out working access tokens on request. Only someone who
+    // administers the resource may enumerate its shares.
+    const canAdminister = await hasPermission({
+      user,
+      resourceType,
+      resourceId,
+      permission: 'admin',
+    });
+
+    if (!canAdminister) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const shares = await db.collection('dataroom_shares')
       .find({
         resourceType,
@@ -71,6 +89,56 @@ export async function POST(request) {
 
     if (!targetEmail || !permissions || !Array.isArray(permissions)) {
       return NextResponse.json({ error: 'targetEmail and permissions required' }, { status: 400 });
+    }
+
+    if (!SHAREABLE_RESOURCE_TYPES.includes(resourceType)) {
+      return NextResponse.json({ error: 'Invalid resourceType' }, { status: 400 });
+    }
+
+    const unknownPermissions = permissions.filter((p) => !PERMISSION_TYPES.includes(p));
+    if (unknownPermissions.length) {
+      return NextResponse.json(
+        { error: `Unknown permission(s): ${unknownPermissions.join(', ')}` },
+        { status: 400 },
+      );
+    }
+
+    // ACCESS CONTROL. This endpoint previously created a working share token
+    // for any resourceId supplied, for any authenticated caller — exfiltration
+    // without even needing to stay logged in.
+    const canAdminister = await hasPermission({
+      user,
+      resourceType,
+      resourceId,
+      permission: 'admin',
+      roomId: roomId || null,
+    });
+
+    if (!canAdminister) {
+      return NextResponse.json(
+        { error: 'You do not have permission to share this resource' },
+        { status: 403 },
+      );
+    }
+
+    // A share must never grant more than the sharer holds. Administering the
+    // resource implies all of them today, but checking each delegated
+    // permission explicitly means this stays correct if sharing is later opened
+    // up to non-administrators.
+    for (const permission of permissions) {
+      const holdsIt = await hasPermission({
+        user,
+        resourceType,
+        resourceId,
+        permission,
+        roomId: roomId || null,
+      });
+      if (!holdsIt) {
+        return NextResponse.json(
+          { error: `You cannot grant "${permission}" because you do not hold it` },
+          { status: 403 },
+        );
+      }
     }
 
     const client = await clientPromise;
