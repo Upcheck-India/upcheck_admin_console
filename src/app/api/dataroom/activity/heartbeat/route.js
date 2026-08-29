@@ -1,42 +1,6 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) {
-      const externalToken = request.cookies.get('external_user_token')?.value;
-      if (!externalToken) return null;
-      
-      const client = await clientPromise;
-      const db = client.db('resources');
-      const externalUser = await db.collection('dataroom_external_users').findOne(
-        { sessionToken: externalToken },
-        { projection: { _id: 1, email: 1, name: 1, role: 1 } }
-      );
-      
-      if (externalUser) {
-        return {
-          ...externalUser,
-          username: externalUser.name,
-          isExternal: true,
-        };
-      }
-      return null;
-    }
-    
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user ? { ...user, isExternal: false } : null;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 
 function parseUserAgent(userAgent) {
   const ua = userAgent || '';
@@ -97,10 +61,8 @@ async function getLocationFromIP(ip) {
 }
 
 // POST /api/dataroom/activity/heartbeat - Record user activity heartbeat
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const { documentId, roomId, action = 'viewing' } = body;
@@ -108,9 +70,6 @@ export async function POST(request) {
     if (!documentId || !ObjectId.isValid(documentId)) {
       return NextResponse.json({ error: 'Valid documentId is required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Parse request info
     const userAgent = request.headers.get('user-agent');
@@ -144,9 +103,9 @@ export async function POST(request) {
     // per viewer every 30 seconds.
 
     return NextResponse.json({ success: true });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/activity/heartbeat error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    selfScoped: true,
+    allowExternal: true,
+  },
+);

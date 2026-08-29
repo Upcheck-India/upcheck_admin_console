@@ -1,29 +1,11 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/tasks - List tasks
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
@@ -31,9 +13,6 @@ export async function GET(request) {
     const assignedTo = searchParams.get('assignedTo');
     const status = searchParams.get('status'); // pending | in_progress | completed | cancelled
     const priority = searchParams.get('priority'); // low | medium | high | urgent
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const filter = { isDeleted: { $ne: true } };
 
@@ -72,18 +51,16 @@ export async function GET(request) {
       count: tasks.length,
       tasks,
     });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/tasks error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);
 
 // POST /api/dataroom/tasks - Create task
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const {
@@ -110,9 +87,6 @@ export async function POST(request) {
     if (!assignedToEmail || !assignedToEmail.includes('@')) {
       return NextResponse.json({ error: 'Valid assignedToEmail is required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify room exists
     const room = await db.collection('dataroom_rooms').findOne({
@@ -181,9 +155,9 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ ...newTask, _id: result.insertedId }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/tasks error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);

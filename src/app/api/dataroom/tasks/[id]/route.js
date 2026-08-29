@@ -1,37 +1,16 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit } from '../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth, roomOf } from '../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/tasks/[id] - Get single task
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const task = await db.collection('dataroom_tasks').findOne({
       _id: new ObjectId(id),
@@ -43,17 +22,16 @@ export async function GET(request, { params }) {
     }
 
     return NextResponse.json(task);
-  } catch (error) {
-    console.error('GET /api/dataroom/tasks/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resolve: roomOf('dataroom_tasks', 'id'),
+  },
+);
 
 // PUT /api/dataroom/tasks/[id] - Update task
-export async function PUT(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const PUT = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -72,9 +50,6 @@ export async function PUT(request, { params }) {
       dueDate,
       addComment,
     } = body;
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const task = await db.collection('dataroom_tasks').findOne({
       _id: new ObjectId(id),
@@ -150,26 +125,21 @@ export async function PUT(request, { params }) {
 
     const updated = await db.collection('dataroom_tasks').findOne({ _id: new ObjectId(id) });
     return NextResponse.json(updated);
-
-  } catch (error) {
-    console.error('PUT /api/dataroom/tasks/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resolve: roomOf('dataroom_tasks', 'id'),
+  },
+);
 
 // DELETE /api/dataroom/tasks/[id] - Delete task
-export async function DELETE(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const DELETE = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid task ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const task = await db.collection('dataroom_tasks').findOne({ _id: new ObjectId(id) });
 
@@ -200,9 +170,9 @@ export async function DELETE(request, { params }) {
     });
 
     return NextResponse.json({ success: true });
-
-  } catch (error) {
-    console.error('DELETE /api/dataroom/tasks/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resolve: roomOf('dataroom_tasks', 'id'),
+  },
+);

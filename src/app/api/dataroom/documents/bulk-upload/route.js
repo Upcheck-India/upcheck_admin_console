@@ -1,25 +1,9 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { scanFile } from '../../../../../lib/dataroom/virus-scanner';
 import crypto from 'crypto';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 
 const ALLOWED_FILE_TYPES = [
   'application/pdf',
@@ -44,12 +28,8 @@ const ALLOWED_FILE_TYPES = [
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
 // POST /api/dataroom/documents/bulk-upload - Bulk upload multiple documents
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const formData = await request.formData();
     const files = formData.getAll('files');
@@ -69,9 +49,6 @@ export async function POST(request) {
     if (!roomId || !ObjectId.isValid(roomId)) {
       return NextResponse.json({ error: 'Valid roomId required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
     const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
 
     // Verify room exists
@@ -271,9 +248,8 @@ export async function POST(request) {
       message: `Bulk upload completed: ${results.successful.length} succeeded, ${results.failed.length} failed`,
       results,
     }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/documents/bulk-upload error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    selfScoped: true,
+  },
+);

@@ -226,6 +226,52 @@ async function loadRoomForResource(db, ref, fallbackRoomId) {
 }
 
 /**
+ * Build a `resolve` function for routes scoped to a secondary entity — a task,
+ * Q&A thread, workflow, viewer group, metadata template, share record.
+ *
+ * Grants are only ever stored against a room, folder or document, so
+ * permission on one of these entities means permission on its room. This looks
+ * the entity up by id and hands the wrapper the room it belongs to.
+ *
+ *   resolve: roomOf('dataroom_tasks', 'id')
+ */
+export function roomOf(collection, param = 'id', field = 'roomId') {
+  return async function resolveRoomOf(request, params) {
+    const id = params?.[param];
+    if (!id || !ObjectId.isValid(id)) return null;
+
+    const client = await clientPromise;
+    const db = client.db('resources');
+    const doc = await db
+      .collection(collection)
+      .findOne({ _id: new ObjectId(id) }, { projection: { [field]: 1 } });
+
+    const roomId = doc?.[field];
+    return roomId ? { type: 'room', id: roomId.toString() } : null;
+  };
+}
+
+/**
+ * Build a `resolve` function for routes whose target arrives in a JSON body.
+ * Reads a clone so the handler can still consume the request stream, and
+ * returns null for non-JSON bodies (multipart uploads must not be parsed
+ * twice — those routes use `selfScoped` and check inline instead).
+ */
+export function resourceFromBody(typeKey, idKey, fixedType = null) {
+  return async function resolveFromBody(request) {
+    const contentType = request.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
+
+    const body = await request.clone().json().catch(() => null);
+    if (!body) return null;
+
+    const type = fixedType || body[typeKey];
+    const id = body[idKey];
+    return type && id ? { type: String(type), id: String(id) } : null;
+  };
+}
+
+/**
  * Wrap a data room route handler with identity, room and permission checks.
  *
  * @param {Function} handler  (request, ctx) => Response

@@ -1,41 +1,15 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/analytics - Get analytics for room or document
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
     const documentId = searchParams.get('documentId');
     const type = searchParams.get('type') || 'summary'; // summary, engagement, users
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     if (type === 'summary') {
       // Overall room or document summary
@@ -165,9 +139,9 @@ export async function GET(request) {
     }
 
     return NextResponse.json({ error: 'Invalid analytics type' }, { status: 400 });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/analytics error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);

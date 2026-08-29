@@ -1,37 +1,16 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../../lib/mongodb';
 import { GridFSBucket, ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/versions/[versionId] - Get specific version
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id, versionId } = await params;
 
     if (!ObjectId.isValid(id) || !ObjectId.isValid(versionId)) {
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Get the document
     const document = await db.collection('dataroom_documents').findOne({
@@ -77,9 +56,9 @@ export async function GET(request, { params }) {
       console.error('GridFS download error:', gridfsError);
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 });
     }
-
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/versions/[versionId] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'document', param: 'id' },
+  },
+);

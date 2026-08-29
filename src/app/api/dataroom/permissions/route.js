@@ -1,35 +1,12 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
 import { grantPermission, getResourcePermissions } from '../../../../lib/dataroom/permission-checker';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth, resourceFromBody } from '../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/permissions - Get permissions for a resource
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const resourceType = searchParams.get('resourceType');
@@ -51,18 +28,16 @@ export async function GET(request) {
       count: permissions.length,
       permissions,
     });
-  } catch (error) {
-    console.error('GET /api/dataroom/permissions error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resolve: resourceFromBody('resourceType', 'resourceId'),
+  },
+);
 
 // POST /api/dataroom/permissions - Grant permission
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const {
@@ -130,19 +105,16 @@ export async function POST(request) {
     });
 
     return NextResponse.json(result, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/permissions error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resolve: resourceFromBody('resourceType', 'resourceId'),
+  },
+);
 
 // DELETE /api/dataroom/permissions - Revoke permission
-export async function DELETE(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const DELETE = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const permissionId = searchParams.get('id');
@@ -150,9 +122,6 @@ export async function DELETE(request) {
     if (!permissionId || !ObjectId.isValid(permissionId)) {
       return NextResponse.json({ error: 'Valid permission id is required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const permission = await db.collection('dataroom_permissions').findOne({
       _id: new ObjectId(permissionId),
@@ -183,9 +152,9 @@ export async function DELETE(request) {
     });
 
     return NextResponse.json({ success: true });
-
-  } catch (error) {
-    console.error('DELETE /api/dataroom/permissions error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resolve: resourceFromBody('resourceType', 'resourceId'),
+  },
+);

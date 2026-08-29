@@ -1,28 +1,10 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/versions/compare?v1={versionId1}&v2={versionId2}
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     const { searchParams } = new URL(request.url);
@@ -36,9 +18,6 @@ export async function GET(request, { params }) {
     if (!v1 || !v2 || !ObjectId.isValid(v1) || !ObjectId.isValid(v2)) {
       return NextResponse.json({ error: 'Valid version IDs (v1, v2) are required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Get the document
     const document = await db.collection('dataroom_documents').findOne({
@@ -98,9 +77,9 @@ export async function GET(request, { params }) {
         newerVersion: version1.versionNumber > version2.versionNumber ? 'v1' : 'v2',
       },
     });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/versions/compare error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'document', param: 'id' },
+  },
+);

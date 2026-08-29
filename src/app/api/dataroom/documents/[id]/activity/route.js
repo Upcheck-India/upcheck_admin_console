@@ -1,36 +1,15 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/activity - Get document activity summary
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid document ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Check document exists
     const document = await db.collection('dataroom_documents').findOne({ _id: new ObjectId(id) });
@@ -147,9 +126,9 @@ export async function GET(request, { params }) {
       recentViewers,
       topLocations,
     });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/activity error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'document', param: 'id' },
+  },
+);

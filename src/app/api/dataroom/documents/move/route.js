@@ -1,34 +1,11 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth, resourceFromBody } from '../../../../../lib/dataroom/withDataroomAuth';
 
 // POST /api/dataroom/documents/move - Move or copy documents between rooms/folders
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const { documentIds, targetRoomId, targetFolderId, operation = 'move' } = body;
@@ -49,9 +26,6 @@ export async function POST(request) {
     if (!['move', 'copy'].includes(operation)) {
       return NextResponse.json({ error: 'operation must be "move" or "copy"' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify target room exists
     const targetRoom = await db.collection('dataroom_rooms').findOne({
@@ -210,9 +184,9 @@ export async function POST(request) {
       operation,
       results,
     });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/documents/move error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resolve: resourceFromBody(null, 'roomId', 'room'),
+  },
+);

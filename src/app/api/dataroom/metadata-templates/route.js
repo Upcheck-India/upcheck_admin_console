@@ -1,39 +1,14 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit } from '../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/metadata-templates - List metadata templates
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const documentType = searchParams.get('documentType');
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const filter = { isDeleted: { $ne: true } };
     if (documentType) {
@@ -46,18 +21,16 @@ export async function GET(request) {
       .toArray();
 
     return NextResponse.json({ count: templates.length, items: templates });
-  } catch (error) {
-    console.error('GET /api/dataroom/metadata-templates error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);
 
 // POST /api/dataroom/metadata-templates - Create metadata template
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const {
@@ -85,9 +58,6 @@ export async function POST(request) {
         return NextResponse.json({ error: `Invalid field type: ${field.type}` }, { status: 400 });
       }
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Check for duplicate template name
     const existing = await db.collection('dataroom_metadata_templates').findOne({
@@ -139,9 +109,9 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ ...newTemplate, _id: result.insertedId }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/metadata-templates error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);

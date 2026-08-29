@@ -1,35 +1,12 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit } from '../../../../lib/dataroom/audit-logger';
 import { deleteFolder } from '../../../../lib/dataroom/folder-utils';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth, resourceFromBody } from '../../../../lib/dataroom/withDataroomAuth';
 
 // POST /api/dataroom/bulk - Bulk operations
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const { operation, resourceType, resourceIds, targetFolderId, roomId } = body;
@@ -50,9 +27,6 @@ export async function POST(request) {
     if (resourceIds.length > 100) {
       return NextResponse.json({ error: 'Cannot perform bulk operation on more than 100 items at once' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
     const results = {
       success: 0,
       failed: 0,
@@ -205,9 +179,9 @@ export async function POST(request) {
       total: resourceIds.length,
       ...results,
     });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/bulk error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resolve: resourceFromBody(null, 'roomId', 'room'),
+  },
+);
