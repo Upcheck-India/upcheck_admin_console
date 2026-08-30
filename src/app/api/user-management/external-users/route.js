@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
-import { clerkClient } from '@clerk/nextjs/server';
 import bcrypt from 'bcryptjs';
 import { sendTemplatedEmail, EMAIL_TYPES, sendEmail } from '../../../../lib/emailService.js';
 
@@ -300,13 +299,11 @@ export async function POST(request) {
   }
 }
 
-// DELETE /api/user-management/external-users - Delete external user from both MongoDB and Clerk
+// DELETE /api/user-management/external-users - Delete an external user
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    const clerkId = searchParams.get('clerkId');
-    const deleteFromClerk = searchParams.get('deleteFromClerk') === 'true';
 
     if (!userId) {
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
@@ -324,20 +321,8 @@ export async function DELETE(request) {
       return NextResponse.json({ error: 'User not found in MongoDB' }, { status: 404 });
     }
 
-    // Get Clerk ID from user record or from query param
-    const userClerkId = clerkId || user.clerkId;
-
-    // Delete from Clerk if requested and clerkId exists
-    if (deleteFromClerk && userClerkId) {
-      try {
-        await clerkClient.users.deleteUser(userClerkId);
-        console.log(`Deleted user ${userClerkId} from Clerk`);
-      } catch (clerkError) {
-        // User might not exist in Clerk anymore, log but continue with MongoDB deletion
-        console.warn(`Could not delete from Clerk (user may not exist): ${userClerkId}`, clerkError);
-      }
-    }
-
+    // Deleting the record removes the credentials with it: the password hash
+    // and session token live on this document, not with any external provider.
     // Delete from MongoDB
     await db.collection('dataroom_external_users').deleteOne({
       _id: new ObjectId(userId)
@@ -348,7 +333,6 @@ export async function DELETE(request) {
     return NextResponse.json({
       success: true,
       message: 'User deleted successfully',
-      deletedFromClerk: deleteFromClerk && userClerkId,
     });
 
   } catch (error) {

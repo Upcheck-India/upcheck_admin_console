@@ -426,11 +426,9 @@ const UserManagement = () => {
     }
   };
 
-  const handleDeleteExternalUser = async (userId, clerkId, deleteFromClerk) => {
+  const handleDeleteExternalUser = async (userId) => {
     try {
       const params = new URLSearchParams({ userId });
-      if (clerkId) params.append('clerkId', clerkId);
-      if (deleteFromClerk) params.append('deleteFromClerk', 'true');
 
       const response = await fetch(`/api/user-management/external-users?${params}`, {
         method: 'DELETE',

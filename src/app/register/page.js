@@ -1,26 +1,15 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, Lock, Coffee, Frown, ChevronRight, ChevronLeft, Key, Hand, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
-import { useClerk } from '@clerk/nextjs';
 
 export default function Register() {
-  const router = useRouter();
-  const clerk = useClerk();
   const [currentPage, setCurrentPage] = useState(0);
 
   // Initialize the particles and shrimps background on component mount
   useEffect(() => {
-    // Check if user has an active Clerk session (external user)
-    // If so, redirect them to their dashboard
-    if (clerk?.user) {
-      router.push('/dataroom/external/dashboard');
-      return;
-    }
-
     if (typeof window !== 'undefined') {
       initParticlesAndShrimps();
     }

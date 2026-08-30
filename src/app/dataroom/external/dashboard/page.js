@@ -1,59 +1,21 @@
 'use client';
 
-import { useAuth, useUser, SignOutButton, useClerk } from '@clerk/nextjs';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import useExternalUser from '../../../../hooks/useExternalUser';
 import { Shield, CheckCircle, LogOut, Clock, User, Mail, AlertTriangle } from 'lucide-react';
 
-function getCookie(name) {
-  if (typeof document === 'undefined') return null;
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) return parts.pop()?.split(';').shift() ?? null;
-  return null;
-}
-
-function getSessionExpiry(user) {
-  // Clerk sessions default to 7 days; use lastSignInAt as base if available
-  const base = user?.lastSignInAt ? new Date(user.lastSignInAt) : new Date();
-  base.setDate(base.getDate() + 7);
-  return base.toLocaleDateString();
-}
-
 export default function ExternalUserDashboard() {
-  const { isSignedIn, isLoaded } = useAuth();
-  // FIX: useAuth() does not expose `user` — must use useUser() for that
-  const { user } = useUser();
-  const clerk = useClerk();
-  const router = useRouter();
+  // The hook sends unauthenticated visitors to the login page itself. The
+  // middleware does the same on the cookie, so this is only the fallback for a
+  // cookie that exists but no longer names a live session.
+  const { user, expiresAt, isLoaded, isSignedIn, signOut } = useExternalUser({
+    redirectTo: '/dataroom/external/login',
+  });
   const [mounted, setMounted] = useState(false);
-  const [hasSessionConflict, setHasSessionConflict] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Check for session conflict (internal admin session vs external Clerk session)
-  useEffect(() => {
-    if (!mounted || !isLoaded) return;
-
-    const hasAdminToken = getCookie('admin_token');
-
-    if (hasAdminToken && isSignedIn) {
-      // Session conflict detected — sign out from Clerk first, then redirect
-      setHasSessionConflict(true);
-      clerk.signOut({ redirectUrl: '/dataroom/external/login' });
-    }
-  }, [mounted, isLoaded, isSignedIn, clerk]);
-
-  // Redirect to login if not signed in (only when no conflict is being resolved)
-  useEffect(() => {
-    if (!mounted || !isLoaded || hasSessionConflict) return;
-
-    if (!isSignedIn) {
-      router.push('/dataroom/external/login');
-    }
-  }, [isLoaded, isSignedIn, mounted, hasSessionConflict, router]);
 
   // Loading state
   if (!mounted || !isLoaded) {
@@ -67,31 +29,14 @@ export default function ExternalUserDashboard() {
     );
   }
 
-  // Conflict resolution in progress — show brief message before redirect fires
-  if (hasSessionConflict) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-center px-4">
-          <AlertTriangle className="w-10 h-10 text-amber-500" />
-          <p className="text-base font-semibold text-slate-800">Session conflict detected</p>
-          <p className="text-sm text-slate-500">Signing you out and redirecting…</p>
-        </div>
-      </div>
-    );
-  }
-
   // Not signed in — returning null while redirect fires prevents flicker
   if (!isSignedIn) {
     return null;
   }
 
-  const displayName =
-    user?.firstName
-      ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
-      : user?.primaryEmailAddress?.emailAddress ?? 'User';
-
-  const emailAddress = user?.primaryEmailAddress?.emailAddress ?? 'N/A';
-  const sessionExpiry = getSessionExpiry(user);
+  const displayName = user.name || user.email;
+  const emailAddress = user.email;
+  const sessionExpiry = expiresAt ? new Date(expiresAt).toLocaleDateString() : 'unknown';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50">
@@ -106,13 +51,13 @@ export default function ExternalUserDashboard() {
             </div>
           </div>
 
-          {/* FIX: pass redirectUrl so sign-out lands on login, not the app root */}
-          <SignOutButton redirectUrl="/dataroom/external/login">
-            <button className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-              <LogOut className="w-4 h-4" />
-              Sign Out
-            </button>
-          </SignOutButton>
+          <button
+            onClick={() => signOut()}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            Sign Out
+          </button>
         </div>
       </header>
 

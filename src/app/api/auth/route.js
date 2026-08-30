@@ -76,6 +76,11 @@ export async function POST(req) {
         path: '/',
       });
 
+      // The two audiences are mutually exclusive. Signing in as staff ends any
+      // external portal session in the same browser — it cannot be done from
+      // the client, because the cookie is httpOnly.
+      cookies().delete('external_user_token');
+
       console.log('Login successful, session established');
       return NextResponse.json({
         success: true,
