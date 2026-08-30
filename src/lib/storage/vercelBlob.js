@@ -19,13 +19,17 @@ export function isConfigured() {
   return !!TOKEN;
 }
 
-function pathFor(appId, version, filename) {
-  const safeFilename = (filename || 'app.apk').replace(/[^a-zA-Z0-9._-]/g, '_');
-  return `appstore/${appId}/${version}-${Date.now()}-${safeFilename}`;
+// Every stored object is namespaced by the area that owns it, so usage can be
+// reported per area and one area's files can never collide with another's.
+export const DEFAULT_PREFIX = 'appstore';
+
+function pathFor(prefix, key, filename) {
+  const safeFilename = (filename || 'file').replace(/[^a-zA-Z0-9._-]/g, '_');
+  return `${prefix}/${key}/${Date.now()}-${safeFilename}`;
 }
 
-export function startUpload(_db, { filename, contentType, appId, version }) {
-  const pathname = pathFor(appId, version, filename);
+export function startUpload(_db, { filename, contentType, prefix = DEFAULT_PREFIX, key = 'misc' }) {
+  const pathname = pathFor(prefix, key, filename);
   const sink = new PassThrough();
   const putPromise = put(pathname, sink, {
     access: 'private',
@@ -57,10 +61,10 @@ export function startUpload(_db, { filename, contentType, appId, version }) {
  * size equals the full file) and just serve the whole thing as a normal
  * 200 response, which is a safe, spec-correct thing for a resumable
  * downloader to see. */
-export async function getDownloadStream(_db, version, range) {
-  if (!version.blobUrl && !version.blobPathname) return null;
+export async function getDownloadStream(_db, ref, range) {
+  if (!ref.blobUrl && !ref.blobPathname) return null;
   const headers = range ? { Range: `bytes=${range.start}-${range.end}` } : undefined;
-  const result = await get(version.blobUrl || version.blobPathname, { access: 'private', token: TOKEN, headers });
+  const result = await get(ref.blobUrl || ref.blobPathname, { access: 'private', token: TOKEN, headers });
   if (!result || result.statusCode !== 200) return null;
 
   const total = result.blob.size;
@@ -75,12 +79,12 @@ export async function getDownloadStream(_db, version, range) {
   return { webStream: result.stream, size: total, contentType: result.blob.contentType, range: null };
 }
 
-export async function deleteFile(_db, version) {
-  const target = version.blobUrl || version.blobPathname;
+export async function deleteFile(_db, ref) {
+  const target = ref.blobUrl || ref.blobPathname;
   if (target) await del(target, { token: TOKEN }).catch(() => {});
 }
 
-export async function getUsage() {
+export async function getUsage(_db, { prefix = DEFAULT_PREFIX } = {}) {
   if (!isConfigured()) {
     return { provider: PROVIDER_ID, label: PROVIDER_LABEL, totalBytes: 0, fileCount: 0, limitBytes: null, configured: false };
   }
@@ -88,7 +92,7 @@ export async function getUsage() {
   let fileCount = 0;
   let cursor;
   do {
-    const page = await list({ token: TOKEN, prefix: 'appstore/', cursor, limit: 1000 });
+    const page = await list({ token: TOKEN, prefix: `${prefix}/`, cursor, limit: 1000 });
     totalBytes += page.blobs.reduce((sum, b) => sum + b.size, 0);
     fileCount += page.blobs.length;
     cursor = page.cursor;

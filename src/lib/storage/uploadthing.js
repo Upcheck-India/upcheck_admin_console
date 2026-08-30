@@ -22,7 +22,7 @@ export function isConfigured() {
   return !!process.env.UPLOADTHING_TOKEN;
 }
 
-export function startUpload(_db, { filename, contentType, appId, version }) {
+export function startUpload(_db, { filename, contentType, key = 'file' }) {
   const chunks = [];
   const sink = new Writable({
     write(chunk, _enc, cb) {
@@ -36,7 +36,7 @@ export function startUpload(_db, { filename, contentType, appId, version }) {
       const buffer = Buffer.concat(chunks);
       const file = new UTFile([buffer], filename, {
         type: contentType,
-        customId: `${appId}-${version}-${Date.now()}`,
+        customId: `${key}-${Date.now()}`,
       });
       const result = await getApi().uploadFiles(file);
       if (result.error) {
@@ -55,13 +55,13 @@ export function startUpload(_db, { filename, contentType, appId, version }) {
  * which reliably honors range GETs (a standard, publicly documented S3
  * feature, unlike the other providers' range support), so a 206 response
  * here is trustworthy rather than best-effort. */
-export async function getDownloadStream(_db, version, range) {
-  if (!version.blobUrl) return null;
+export async function getDownloadStream(_db, ref, range) {
+  if (!ref.blobUrl) return null;
   const headers = range ? { Range: `bytes=${range.start}-${range.end}` } : undefined;
-  const res = await fetch(version.blobUrl, { headers });
+  const res = await fetch(ref.blobUrl, { headers });
   if (!res.ok || !res.body) return null;
 
-  const contentType = res.headers.get('content-type') || 'application/vnd.android.package-archive';
+  const contentType = res.headers.get('content-type') || 'application/octet-stream';
   if (res.status === 206) {
     const contentRange = res.headers.get('content-range'); // "bytes start-end/total"
     const total = contentRange ? Number(contentRange.split('/')[1]) : null;
@@ -75,8 +75,8 @@ export async function getDownloadStream(_db, version, range) {
   return { webStream: res.body, size: Number(res.headers.get('content-length')) || null, contentType, range: null };
 }
 
-export async function deleteFile(_db, version) {
-  if (version.utKey) await getApi().deleteFiles(version.utKey).catch(() => {});
+export async function deleteFile(_db, ref) {
+  if (ref.utKey) await getApi().deleteFiles(ref.utKey).catch(() => {});
 }
 
 export async function getUsage() {

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { Readable } from 'node:stream';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
 import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
+import { openDocumentStream } from '../../../../../../lib/dataroom/document-storage';
 
 // GET /api/dataroom/documents/[id]/download - Download document file
 //
@@ -14,7 +14,6 @@ export const GET = withDataroomAuth(
   async (request, { user, db, params, room, isAdmin }) => {
     const { id } = params;
 
-    // Get document metadata
     const document = await db.collection('dataroom_documents').findOne({
       _id: new ObjectId(id),
       isDeleted: { $ne: true },
@@ -24,74 +23,64 @@ export const GET = withDataroomAuth(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    if (!document.fileId) {
-      return NextResponse.json({ error: 'No file associated with this document' }, { status: 404 });
-    }
-
     // Room-wide download switch. Admins retain access so they can turn it back
     // off if it was flipped by mistake.
     if (room?.settings?.allowDownload === false && !isAdmin) {
       return NextResponse.json({ error: 'Downloads are disabled for this room' }, { status: 403 });
     }
 
-    // Get file from GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
+    const stream = await openDocumentStream(db, document);
 
-    // Find the file
-    const files = await bucket.find({ _id: document.fileId }).toArray();
-    if (files.length === 0) {
+    if (!stream) {
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 });
     }
 
-    const file = files[0];
-
-    // Log download
-    await logAudit({
-      action: AUDIT_ACTIONS.DOCUMENT_DOWNLOAD,
-      resourceType: 'document',
-      resourceId: id,
-      roomId: document.roomId,
-      user,
-      details: {
-        name: document.name,
-        fileName: document.fileName,
-        fileSize: document.fileSize,
-      },
-      request,
-    });
-
-    // Update analytics
-    await db.collection('dataroom_analytics').updateOne(
-      { documentId: new ObjectId(id), date: new Date().toISOString().split('T')[0] },
-      {
-        $inc: { downloadCount: 1 },
-        $push: {
-          downloads: {
-            userId: user._id.toString(),
-            userEmail: user.email,
-            timestamp: new Date(),
+    // Logged before the bytes are handed over, so the record exists whether or
+    // not the client finishes the transfer.
+    await Promise.all([
+      logAudit({
+        action: AUDIT_ACTIONS.DOCUMENT_DOWNLOAD,
+        resourceType: 'document',
+        resourceId: id,
+        roomId: document.roomId,
+        user,
+        details: {
+          name: document.name,
+          fileName: document.fileName,
+          fileSize: document.fileSize,
+        },
+        request,
+      }),
+      db.collection('dataroom_analytics').updateOne(
+        { documentId: new ObjectId(id), date: new Date().toISOString().split('T')[0] },
+        {
+          $inc: { downloadCount: 1 },
+          $push: {
+            downloads: {
+              userId: user._id.toString(),
+              userEmail: user.email,
+              timestamp: new Date(),
+            },
           },
         },
-      },
-      { upsert: true }
-    );
+        { upsert: true },
+      ),
+    ]);
 
     // Streamed, not buffered: a download used to read the entire file into the
-    // function's memory before sending the first byte, which put a large
-    // document's whole size against the memory limit and delayed the response
-    // until the last chunk had arrived from Mongo. Auditing happens above, so
-    // the log entry is written whether or not the client finishes the transfer.
-    const downloadStream = bucket.openDownloadStream(document.fileId);
-    request.signal?.addEventListener('abort', () => downloadStream.destroy(), { once: true });
-    downloadStream.on('error', (err) => console.error('GridFS download error:', err));
+    // function's memory before sending the first byte.
+    if (stream.nodeStream) {
+      request.signal?.addEventListener('abort', () => stream.nodeStream.destroy(), { once: true });
+      stream.nodeStream.on('error', (err) => console.error('Document download error:', err));
+    }
 
-    return new NextResponse(Readable.toWeb(downloadStream), {
-      headers: {
-        'Content-Type': file.contentType || document.mimeType || 'application/octet-stream',
-        'Content-Disposition': `attachment; filename="${encodeURIComponent(document.fileName || file.filename)}"`,
-        'Content-Length': String(file.length),
-      },
-    });
+    const headers = {
+      'Content-Type': document.mimeType || stream.contentType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(document.fileName || 'document')}"`,
+    };
+    if (stream.size != null) headers['Content-Length'] = String(stream.size);
+
+    return new NextResponse(stream.webStream, { headers });
   },
   {
     requires: 'download',

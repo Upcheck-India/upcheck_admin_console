@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
+import { storeDocumentFile } from '../../../../../../lib/dataroom/document-storage';
 import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/versions - List all versions
@@ -74,31 +75,15 @@ export const POST = withDataroomAuth(
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
-    // Upload file to GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadStream = bucket.openUploadStream(file.name, {
-      contentType: file.type,
-      metadata: {
-        roomId: document.roomId,
-        documentId: new ObjectId(id),
-        uploadedBy: user._id.toString(),
-        uploadedByEmail: user.email,
-        originalName: file.name,
-        isVersion: true,
-      },
-    });
-
-    await new Promise((resolve, reject) => {
-      uploadStream.write(buffer);
-      uploadStream.end();
-      uploadStream.on('finish', resolve);
-      uploadStream.on('error', reject);
-    });
-
-    const fileId = uploadStream.id;
+    // Stored through lib/storage like any other document file, so a new
+    // version lands with whichever provider is active and records which one.
+    let storage;
+    try {
+      storage = await storeDocumentFile(db, file, { roomId: document.roomId, user });
+    } catch (error) {
+      console.error('Version storage failed:', error);
+      return NextResponse.json({ error: 'Could not store the uploaded file' }, { status: 502 });
+    }
 
     // Calculate new version number
     const currentVersion = document.currentVersion || 1;
@@ -110,7 +95,7 @@ export const POST = withDataroomAuth(
     const versionRecord = {
       documentId: new ObjectId(id),
       versionNumber: newVersion,
-      fileId,
+      ...storage,
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
@@ -131,7 +116,11 @@ export const POST = withDataroomAuth(
       {
         $set: {
           currentVersion: newVersion,
-          fileId,
+          // The new version's storage fields replace the old ones. Fields the
+          // new provider does not use are left behind but never read: the
+          // reader dispatches on storageProvider, which is always overwritten
+          // here alongside them.
+          ...storage,
           fileName: file.name,
           fileSize: file.size,
           mimeType: file.type,

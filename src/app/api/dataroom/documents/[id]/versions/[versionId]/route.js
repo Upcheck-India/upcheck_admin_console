@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
+import { openDocumentStream } from '../../../../../../../lib/dataroom/document-storage';
 import { withDataroomAuth } from '../../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/versions/[versionId] - Get specific version
@@ -32,33 +33,33 @@ export const GET = withDataroomAuth(
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
     }
 
-    // Get file from GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-    
-    try {
-      const downloadStream = bucket.openDownloadStream(version.fileId);
-      const chunks = [];
-      
-      for await (const chunk of downloadStream) {
-        chunks.push(chunk);
-      }
-      
-      const fileBuffer = Buffer.concat(chunks);
-      
-      return new NextResponse(fileBuffer, {
-        headers: {
-          'Content-Type': version.mimeType || 'application/octet-stream',
-          'Content-Disposition': `attachment; filename="${version.fileName}"`,
-          'Content-Length': fileBuffer.length.toString(),
-        },
-      });
-    } catch (gridfsError) {
-      console.error('GridFS download error:', gridfsError);
+    // A version record carries the same storage fields as a document, so the
+    // same reader finds it whichever provider it was written to.
+    const stream = await openDocumentStream(db, version);
+
+    if (!stream) {
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 });
     }
+
+    if (stream.nodeStream) {
+      request.signal?.addEventListener('abort', () => stream.nodeStream.destroy(), { once: true });
+      stream.nodeStream.on('error', (err) => console.error('Version download error:', err));
+    }
+
+    const headers = {
+      'Content-Type': version.mimeType || stream.contentType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(version.fileName || 'document')}"`,
+    };
+    if (stream.size != null) headers['Content-Length'] = String(stream.size);
+
+    return new NextResponse(stream.webStream, { headers });
   },
   {
-    requires: 'view',
+    // This endpoint returns the file as an attachment, so it is a download
+    // however the URL is spelled. It required only 'view', which let anyone
+    // who could read a document take away every historical version of it.
+    requires: 'download',
     resource: { type: 'document', param: 'id' },
+    allowExternal: true,
   },
 );

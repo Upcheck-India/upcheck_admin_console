@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { scanFile } from '../../../../../lib/dataroom/virus-scanner';
 import { hasPermission } from '../../../../../lib/dataroom/permission-checker';
 import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
+import { storeDocumentFile } from '../../../../../lib/dataroom/document-storage';
 
 // Allowed file types
 const ALLOWED_TYPES = [
@@ -24,15 +25,16 @@ const ALLOWED_TYPES = [
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
-// POST /api/dataroom/documents/upload - Upload file to GridFS and create document
+// POST /api/dataroom/documents/upload - Store a file and create the document
 //
 // selfScoped: the destination roomId arrives inside the multipart body. Having
 // the wrapper resolve it would mean parsing the whole upload twice — for a
 // 100 MB file that is not acceptable — so the room grant is checked here,
 // immediately after the form is parsed and before anything is written.
 //
-// Phase 3 rewrites this route to stream into lib/storage; at that point roomId
-// moves to a query parameter and this check moves back into the wrapper.
+// The bytes go to whichever provider is active (Vercel Blob, GridFS or
+// UploadThing) via lib/storage, and the document records which one, so a file
+// stays readable after the setting changes.
 export const POST = withDataroomAuth(
   async (request, { user, db }) => {
     const formData = await request.formData();
@@ -136,29 +138,15 @@ export const POST = withDataroomAuth(
       targetFolderId = new ObjectId(folderId);
     }
 
-    // Upload file to GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadStream = bucket.openUploadStream(file.name, {
-      contentType: file.type,
-      metadata: {
-        roomId: new ObjectId(roomId),
-        uploadedBy: user._id.toString(),
-        uploadedByEmail: user.email,
-        originalName: file.name,
-      },
-    });
-
-    await new Promise((resolve, reject) => {
-      uploadStream.write(buffer);
-      uploadStream.end();
-      uploadStream.on('finish', resolve);
-      uploadStream.on('error', reject);
-    });
-
-    const fileId = uploadStream.id;
+    // Streamed into storage rather than read into a Buffer first: a 100MB
+    // upload no longer has to exist in the function's memory in one piece.
+    let storage;
+    try {
+      storage = await storeDocumentFile(db, file, { roomId: new ObjectId(roomId), user });
+    } catch (error) {
+      console.error('Document storage failed:', error);
+      return NextResponse.json({ error: 'Could not store the uploaded file' }, { status: 502 });
+    }
 
     // Generate document index number
     const lastDoc = await db.collection('dataroom_documents')
@@ -187,7 +175,7 @@ export const POST = withDataroomAuth(
       description: description.trim(),
       documentType,
       indexNumber,
-      fileId,
+      ...storage,
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
@@ -213,7 +201,7 @@ export const POST = withDataroomAuth(
     await db.collection('dataroom_versions').insertOne({
       documentId: result.insertedId,
       versionNumber: 1,
-      fileId,
+      ...storage,
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
