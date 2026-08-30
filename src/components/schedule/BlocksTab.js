@@ -188,6 +188,116 @@ function BlockList({ onOpen }) {
 
 /* ───────────────────────────  The editor  ────────────────────────────── */
 
+/* ────────────────────────  Creating and editing a block  ───────────────── */
+
+/**
+ * Four steps rather than one long form.
+ *
+ * A block has twenty-odd settings and only four of them are needed to make a
+ * useful one. Showing all twenty at once made the common case look like the
+ * hard case. Splitting them means each screen asks one question — what is it,
+ * when is it open, how much may one person take, who may take it — and the
+ * defaults carry the rest.
+ *
+ * Editing skips the gate: every step is reachable immediately, because someone
+ * editing already knows what they came to change and should not have to walk
+ * past three screens to reach it.
+ */
+
+const STEPS = [
+  { id: 'identity', label: 'Identity', hint: 'Name it and give it a face' },
+  { id: 'schedule', label: 'Schedule', hint: 'When the block is open' },
+  { id: 'rules', label: 'Rules', hint: 'How much one person may take' },
+  { id: 'access', label: 'Access', hint: 'Who may claim, and how' },
+];
+
+// Shared control styles, defined once so the four steps cannot drift apart.
+const UI = {
+  label: 'block text-xs font-medium text-gray-600 mb-1',
+  input:
+    'w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-sm ' +
+    'focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none',
+  chip: 'px-2.5 py-1 rounded-full text-xs font-medium border transition-colors',
+  chipOn: 'bg-blue-600 text-white border-blue-600',
+  chipOff: 'text-gray-600 border-gray-300 hover:border-gray-400 bg-white',
+};
+
+function Field({ label, hint, children }) {
+  return (
+    <div>
+      <label className={UI.label}>
+        {label}
+        {hint && <span className="text-gray-400 font-normal"> {hint}</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function Choice({ active, onClick, title, hint }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left px-3 py-2 rounded-lg border transition-colors ${
+        active ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:bg-gray-50'
+      }`}
+    >
+      <span className="block text-sm font-medium text-gray-800">{title}</span>
+      {hint && <span className="block text-xs text-gray-500 mt-0.5">{hint}</span>}
+    </button>
+  );
+}
+
+/** The step rail. Doubles as navigation once a step has been reached. */
+function StepRail({ step, furthest, onJump }) {
+  return (
+    <ol className="flex items-center gap-1 px-4 pb-3">
+      {STEPS.map((s, i) => {
+        const state = i === step ? 'current' : i < furthest || i < step ? 'done' : 'todo';
+        return (
+          <li key={s.id} className="flex items-center gap-1 flex-1 min-w-0">
+            <button
+              type="button"
+              disabled={i > furthest}
+              onClick={() => onJump(i)}
+              title={s.hint}
+              className={`flex items-center gap-1.5 min-w-0 rounded-lg px-1.5 py-1 transition-colors ${
+                i > furthest ? 'cursor-default' : 'hover:bg-gray-100'
+              }`}
+            >
+              <span
+                className={`h-5 w-5 shrink-0 rounded-full grid place-items-center text-[10px] font-bold ${
+                  state === 'current'
+                    ? 'bg-blue-600 text-white'
+                    : state === 'done'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-400'
+                }`}
+              >
+                {state === 'done' ? <Check className="h-3 w-3" /> : i + 1}
+              </span>
+              <span
+                className={`text-xs truncate ${
+                  state === 'current' ? 'font-semibold text-gray-900' : 'text-gray-500'
+                }`}
+              >
+                {s.label}
+              </span>
+            </button>
+            {i < STEPS.length - 1 && (
+              <span
+                className={`h-px flex-1 ${i < furthest ? 'bg-blue-200' : 'bg-gray-200'}`}
+                aria-hidden="true"
+              />
+            )}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function BlockEditor({ block, onClose, onSaved }) {
   const [form, setForm] = useState(() => (block ? {
     ...emptyBlock(), ...block,
@@ -199,6 +309,10 @@ function BlockEditor({ block, onClose, onSaved }) {
   const [error, setError] = useState('');
   const [audience, setAudience] = useState({ roles: [], teams: [], users: [] });
   const [iconQuery, setIconQuery] = useState('');
+  const [step, setStep] = useState(0);
+  // Editing unlocks every step at once; creating unlocks them as you go, so
+  // the numbers mean progress rather than decoration.
+  const [furthest, setFurthest] = useState(block ? STEPS.length - 1 : 0);
 
   useEffect(() => {
     fetch('/api/scheduling/blocks/audience', { credentials: 'include' })
@@ -225,8 +339,49 @@ function BlockEditor({ block, onClose, onSaved }) {
     } catch { return ''; }
   }, [form.rules]);
 
+  /**
+   * What is wrong with the current step, or null.
+   *
+   * Checked per step rather than only on submit: being told on screen four
+   * that screen two was wrong is the thing that makes wizards worse than long
+   * forms, not better.
+   */
+  const stepError = useMemo(() => {
+    if (step === 0) {
+      if (!form.title.trim()) return 'Give the block a name.';
+    }
+    if (step === 1) {
+      if (!form.startDate) return 'Pick a start date.';
+      if (form.endDate && form.endDate < form.startDate) return 'The end date is before the start date.';
+      if (!form.window.days.length) return 'Choose at least one weekday.';
+      if (form.window.startTime >= form.window.endTime) return 'The open-until time must be after open-from.';
+      if (Number(form.window.granularityMinutes) < 15) return 'Slot size must be at least 15 minutes.';
+    }
+    if (step === 2) {
+      const { minMinutes, maxMinutes, capacity } = form.rules;
+      if (Number(minMinutes) < 1) return 'Minimum length must be at least a minute.';
+      if (Number(maxMinutes) < Number(minMinutes)) return 'Maximum length is below the minimum.';
+      if (Number(capacity) < 1) return 'Capacity must be at least one.';
+    }
+    if (step === 3) {
+      const { visibility, allowRoles, allowTeams, allowUserIds } = form.access;
+      if (visibility === 'restricted' && !allowRoles.length && !allowTeams.length && !allowUserIds.length) {
+        return 'A restricted block needs at least one role, team or person.';
+      }
+    }
+    return null;
+  }, [step, form]);
+
+  const go = (next) => {
+    if (next > step && stepError) { setError(stepError); return; }
+    setError('');
+    setStep(next);
+    setFurthest((f) => Math.max(f, next));
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+    if (stepError) { setError(stepError); return; }
     setError('');
     setSaving(true);
     try {
@@ -253,174 +408,360 @@ function BlockEditor({ block, onClose, onSaved }) {
   };
 
   const icons = ICON_CHOICES.filter((n) => n.toLowerCase().includes(iconQuery.toLowerCase()));
-  const label = 'block text-sm font-medium text-gray-700 mb-1';
-  const input = 'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm';
-  const group = 'border border-gray-200 rounded-xl p-4 space-y-3';
-  const legend = 'text-xs font-bold uppercase tracking-wide text-gray-500';
+  const last = step === STEPS.length - 1;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-start justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-8">
-        <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-white rounded-t-xl">
-          <h2 className="text-lg font-semibold">{block ? 'Edit Block' : 'New Block'}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl flex flex-col max-h-[88vh]">
+
+        {/* Header doubles as a live preview: the icon and colour chosen on step
+            one stay visible while the rest is filled in. */}
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+          <span
+            className="h-9 w-9 rounded-xl grid place-items-center shrink-0 transition-colors"
+            style={{ background: `${form.color}1A`, color: form.color }}
+          >
+            <BlockIcon name={form.icon} className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-semibold text-gray-900 truncate">
+              {form.title.trim() || (block ? 'Edit block' : 'New block')}
+            </h2>
+            <p className="text-xs text-gray-500">{STEPS[step].hint}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        <form onSubmit={submit} className="p-4 space-y-4">
-          {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded flex gap-2"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />{error}</div>}
+        <StepRail step={step} furthest={furthest} onJump={go} />
 
-          {/* Identity first — the icon and colour follow the block everywhere. */}
-          <div className={group}>
-            <span className={legend}>What and when</span>
-            <div className="flex gap-3 items-start">
-              <span className="h-11 w-11 rounded-lg flex items-center justify-center shrink-0" style={{ background: `${form.color}1A`, color: form.color }}>
-                <BlockIcon name={form.icon} className="h-6 w-6" />
-              </span>
-              <div className="flex-1">
-                <input value={form.title} onChange={(e) => set({ title: e.target.value })} placeholder="e.g. Claude Code seat" className={input} />
-              </div>
-            </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {COLOR_CHOICES.map((c) => (
-                <button type="button" key={c} onClick={() => set({ color: c })}
-                  className={`h-6 w-6 rounded-full border-2 ${form.color === c ? 'border-gray-800' : 'border-transparent'}`} style={{ background: c }} />
-              ))}
-            </div>
-            <input value={iconQuery} onChange={(e) => setIconQuery(e.target.value)} placeholder="Search icons…" className={`${input} text-xs`} />
-            <div className="grid grid-cols-10 gap-1 max-h-24 overflow-y-auto">
-              {icons.map((n) => (
-                <button type="button" key={n} title={n} onClick={() => set({ icon: n })}
-                  className={`h-8 rounded flex items-center justify-center ${form.icon === n ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:bg-gray-100'}`}>
-                  <BlockIcon name={n} className="h-4 w-4" />
-                </button>
-              ))}
-            </div>
-            <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} placeholder="What is this block for?" className={input} />
+        <form onSubmit={submit} className="flex flex-col min-h-0 flex-1">
+          <div className="px-4 pb-4 overflow-y-auto flex-1 min-h-[19rem]">
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div><label className={label}>Timezone</label>
-                <select value={form.timezone} onChange={(e) => set({ timezone: e.target.value })} className={input}>
-                  {TIMEZONES.map((t) => <option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div><label className={label}>Starts</label>
-                <input type="date" value={form.startDate} onChange={(e) => set({ startDate: e.target.value })} className={input} />
-              </div>
-              <div><label className={label}>Ends <span className="text-gray-400 font-normal">(blank = rolling)</span></label>
-                <input type="date" value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} className={input} />
-              </div>
-              <div><label className={label}>Slot size (min)</label>
-                <input type="number" min="15" step="5" value={form.window.granularityMinutes} onChange={(e) => setWin({ granularityMinutes: Number(e.target.value) })} className={input} />
-              </div>
-            </div>
+            {/* ── 1 · Identity ─────────────────────────────────────────── */}
+            {step === 0 && (
+              <div className="space-y-3">
+                <Field label="Name">
+                  <input
+                    autoFocus
+                    value={form.title}
+                    onChange={(e) => set({ title: e.target.value })}
+                    placeholder="e.g. Claude Code seat"
+                    className={UI.input}
+                  />
+                </Field>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={label}>Open from</label>
-                <input type="time" value={form.window.startTime} onChange={(e) => setWin({ startTime: e.target.value })} className={input} />
-              </div>
-              <div><label className={label}>Open until</label>
-                <input type="time" value={form.window.endTime} onChange={(e) => setWin({ endTime: e.target.value })} className={input} />
-              </div>
-            </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {DOW.map((d, i) => (
-                <button type="button" key={d} onClick={() => setWin({ days: toggle(form.window.days, i) })}
-                  className={`px-2.5 py-1 rounded-full text-xs font-medium border ${form.window.days.includes(i) ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 border-gray-300'}`}>{d}</button>
-              ))}
-            </div>
-          </div>
+                <Field label="What is it for?" hint="(optional)">
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => set({ description: e.target.value })}
+                    rows={2}
+                    placeholder="One line your team will read before claiming."
+                    className={UI.input}
+                  />
+                </Field>
 
-          <div className={group}>
-            <span className={legend}>Claim rules</span>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div><label className={label}>Min length (min)</label><input type="number" min="0" value={form.rules.minMinutes} onChange={(e) => setRule({ minMinutes: Number(e.target.value) })} className={input} /></div>
-              <div><label className={label}>Max length (min)</label><input type="number" min="0" value={form.rules.maxMinutes} onChange={(e) => setRule({ maxMinutes: Number(e.target.value) })} className={input} /></div>
-              <div><label className={label}>Per person / day</label><input type="number" min="0" value={form.rules.maxMinutesPerDay ?? ''} onChange={(e) => setRule({ maxMinutesPerDay: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no cap" className={input} /></div>
-              <div><label className={label}>Per person / week</label><input type="number" min="0" value={form.rules.maxMinutesPerWeek ?? ''} onChange={(e) => setRule({ maxMinutesPerWeek: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no cap" className={input} /></div>
-              <div><label className={label}>Claims / day</label><input type="number" min="0" value={form.rules.maxClaimsPerDay ?? ''} onChange={(e) => setRule({ maxClaimsPerDay: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no cap" className={input} /></div>
-              <div><label className={label}>Capacity</label><input type="number" min="1" value={form.rules.capacity} onChange={(e) => setRule({ capacity: Number(e.target.value) })} className={input} /></div>
-              <div><label className={label}>Notice (min)</label><input type="number" min="0" value={form.rules.advanceNoticeMinutes} onChange={(e) => setRule({ advanceNoticeMinutes: Number(e.target.value) })} className={input} /></div>
-              <div><label className={label}>Horizon (days)</label><input type="number" min="0" value={form.rules.horizonDays ?? ''} onChange={(e) => setRule({ horizonDays: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no limit" className={input} /></div>
-            </div>
-            <p className="text-xs text-gray-500 bg-gray-50 rounded-lg p-2">{echo}</p>
-          </div>
-
-          <div className={group}>
-            <span className={legend}>Who can claim</span>
-            <div className="flex gap-4 text-sm">
-              {['org', 'restricted'].map((v) => (
-                <label key={v} className="flex items-center gap-2">
-                  <input type="radio" name="visibility" checked={form.access.visibility === v} onChange={() => setAccess({ visibility: v })} />
-                  {v === 'org' ? 'Everyone in the org' : 'Only who I pick'}
-                </label>
-              ))}
-            </div>
-            {form.access.visibility === 'restricted' && (
-              <div className="space-y-2">
-                <div>
-                  <label className={label}>Roles</label>
+                <Field label="Colour">
                   <div className="flex gap-1.5 flex-wrap">
-                    {audience.roles.map((r) => (
-                      <button type="button" key={r} onClick={() => setAccess({ allowRoles: toggle(form.access.allowRoles, r) })}
-                        className={`px-2.5 py-1 rounded-full text-xs border ${form.access.allowRoles.includes(r) ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 border-gray-300'}`}>{r}</button>
+                    {COLOR_CHOICES.map((c) => (
+                      <button
+                        type="button"
+                        key={c}
+                        onClick={() => set({ color: c })}
+                        aria-label={`Colour ${c}`}
+                        className={`h-7 w-7 rounded-full transition-transform ${
+                          form.color === c ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : ''
+                        }`}
+                        style={{ background: c }}
+                      />
                     ))}
                   </div>
-                </div>
-                <div>
-                  <label className={label}>Teams</label>
-                  <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto">
-                    {audience.teams.map((t) => (
-                      <button type="button" key={t._id} onClick={() => setAccess({ allowTeams: toggle(form.access.allowTeams, t._id) })}
-                        className={`px-2.5 py-1 rounded-full text-xs border ${form.access.allowTeams.includes(t._id) ? 'bg-blue-600 text-white border-blue-600' : 'text-gray-500 border-gray-300'}`}>{t.name}</button>
+                </Field>
+
+                <Field label="Icon">
+                  <input
+                    value={iconQuery}
+                    onChange={(e) => setIconQuery(e.target.value)}
+                    placeholder="Search…"
+                    className={`${UI.input} mb-2`}
+                  />
+                  <div className="grid grid-cols-10 gap-1 max-h-[7.5rem] overflow-y-auto pr-1">
+                    {icons.map((n) => (
+                      <button
+                        type="button"
+                        key={n}
+                        title={n}
+                        onClick={() => set({ icon: n })}
+                        className={`h-8 rounded-lg grid place-items-center transition-colors ${
+                          form.icon === n
+                            ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-300'
+                            : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                      >
+                        <BlockIcon name={n} className="h-4 w-4" />
+                      </button>
                     ))}
+                    {icons.length === 0 && (
+                      <p className="col-span-10 text-xs text-gray-400 py-3 text-center">
+                        No icon matches “{iconQuery}”.
+                      </p>
+                    )}
                   </div>
-                </div>
-                <div>
-                  <label className={label}>People</label>
-                  <select multiple value={form.access.allowUserIds} size={5}
-                    onChange={(e) => setAccess({ allowUserIds: Array.from(e.target.selectedOptions, (o) => o.value) })}
-                    className={input}>
-                    {audience.users.map((u) => <option key={u._id} value={u._id}>{u.name} · {u.role}</option>)}
-                  </select>
-                </div>
+                </Field>
               </div>
             )}
-            <div>
-              <label className={label}>Never allow <span className="text-gray-400 font-normal">(wins over everything, including admin)</span></label>
-              <select multiple value={form.access.denyUserIds} size={3}
-                onChange={(e) => setAccess({ denyUserIds: Array.from(e.target.selectedOptions, (o) => o.value) })}
-                className={input}>
-                {audience.users.map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
-              </select>
-            </div>
+
+            {/* ── 2 · Schedule ─────────────────────────────────────────── */}
+            {step === 1 && (
+              <div className="space-y-3">
+                <Field label="Timezone" hint="— sets what “a day” means for the quotas">
+                  <select value={form.timezone} onChange={(e) => set({ timezone: e.target.value })} className={UI.input}>
+                    {TIMEZONES.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </Field>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Starts">
+                    <input type="date" value={form.startDate} onChange={(e) => set({ startDate: e.target.value })} className={UI.input} />
+                  </Field>
+                  <Field label="Ends" hint="(blank = rolling)">
+                    <input type="date" value={form.endDate} onChange={(e) => set({ endDate: e.target.value })} className={UI.input} />
+                  </Field>
+                </div>
+
+                <Field label="Open on">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {DOW.map((d, i) => (
+                      <button
+                        type="button"
+                        key={d}
+                        onClick={() => setWin({ days: toggle(form.window.days, i) })}
+                        className={`${UI.chip} ${form.window.days.includes(i) ? UI.chipOn : UI.chipOff}`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <Field label="From">
+                    <input type="time" value={form.window.startTime} onChange={(e) => setWin({ startTime: e.target.value })} className={UI.input} />
+                  </Field>
+                  <Field label="Until">
+                    <input type="time" value={form.window.endTime} onChange={(e) => setWin({ endTime: e.target.value })} className={UI.input} />
+                  </Field>
+                  <Field label="Slot size" hint="min">
+                    <input type="number" min="15" step="5" value={form.window.granularityMinutes} onChange={(e) => setWin({ granularityMinutes: Number(e.target.value) })} className={UI.input} />
+                  </Field>
+                </div>
+
+                <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                  Claims snap to {form.window.granularityMinutes}-minute boundaries counted from{' '}
+                  {form.window.startTime}, in {form.timezone}.
+                </p>
+              </div>
+            )}
+
+            {/* ── 3 · Rules ────────────────────────────────────────────── */}
+            {step === 2 && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Shortest claim" hint="min">
+                    <input type="number" min="1" value={form.rules.minMinutes} onChange={(e) => setRule({ minMinutes: Number(e.target.value) })} className={UI.input} />
+                  </Field>
+                  <Field label="Longest claim" hint="min">
+                    <input type="number" min="1" value={form.rules.maxMinutes} onChange={(e) => setRule({ maxMinutes: Number(e.target.value) })} className={UI.input} />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Per person, per day" hint="min">
+                    <input type="number" min="0" value={form.rules.maxMinutesPerDay ?? ''} onChange={(e) => setRule({ maxMinutesPerDay: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no cap" className={UI.input} />
+                  </Field>
+                  <Field label="Per person, per week" hint="min">
+                    <input type="number" min="0" value={form.rules.maxMinutesPerWeek ?? ''} onChange={(e) => setRule({ maxMinutesPerWeek: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no cap" className={UI.input} />
+                  </Field>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Claims per day" hint="each">
+                    <input type="number" min="0" value={form.rules.maxClaimsPerDay ?? ''} onChange={(e) => setRule({ maxClaimsPerDay: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no cap" className={UI.input} />
+                  </Field>
+                  <Field label="Capacity" hint="— how many at once">
+                    <input type="number" min="1" value={form.rules.capacity} onChange={(e) => setRule({ capacity: Number(e.target.value) })} className={UI.input} />
+                  </Field>
+                </div>
+
+                <details className="group">
+                  <summary className="text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none list-none flex items-center gap-1">
+                    <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+                    Timing limits
+                  </summary>
+                  <div className="grid grid-cols-2 gap-3 pt-2">
+                    <Field label="Minimum notice" hint="min">
+                      <input type="number" min="0" value={form.rules.advanceNoticeMinutes} onChange={(e) => setRule({ advanceNoticeMinutes: Number(e.target.value) })} className={UI.input} />
+                    </Field>
+                    <Field label="Bookable ahead" hint="days">
+                      <input type="number" min="0" value={form.rules.horizonDays ?? ''} onChange={(e) => setRule({ horizonDays: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="no limit" className={UI.input} />
+                    </Field>
+                  </div>
+                </details>
+
+                {echo && (
+                  <p className="text-xs text-blue-900 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                    {echo}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* ── 4 · Access and approval ──────────────────────────────── */}
+            {step === 3 && (
+              <div className="space-y-3">
+                <Field label="Who can claim">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Choice
+                      active={form.access.visibility === 'org'}
+                      onClick={() => setAccess({ visibility: 'org' })}
+                      title="Everyone"
+                      hint="Anyone signed in"
+                    />
+                    <Choice
+                      active={form.access.visibility === 'restricted'}
+                      onClick={() => setAccess({ visibility: 'restricted' })}
+                      title="Only who I pick"
+                      hint="Roles, teams or people"
+                    />
+                  </div>
+                </Field>
+
+                {form.access.visibility === 'restricted' && (
+                  <div className="space-y-3 pl-3 border-l-2 border-blue-100">
+                    {audience.roles.length > 0 && (
+                      <Field label="Roles">
+                        <div className="flex gap-1.5 flex-wrap">
+                          {audience.roles.map((r) => (
+                            <button type="button" key={r} onClick={() => setAccess({ allowRoles: toggle(form.access.allowRoles, r) })}
+                              className={`${UI.chip} ${form.access.allowRoles.includes(r) ? UI.chipOn : UI.chipOff}`}>{r}</button>
+                          ))}
+                        </div>
+                      </Field>
+                    )}
+                    {audience.teams.length > 0 && (
+                      <Field label="Teams">
+                        <div className="flex gap-1.5 flex-wrap max-h-20 overflow-y-auto">
+                          {audience.teams.map((t) => (
+                            <button type="button" key={t._id} onClick={() => setAccess({ allowTeams: toggle(form.access.allowTeams, t._id) })}
+                              className={`${UI.chip} ${form.access.allowTeams.includes(t._id) ? UI.chipOn : UI.chipOff}`}>{t.name}</button>
+                          ))}
+                        </div>
+                      </Field>
+                    )}
+                    <Field label="People" hint="— ctrl-click for several">
+                      <select multiple value={form.access.allowUserIds} size={4}
+                        onChange={(e) => setAccess({ allowUserIds: Array.from(e.target.selectedOptions, (o) => o.value) })}
+                        className={UI.input}>
+                        {audience.users.map((u) => <option key={u._id} value={u._id}>{u.name} · {u.role}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+
+                <Field label="Approval">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Choice
+                      active={form.claimMode === 'instant'}
+                      onClick={() => set({ claimMode: 'instant' })}
+                      title="First come, first served"
+                      hint="Claims land immediately"
+                    />
+                    <Choice
+                      active={form.claimMode === 'approval'}
+                      onClick={() => set({ claimMode: 'approval' })}
+                      title="I approve each one"
+                      hint="Requests queue for you"
+                    />
+                  </div>
+                </Field>
+
+                <details className="group">
+                  <summary className="text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-700 select-none list-none flex items-center gap-1">
+                    <ChevronRight className="h-3 w-3 transition-transform group-open:rotate-90" />
+                    Cancellation, status and blocked people
+                  </summary>
+                  <div className="space-y-3 pt-2">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Cancellable until" hint="min before">
+                        <input type="number" min="0" value={form.cancellableUntilMinutesBefore ?? ''} onChange={(e) => set({ cancellableUntilMinutesBefore: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="any time" className={UI.input} />
+                      </Field>
+                      <Field label="Status">
+                        <select value={form.status} onChange={(e) => set({ status: e.target.value })} className={UI.input}>
+                          <option value="open">Open</option><option value="paused">Paused</option><option value="closed">Closed</option>
+                        </select>
+                      </Field>
+                    </div>
+                    <Field label="Never allow" hint="— wins over everything, including admin">
+                      <select multiple value={form.access.denyUserIds} size={3}
+                        onChange={(e) => setAccess({ denyUserIds: Array.from(e.target.selectedOptions, (o) => o.value) })}
+                        className={UI.input}>
+                        {audience.users.map((u) => <option key={u._id} value={u._id}>{u.name}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                </details>
+              </div>
+            )}
           </div>
 
-          <div className={group}>
-            <span className={legend}>Approval</span>
-            <div className="flex gap-4 text-sm">
-              {[['instant', 'First come, first served'], ['approval', 'I approve each request']].map(([v, txt]) => (
-                <label key={v} className="flex items-center gap-2">
-                  <input type="radio" name="claimMode" checked={form.claimMode === v} onChange={() => set({ claimMode: v })} />{txt}
-                </label>
-              ))}
+          {/* Errors sit next to the buttons, where the eye already is when a
+              step refuses to advance. */}
+          {error && (
+            <div className="mx-4 mb-2 bg-red-50 text-red-700 text-xs px-3 py-2 rounded-lg flex gap-2 items-start">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-px" />
+              {error}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><label className={label}>Cancellable until (min before)</label>
-                <input type="number" min="0" value={form.cancellableUntilMinutesBefore ?? ''} onChange={(e) => set({ cancellableUntilMinutesBefore: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="any time" className={input} />
-              </div>
-              <div><label className={label}>Status</label>
-                <select value={form.status} onChange={(e) => set({ status: e.target.value })} className={input}>
-                  <option value="open">Open</option><option value="paused">Paused</option><option value="closed">Closed</option>
-                </select>
-              </div>
-            </div>
-          </div>
+          )}
 
-          <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold disabled:opacity-60">
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}{block ? 'Save changes' : 'Create block'}
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-t bg-gray-50 rounded-b-2xl">
+            <button
+              type="button"
+              onClick={step === 0 ? onClose : () => go(step - 1)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-100"
+            >
+              {step > 0 && <ChevronLeft className="h-4 w-4" />}
+              {step === 0 ? 'Cancel' : 'Back'}
             </button>
+
+            <span className="text-xs text-gray-400 tabular-nums">
+              {step + 1} / {STEPS.length}
+            </span>
+
+            {last ? (
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {block ? 'Save changes' : 'Create block'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => go(step + 1)}
+                className="inline-flex items-center gap-1 px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold"
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </form>
       </div>
@@ -547,6 +888,7 @@ function BlockDetail({ id, onBack }) {
         view={view}
         anchorDate={anchor}
         timezone={displayTz}
+        accent={block.color}
         window={block.window}
         claims={claims}
         currentUserId={userId}

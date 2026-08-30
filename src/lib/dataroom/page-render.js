@@ -1,4 +1,6 @@
 import { Readable } from 'node:stream';
+import path from 'node:path';
+import { createRequire } from 'node:module';
 import { ObjectId } from 'mongodb';
 import {
   deleteDocumentFile,
@@ -124,16 +126,52 @@ async function* streamToAsyncIterable(webStream) {
   }
 }
 
+/**
+ * Where pdf.js finds the Type1 fonts every PDF assumes are present but does
+ * not embed — Helvetica, Times, Courier.
+ *
+ * Three things here are load-bearing, all of them learned by watching pages
+ * come out blank (scripts/test-page-render.mjs pins them):
+ *
+ *   - The path is absolute, resolved from this module. A relative path is
+ *     resolved against the working directory, which is the repo root in
+ *     development and something else entirely in a deployed function.
+ *   - It is a plain filesystem path, NOT a file:// URL. pdf.js's Node data
+ *     factory reads it with fs, and a file:// URL fails silently: the fonts
+ *     never load, no error is raised, and every glyph is simply skipped.
+ *   - It ends with a separator, because pdf.js concatenates the filename
+ *     straight onto it.
+ *
+ * A page whose only content is text renders completely blank when this is
+ * wrong, and nothing anywhere reports an error.
+ */
+let fontPaths = null;
+function resolveFontPaths() {
+  if (!fontPaths) {
+    const require_ = createRequire(import.meta.url);
+    const root = path.dirname(require_.resolve('pdfjs-dist/package.json'));
+    fontPaths = {
+      standardFontDataUrl: path.join(root, 'standard_fonts') + path.sep,
+      cMapUrl: path.join(root, 'cmaps') + path.sep,
+    };
+  }
+  return fontPaths;
+}
+
 /** Open a PDF with pdf.js in Node. */
 async function openPdf(db, document) {
   const { pdfjs } = await loadDeps();
   const data = await loadPdfBuffer(db, document);
+  const { standardFontDataUrl, cMapUrl } = resolveFontPaths();
+
   return pdfjs.getDocument({
     data: new Uint8Array(data),
-    // Without these, any page using a standard font renders blank glyphs.
-    standardFontDataUrl: 'node_modules/pdfjs-dist/standard_fonts/',
-    useSystemFonts: true,
-    isEvalSupported: false,
+    standardFontDataUrl,
+    cMapUrl,
+    cMapPacked: true,
+    // There is no system font stack in a serverless function, so asking for
+    // one gets substitutions rather than the real thing.
+    useSystemFonts: false,
   }).promise;
 }
 
