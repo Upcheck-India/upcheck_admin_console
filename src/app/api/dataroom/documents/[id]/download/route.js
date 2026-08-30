@@ -86,5 +86,6 @@ export const GET = withDataroomAuth(
     requires: 'download',
     resource: { type: 'document', param: 'id' },
     allowExternal: true,
+    allowShare: true,
   },
 );

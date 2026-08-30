@@ -200,6 +200,25 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('dataroom_shares').createIndex({ shareToken: 1 }, { unique: true }),
       db.collection('dataroom_shares').createIndex({ resourceType: 1, resourceId: 1 }),
       db.collection('dataroom_shares').createIndex({ targetEmail: 1 }),
+      db.collection('dataroom_shares').createIndex({ allowedEmails: 1 }),
+
+      // Share-link sessions and their one-time codes. Both expire on their
+      // own via TTL indexes: a session left behind is a working credential,
+      // and an unswept code collection grows for the life of the deployment.
+      db.collection('dataroom_share_sessions').createIndex({ token: 1 }, { unique: true }),
+      db.collection('dataroom_share_sessions').createIndex({ shareId: 1 }),
+      db.collection('dataroom_share_sessions').createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0, name: 'share_session_ttl' },
+      ),
+      db.collection('dataroom_share_codes').createIndex(
+        { shareId: 1, email: 1 },
+        { unique: true },
+      ),
+      db.collection('dataroom_share_codes').createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0, name: 'share_code_ttl' },
+      ),
 
       // Versions, analytics, groups.
       db.collection('dataroom_versions').createIndex({ documentId: 1, versionNumber: -1 }),

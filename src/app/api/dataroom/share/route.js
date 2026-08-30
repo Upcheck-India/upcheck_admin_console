@@ -3,8 +3,12 @@ import { ObjectId } from 'mongodb';
 import crypto from 'crypto';
 import { hasPermission, PERMISSION_TYPES } from '../../../../lib/dataroom/permission-checker';
 import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
-
-const SHAREABLE_RESOURCE_TYPES = ['document', 'folder', 'room'];
+import {
+  AUDIENCES,
+  PROTECTIONS,
+  SHAREABLE_RESOURCE_TYPES,
+  normalizeShare,
+} from '../../../../lib/dataroom/share-links';
 
 /**
  * Both handlers act on a resource named by (resourceType, resourceId) rather
@@ -34,38 +38,53 @@ export const GET = withDataroomAuth(
     }
 
     const shares = await db.collection('dataroom_shares')
-      .find({
-        resourceType,
-        resourceId: new ObjectId(resourceId),
-      })
+      .find({ resourceType, resourceId: new ObjectId(resourceId) })
       .sort({ createdAt: -1 })
       .toArray();
 
-    return NextResponse.json({ shares });
+    // Normalised on the way out so the editor renders one model rather than
+    // having to know what old records omitted.
+    return NextResponse.json({ shares: shares.map(normalizeShare) });
   },
   { requires: 'admin', resolve: resourceFromQuery },
 );
 
-// POST /api/dataroom/share - Create a new share link
+// POST /api/dataroom/share - Create a share link
 //
-// Previously created a working share token for any resourceId supplied, for any
-// authenticated caller. `admin` on the resource is now required by the wrapper,
-// and the delegated permissions are capped to what the sharer holds below.
+// `admin` on the resource is enforced by the wrapper, and the delegated
+// permissions are capped to what the sharer holds below.
 export const POST = withDataroomAuth(
   async (request, { user, db }) => {
     const body = await request.json();
-    const { resourceType, resourceId, roomId, targetEmail, permissions, expiresAt } = body;
+    const {
+      resourceType,
+      resourceId,
+      roomId,
+      name,
+      permissions,
+      expiresAt,
+      maxAccesses,
+      // Audience — who the link admits.
+      audience = 'restricted',
+      allowedEmails = [],
+      allowedRoles = [],
+      allowedUserIds = [],
+      // Protection — what a visitor must prove.
+      protection = 'collect_email',
+      // Accepted for older callers; folded into allowedEmails below.
+      targetEmail,
+    } = body;
 
     if (!resourceType || !resourceId || !ObjectId.isValid(resourceId)) {
       return NextResponse.json({ error: 'Valid resourceType and resourceId required' }, { status: 400 });
     }
 
-    if (!targetEmail || !permissions || !Array.isArray(permissions)) {
-      return NextResponse.json({ error: 'targetEmail and permissions required' }, { status: 400 });
-    }
-
     if (!SHAREABLE_RESOURCE_TYPES.includes(resourceType)) {
       return NextResponse.json({ error: 'Invalid resourceType' }, { status: 400 });
+    }
+
+    if (!Array.isArray(permissions) || permissions.length === 0) {
+      return NextResponse.json({ error: 'permissions required' }, { status: 400 });
     }
 
     const unknownPermissions = permissions.filter((p) => !PERMISSION_TYPES.includes(p));
@@ -76,8 +95,43 @@ export const POST = withDataroomAuth(
       );
     }
 
-    // `admin` on the resource is enforced by the wrapper.
-    //
+    if (permissions.includes('admin')) {
+      // A link is a bearer credential. Handing out the ability to re-share and
+      // re-permission a resource through one is not something to do by
+      // accident, so it is not something this endpoint does at all.
+      return NextResponse.json(
+        { error: 'Share links cannot grant "admin"' },
+        { status: 400 },
+      );
+    }
+
+    if (!AUDIENCES.includes(audience)) {
+      return NextResponse.json({ error: 'Invalid audience' }, { status: 400 });
+    }
+
+    if (!PROTECTIONS.includes(protection)) {
+      return NextResponse.json({ error: 'Invalid protection' }, { status: 400 });
+    }
+
+    const emails = [...allowedEmails, ...(targetEmail ? [targetEmail] : [])]
+      .map((e) => String(e).toLowerCase().trim())
+      .filter(Boolean);
+
+    if (
+      audience === 'restricted' &&
+      !emails.length &&
+      !allowedRoles.length &&
+      !allowedUserIds.length
+    ) {
+      // A restricted link naming nobody admits nobody. That is more likely a
+      // half-filled form than an intention, and failing here is kinder than
+      // issuing a link that silently never works.
+      return NextResponse.json(
+        { error: 'A restricted link must name at least one address, role or member' },
+        { status: 400 },
+      );
+    }
+
     // A share must never grant more than the sharer holds. Administering the
     // resource implies all of them today, but checking each delegated
     // permission explicitly means this stays correct if sharing is later opened
@@ -98,24 +152,29 @@ export const POST = withDataroomAuth(
       }
     }
 
-    // Generate unique share token
     const shareToken = crypto.randomBytes(32).toString('hex');
 
-    // Create share record
     const shareDoc = {
       shareToken,
       resourceType,
       resourceId: new ObjectId(resourceId),
       roomId: roomId ? new ObjectId(roomId) : null,
-      targetEmail: targetEmail.toLowerCase(),
+      name: (name || '').trim() || null,
+      audience,
+      allowedEmails: emails,
+      allowedRoles,
+      allowedUserIds: allowedUserIds.map(String),
+      protection,
       permissions,
       expiresAt: expiresAt ? new Date(expiresAt) : null,
+      maxAccesses: Number.isInteger(maxAccesses) && maxAccesses > 0 ? maxAccesses : null,
       createdBy: {
         id: user._id.toString(),
         email: user.email,
         username: user.username,
       },
       createdAt: new Date(),
+      updatedAt: new Date(),
       revokedAt: null,
       accessCount: 0,
       lastAccessedAt: null,
@@ -123,30 +182,31 @@ export const POST = withDataroomAuth(
 
     const result = await db.collection('dataroom_shares').insertOne(shareDoc);
 
-    // Log audit event
     await db.collection('dataroom_audit_log').insertOne({
       userId: user._id.toString(),
       userEmail: user.email,
       action: 'share_created',
       resourceType,
       resourceId: new ObjectId(resourceId),
+      roomId: shareDoc.roomId,
       details: {
-        targetEmail,
+        // The token itself is not logged. The audit log is read by more people
+        // than the share list is, and a logged token is a working credential.
+        shareId: result.insertedId.toString(),
+        audience,
+        protection,
         permissions,
-        shareToken,
+        recipientCount: emails.length + allowedRoles.length + allowedUserIds.length,
         expiresAt,
       },
       timestamp: new Date(),
     });
 
-    // TODO: Send email invitation with share link
-    // For now, return the share token so it can be copied
-
     return NextResponse.json({
       success: true,
       shareId: result.insertedId,
       shareToken,
-      message: 'Share link created successfully',
+      url: `/dataroom/shared/${shareToken}`,
     });
   },
   {

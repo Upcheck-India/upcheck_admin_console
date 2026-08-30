@@ -60,5 +60,6 @@ export const POST = withDataroomAuth(
     requires: 'print',
     resource: { type: 'document', param: 'id' },
     allowExternal: true,
+    allowShare: true,
   },
 );

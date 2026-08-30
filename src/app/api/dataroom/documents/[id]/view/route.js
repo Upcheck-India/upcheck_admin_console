@@ -121,6 +121,7 @@ export const GET = withDataroomAuth(
     requires: 'view',
     resource: { type: 'document', param: 'id' },
     allowExternal: true,
+    allowShare: true,
     capabilities: true,
   },
 );

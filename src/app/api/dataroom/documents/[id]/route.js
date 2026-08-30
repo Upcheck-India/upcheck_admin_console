@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
+import { deleteDocumentFile } from '../../../../../lib/dataroom/document-storage';
 
 // GET /api/dataroom/documents/[id] - Get single document
 export const GET = withDataroomAuth(
@@ -61,6 +62,7 @@ export const GET = withDataroomAuth(
     requires: 'view',
     resource: { type: 'document', param: 'id' },
     allowExternal: true,
+    allowShare: true,
     capabilities: true,
   },
 );
@@ -163,11 +165,22 @@ export const DELETE = withDataroomAuth(
     }
 
     if (permanent) {
-      // Delete versions
+      // The stored bytes go too. Deleting only the records left every version
+      // of every permanently-deleted document sitting in storage with nothing
+      // referencing it, so nothing would ever find it to clean up.
+      const versions = await db
+        .collection('dataroom_versions')
+        .find({ documentId: new ObjectId(id) })
+        .toArray();
+
+      for (const version of [...versions, document]) {
+        await deleteDocumentFile(db, version).catch((err) =>
+          console.error('Failed to delete stored file:', err),
+        );
+      }
+
       await db.collection('dataroom_versions').deleteMany({ documentId: new ObjectId(id) });
-      // Delete comments
       await db.collection('dataroom_comments').deleteMany({ documentId: new ObjectId(id) });
-      // Delete document
       await db.collection('dataroom_documents').deleteOne({ _id: new ObjectId(id) });
     } else {
       // Soft delete

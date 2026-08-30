@@ -40,6 +40,7 @@ import { getAuthUserResult } from '../auth';
 import { hasPermission, PERMISSION_TYPES } from './permission-checker';
 import { logAudit } from './audit-logger';
 import { validateIpWhitelist, isRoomExpired, getClientIp } from './security';
+import { resolveShareSession, shareCovers } from './share-links';
 
 export const ADMIN_ROLES = ['Admin', 'Console admin'];
 
@@ -47,21 +48,16 @@ export const ADMIN_ROLES = ['Admin', 'Console admin'];
  * Capabilities reported to handlers (and onward to the viewer UI) for the
  * resource under request.
  *
- * PRINT AND DOWNLOAD ARE NOT INDEPENDENT TODAY. The viewer hands the raw file
- * to an <iframe>, which delegates rendering to the browser's native PDF
- * plugin. That plugin's Print dialog offers "Save as PDF", so anyone who can
- * print can obtain the file — a `print` grant without `download` is therefore
- * advisory, not enforceable.
+ * PRINT AND DOWNLOAD ARE NOW SEPARABLE, BUT NOT AIRTIGHT. The viewer no
+ * longer hands the raw file to the browser's PDF plugin — it rasterises pages
+ * to canvas and prints those — so `print` without `download` yields a
+ * watermarked raster rather than the source file. What it does not stop is a
+ * determined viewer reassembling the streamed bytes: the file still crosses
+ * the wire to render it.
  *
- * Two changes close that gap, in order:
- *   - Phase 3 replaces the iframe with an in-app canvas viewer that has no
- *     native toolbar and intercepts Ctrl+P, making the distinction real for
- *     ordinary users.
- *   - Phase 6 renders pages server-side, so the source file never reaches the
- *     browser and the distinction holds against a capable one.
- *
- * Until then `canPrint` is reported honestly alongside `printImpliesEgress`,
- * so callers can decide what to show rather than assuming the control binds.
+ * Phase 6 closes that by rendering pages server-side, so the source file never
+ * reaches the browser at all. Until then `printImpliesEgress` stays true and
+ * says so, rather than letting callers assume the control is airtight.
  */
 const CAPABILITY_PERMISSIONS = ['view', 'comment', 'edit', 'download', 'print'];
 
@@ -282,6 +278,7 @@ export function resourceFromBody(typeKey, idKey, fixedType = null) {
  * @param {Function} [options.resolve]          async (request, params) => { type, id }
  * @param {string}  [options.roomQuery]         query param naming the room, when not resource-scoped
  * @param {boolean} [options.allowExternal]     admit external users (default false)
+ * @param {boolean} [options.allowShare]        admit share-link sessions (default false)
  * @param {boolean} [options.selfScoped]        route filters its own results; skips the resource check
  * @param {boolean} [options.skipRoomChecks]    skip expiry/IP enforcement (rare; say why at the call site)
  */
@@ -293,6 +290,7 @@ export function withDataroomAuth(handler, options = {}) {
     resolve,
     roomQuery = 'roomId',
     allowExternal = false,
+    allowShare = false,
     selfScoped = false,
     skipRoomChecks = false,
     capabilities = false,
@@ -337,6 +335,28 @@ export function withDataroomAuth(handler, options = {}) {
         user = await resolveExternalUser(request, db);
       }
 
+      // A share-link session is an identity of last resort: it is consulted
+      // only when nobody is signed in, so a staff member following a link
+      // keeps their own (usually wider) access rather than being narrowed to
+      // the link's.
+      let shareContext = null;
+      if (!user && allowShare) {
+        shareContext = await resolveShareSession(request, db);
+        if (shareContext) {
+          const { session, share } = shareContext;
+          user = {
+            _id: session._id,
+            id: session._id.toString(),
+            email: session.email,
+            username: session.email || 'Share link visitor',
+            name: session.email || 'Share link visitor',
+            role: 'Share link',
+            isShare: true,
+            shareId: share._id,
+          };
+        }
+      }
+
       if (!user) return json({ error: 'Unauthorized' }, 401);
 
       if (user.isExternal && !allowExternal) {
@@ -347,7 +367,8 @@ export function withDataroomAuth(handler, options = {}) {
         return json({ error: 'Your account is no longer active' }, 403);
       }
 
-      const admin = isAdminRole(user);
+      // A share visitor is never an administrator, whatever the link says.
+      const admin = !shareContext && isAdminRole(user);
 
       // ── Role gate ───────────────────────────────────────────────────────
       if (roles && !roles.includes(user.role)) {
@@ -401,8 +422,46 @@ export function withDataroomAuth(handler, options = {}) {
         }
       }
 
+      // ── Share-link gate ─────────────────────────────────────────────────
+      // A share visitor holds exactly what the link grants, on exactly what
+      // the link covers. Both halves are load-bearing: without the coverage
+      // check a link to one document would authenticate its holder for every
+      // document in the room, because the gate would see a valid identity
+      // carrying `view` and stop there.
+      if (shareContext) {
+        const { share } = shareContext;
+
+        if (!requiredPermissions.length || !ref) {
+          // A route that scopes itself (`selfScoped`) or names no resource
+          // cannot be bounded to the link's scope, so it is not reachable
+          // through a link at all.
+          return json({ error: 'Access denied' }, 403);
+        }
+
+        const covered = await shareCovers(db, share, ref, roomId);
+        const granted = requiredPermissions.every((p) => share.permissions.includes(p));
+
+        if (!covered || !granted) {
+          await logAudit({
+            action: 'SHARE_ACCESS_DENIED',
+            resourceType: ref.type,
+            resourceId: ref.id,
+            roomId: room?._id || null,
+            user,
+            details: {
+              shareId: share._id?.toString(),
+              permission: requiredPermissions.join(','),
+              reason: covered ? 'permission_not_granted' : 'outside_share_scope',
+              path: new URL(request.url).pathname,
+            },
+            request,
+          }).catch(() => {});
+          return json({ error: 'Access denied' }, 403);
+        }
+      }
+
       // ── Permission gate ─────────────────────────────────────────────────
-      if (requiredPermissions.length && !selfScoped) {
+      if (!shareContext && requiredPermissions.length && !selfScoped) {
         if (!ref) {
           console.warn(
             `[withDataroomAuth] ${new URL(request.url).pathname} requires ` +
@@ -435,8 +494,25 @@ export function withDataroomAuth(handler, options = {}) {
         }
       }
 
-      const caps =
-        capabilities && ref ? await resolveCapabilities(user, ref, roomId, room) : null;
+      // A share visitor's capabilities are the link's permissions, not the
+      // result of a grant lookup: the visitor holds no grants of their own, so
+      // asking the permission checker would report nothing and the viewer
+      // would hide every control the link actually allows.
+      let caps = null;
+      if (capabilities && ref) {
+        caps = shareContext
+          ? {
+              canView: shareContext.share.permissions.includes('view'),
+              canComment: shareContext.share.permissions.includes('comment'),
+              canEdit: shareContext.share.permissions.includes('edit'),
+              canDownload:
+                shareContext.share.permissions.includes('download') &&
+                room?.settings?.allowDownload !== false,
+              canPrint: shareContext.share.permissions.includes('print'),
+              printImpliesEgress: true,
+            }
+          : await resolveCapabilities(user, ref, roomId, room);
+      }
 
       return await handler(request, {
         user,
@@ -449,6 +525,7 @@ export function withDataroomAuth(handler, options = {}) {
         capabilities: caps,
         isAdmin: admin,
         isExternal: !!user.isExternal,
+        share: shareContext?.share || null,
       });
     } catch (error) {
       console.error(`Data room route error (${request?.url}):`, error);
