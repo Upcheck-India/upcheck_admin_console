@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { Readable } from 'node:stream';
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
 import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
@@ -44,16 +45,6 @@ export const GET = withDataroomAuth(
 
     const file = files[0];
 
-    // Create download stream
-    const downloadStream = bucket.openDownloadStream(document.fileId);
-
-    // Collect chunks
-    const chunks = [];
-    for await (const chunk of downloadStream) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
-
     // Log download
     await logAudit({
       action: AUDIT_ACTIONS.DOCUMENT_DOWNLOAD,
@@ -85,13 +76,22 @@ export const GET = withDataroomAuth(
       { upsert: true }
     );
 
-    // Return file
-    const headers = new Headers();
-    headers.set('Content-Type', file.contentType || document.mimeType || 'application/octet-stream');
-    headers.set('Content-Disposition', `attachment; filename="${encodeURIComponent(document.fileName || file.filename)}"`);
-    headers.set('Content-Length', buffer.length.toString());
+    // Streamed, not buffered: a download used to read the entire file into the
+    // function's memory before sending the first byte, which put a large
+    // document's whole size against the memory limit and delayed the response
+    // until the last chunk had arrived from Mongo. Auditing happens above, so
+    // the log entry is written whether or not the client finishes the transfer.
+    const downloadStream = bucket.openDownloadStream(document.fileId);
+    request.signal?.addEventListener('abort', () => downloadStream.destroy(), { once: true });
+    downloadStream.on('error', (err) => console.error('GridFS download error:', err));
 
-    return new NextResponse(buffer, { headers });
+    return new NextResponse(Readable.toWeb(downloadStream), {
+      headers: {
+        'Content-Type': file.contentType || document.mimeType || 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${encodeURIComponent(document.fileName || file.filename)}"`,
+        'Content-Length': String(file.length),
+      },
+    });
   },
   {
     requires: 'download',

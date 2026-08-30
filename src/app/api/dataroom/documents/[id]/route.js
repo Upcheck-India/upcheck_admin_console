@@ -5,7 +5,7 @@ import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id] - Get single document
 export const GET = withDataroomAuth(
-  async (request, { user, db, params }) => {
+  async (request, { user, db, params, capabilities }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -21,19 +21,9 @@ export const GET = withDataroomAuth(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // Enforce permissions for view access
-    const { hasPermission } = await import('../../../../../lib/dataroom/permission-checker');
-    const canView = await hasPermission({
-      user,
-      resourceType: 'document',
-      resourceId: id,
-      permission: 'view',
-      roomId: document.roomId
-    });
-
-    if (!canView) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    // The `view` grant is checked by the wrapper before this handler runs; the
+    // hand-rolled hasPermission call that used to sit here asked the same
+    // question a second time, one dynamic import and one round-trip later.
 
     // Log document view
     await logAudit({
@@ -62,11 +52,16 @@ export const GET = withDataroomAuth(
       { upsert: true }
     );
 
-    return NextResponse.json(document);
+    // Capabilities travel with the metadata so the viewer knows which controls
+    // to render before it starts streaming bytes, rather than discovering it
+    // from response headers once the file is already on its way.
+    return NextResponse.json({ ...document, capabilities });
   },
   {
     requires: 'view',
     resource: { type: 'document', param: 'id' },
+    allowExternal: true,
+    capabilities: true,
   },
 );
 

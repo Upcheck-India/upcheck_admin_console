@@ -261,3 +261,51 @@
 
 
 
+
+/* Data room printing.
+   The viewer prints rasterised page canvases rather than letting the browser
+   print the original PDF, so what leaves the machine is a watermarked copy.
+   The print root is built at print time and removed afterwards. */
+#dataroom-print-root {
+  display: none;
+}
+
+@media print {
+  body.dataroom-printing > *:not(#dataroom-print-root) {
+    display: none !important;
+  }
+
+  #dataroom-print-root {
+    display: block;
+  }
+
+  .dataroom-print-page {
+    position: relative;
+    page-break-after: always;
+    break-after: page;
+  }
+
+  .dataroom-print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  .dataroom-print-page canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .dataroom-print-watermark {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(-45deg);
+    font-size: 3rem;
+    font-weight: 700;
+    color: rgba(15, 23, 42, 0.12);
+    pointer-events: none;
+  }
+}

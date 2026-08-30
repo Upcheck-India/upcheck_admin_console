@@ -42,6 +42,7 @@
     "next-auth": "^4.24.11",
     "nodemailer": "^6.9.16",
     "papaparse": "^5.5.3",
+    "pdfjs-dist": "^4.10.38",
     "prismjs": "^1.30.0",
     "react": "^19.0.0",
     "react-datepicker": "^8.4.0",
