@@ -29,6 +29,20 @@ const COLOR_CHOICES = ['#0B6DC7', '#00A9C6', '#1E8E48', '#B36A00', '#C42B2B', '#
 const TIMEZONES = ['Asia/Kolkata', 'UTC', 'America/New_York', 'America/Los_Angeles', 'Europe/London', 'Europe/Berlin', 'Asia/Singapore', 'Asia/Dubai', 'Australia/Sydney'];
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// Most blocks want one of a handful of windows. Typing 09:00 and 18:00 into
+// two time fields is not hard, but it is friction on the common case, and the
+// presets double as a hint about what this field is for.
+// 23:59 rather than 24:00 because parseHHMM rejects hour 24.
+const WINDOW_PRESETS = [
+  { label: 'Full day', start: '09:00', end: '18:00' },
+  { label: 'First half', start: '09:00', end: '13:30' },
+  { label: 'Second half', start: '13:30', end: '18:00' },
+  { label: 'Morning', start: '09:00', end: '12:00' },
+  { label: 'Afternoon', start: '12:00', end: '17:00' },
+  { label: 'Evening', start: '17:00', end: '21:00' },
+  { label: 'All hours', start: '00:00', end: '23:59' },
+];
+
 function BlockIcon({ name, className }) {
   const C = Icons[name] || CalendarClock;
   return <C className={className} />;
@@ -380,7 +394,11 @@ function BlockEditor({ block, onClose, onSaved }) {
   };
 
   const submit = async (e) => {
-    e.preventDefault();
+    e?.preventDefault?.();
+    // Enter inside a field fires the form's submit. On any step but the last
+    // that means 'go on', not 'save' — a half-filled block should never be
+    // created because someone pressed Enter in the title field.
+    if (!last) { go(step + 1); return; }
     if (stepError) { setError(stepError); return; }
     setError('');
     setSaving(true);
@@ -550,17 +568,39 @@ function BlockEditor({ block, onClose, onSaved }) {
                   </div>
                 </Field>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <Field label="From">
-                    <input type="time" value={form.window.startTime} onChange={(e) => setWin({ startTime: e.target.value })} className={UI.input} />
-                  </Field>
-                  <Field label="Until">
-                    <input type="time" value={form.window.endTime} onChange={(e) => setWin({ endTime: e.target.value })} className={UI.input} />
-                  </Field>
-                  <Field label="Slot size" hint="min">
-                    <input type="number" min="15" step="5" value={form.window.granularityMinutes} onChange={(e) => setWin({ granularityMinutes: Number(e.target.value) })} className={UI.input} />
-                  </Field>
-                </div>
+                <Field label="Open hours">
+                  <div className="flex gap-1.5 flex-wrap mb-2">
+                    {WINDOW_PRESETS.map((p) => {
+                      const active =
+                        form.window.startTime === p.start && form.window.endTime === p.end;
+                      return (
+                        <button
+                          type="button"
+                          key={p.label}
+                          onClick={() => setWin({ startTime: p.start, endTime: p.end })}
+                          title={`${p.start} – ${p.end}`}
+                          className={`${UI.chip} ${active ? UI.chipOn : UI.chipOff}`}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <span className="block text-[11px] text-gray-400 mb-1">From</span>
+                      <input type="time" value={form.window.startTime} onChange={(e) => setWin({ startTime: e.target.value })} className={UI.input} />
+                    </div>
+                    <div>
+                      <span className="block text-[11px] text-gray-400 mb-1">Until</span>
+                      <input type="time" value={form.window.endTime} onChange={(e) => setWin({ endTime: e.target.value })} className={UI.input} />
+                    </div>
+                    <div>
+                      <span className="block text-[11px] text-gray-400 mb-1">Slot size (min)</span>
+                      <input type="number" min="15" step="5" value={form.window.granularityMinutes} onChange={(e) => setWin({ granularityMinutes: Number(e.target.value) })} className={UI.input} />
+                    </div>
+                  </div>
+                </Field>
 
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
                   Claims snap to {form.window.granularityMinutes}-minute boundaries counted from{' '}
@@ -743,9 +783,17 @@ function BlockEditor({ block, onClose, onSaved }) {
               {step + 1} / {STEPS.length}
             </span>
 
+            {/* Both branches are type="button", and they carry different keys.
+                A single button whose type flipped from "button" to "submit"
+                during the re-render its own click triggered was submitting the
+                form: React reused the DOM node, the browser saw a submit
+                button under the pointer, and ran the default action. Clicking
+                Next on step three created the block. */}
             {last ? (
               <button
-                type="submit"
+                key="save"
+                type="button"
+                onClick={submit}
                 disabled={saving}
                 className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold disabled:opacity-60"
               >
@@ -754,6 +802,7 @@ function BlockEditor({ block, onClose, onSaved }) {
               </button>
             ) : (
               <button
+                key="next"
                 type="button"
                 onClick={() => go(step + 1)}
                 className="inline-flex items-center gap-1 px-4 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-semibold"
