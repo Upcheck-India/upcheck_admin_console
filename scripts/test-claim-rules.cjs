@@ -298,6 +298,95 @@ function check(name, fn) {
     assert.strictEqual(next.block._id, undefined, 'normalizeBlock must never echo back an _id');
   });
 
+  /* ── a window that runs to midnight ──────────────────────────────────
+   *
+   * The reported bug: a 00:00–23:59 block with a five-hour minimum could not
+   * be claimed past the early evening. 23:59 is not on a slot boundary, so the
+   * last whole slot ended at 23:00 and the last five-hour claim had to start
+   * at 18:00 — the end of the day was unreachable with nothing explaining why.
+   * 24:00 is the fix, and these pin it.
+   */
+  console.log('\nwindows that run to midnight');
+
+  check('parseHHMM accepts 24:00 as end-of-day, and only 24:00', () => {
+    assert.strictEqual(S.parseHHMM('24:00'), 1440);
+    assert.strictEqual(S.parseHHMM('23:59'), 1439);
+    assert.strictEqual(S.parseHHMM('24:30'), null, '24:30 is a typo, not a time');
+    assert.strictEqual(S.parseHHMM('25:00'), null);
+  });
+
+  check('a 24:00 window is accepted and normalises to 1440 minutes long', () => {
+    const built24 = normalizeBlock({
+      title: 'All day', timezone: TZ, startDate: '2026-09-01',
+      window: { days: [1, 2, 3, 4, 5], startTime: '00:00', endTime: '24:00', granularityMinutes: 60 },
+      rules: { minMinutes: 300, maxMinutes: 300, capacity: 1 },
+    });
+    assert.strictEqual(built24.error, undefined, built24.error);
+    assert.strictEqual(built24.block.window.endTime, '24:00');
+  });
+
+  check('wallToUtc maps 24:00 onto the following midnight', () => {
+    const endOfDay = wallToUtc('2026-09-01', '24:00', TZ);
+    const nextMidnight = wallToUtc('2026-09-02', '00:00', TZ);
+    assert.strictEqual(endOfDay.getTime(), nextMidnight.getTime());
+  });
+
+  check('the last five hours of the day can be claimed', () => {
+    const built24 = normalizeBlock({
+      title: 'All day', timezone: TZ, startDate: '2026-09-01', endDate: '2026-09-30',
+      window: { days: [1, 2, 3, 4, 5], startTime: '00:00', endTime: '24:00', granularityMinutes: 60 },
+      rules: {
+        minMinutes: 300, maxMinutes: 300, maxMinutesPerDay: null,
+        maxMinutesPerWeek: null, maxClaimsPerDay: null, capacity: 1,
+        advanceNoticeMinutes: 0, horizonDays: null,
+      },
+    });
+    const B = { _id: 'b24', ownerId: 'owner1', ...built24.block };
+
+    // 19:00 → 24:00 on Tuesday 1 September. This is the exact range the bug
+    // made unreachable.
+    const start = wallToUtc('2026-09-01', '19:00', TZ);
+    const end = wallToUtc('2026-09-01', '24:00', TZ);
+    const res = validateClaim({ block: B, user: RAM, start, end, now: NOW });
+    assert.ok(res.ok, `the evening claim was refused: ${res.code} ${res.message}`);
+    assert.strictEqual(res.minutes, 300);
+  });
+
+  check('a claim ending at midnight is not treated as straddling it', () => {
+    const built24 = normalizeBlock({
+      title: 'All day', timezone: TZ, startDate: '2026-09-01', endDate: '2026-09-30',
+      window: { days: [1, 2, 3, 4, 5], startTime: '00:00', endTime: '24:00', granularityMinutes: 60 },
+      rules: { minMinutes: 60, maxMinutes: 300, capacity: 1 },
+    });
+    const B = { _id: 'b24b', ownerId: 'owner1', ...built24.block };
+    const res = validateClaim({
+      block: B,
+      user: RAM,
+      start: wallToUtc('2026-09-01', '23:00', TZ),
+      end: wallToUtc('2026-09-01', '24:00', TZ),
+      now: NOW,
+    });
+    assert.ok(res.ok, `the last hour was refused: ${res.code} ${res.message}`);
+  });
+
+  check('one minute past midnight is still refused', () => {
+    const built24 = normalizeBlock({
+      title: 'All day', timezone: TZ, startDate: '2026-09-01', endDate: '2026-09-30',
+      window: { days: [1, 2, 3, 4, 5], startTime: '00:00', endTime: '24:00', granularityMinutes: 60 },
+      rules: { minMinutes: 60, maxMinutes: 300, capacity: 1 },
+    });
+    const B = { _id: 'b24c', ownerId: 'owner1', ...built24.block };
+    const res = validateClaim({
+      block: B,
+      user: RAM,
+      start: wallToUtc('2026-09-01', '23:00', TZ),
+      // 01:00 the next day — genuinely across midnight, and still not allowed.
+      end: wallToUtc('2026-09-02', '01:00', TZ),
+      now: NOW,
+    });
+    assert.ok(!res.ok, 'a claim crossing midnight must still be refused');
+  });
+
   console.log(`\n${passed} checks passed.`);
 })().catch((e) => {
   console.error('\nFAILED:', e.message);

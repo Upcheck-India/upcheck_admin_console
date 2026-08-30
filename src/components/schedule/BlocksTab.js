@@ -17,7 +17,10 @@ import {
   Plus, Loader2, X, ChevronLeft, ChevronRight, Trash2, Edit2, Copy,
   AlertTriangle, Check, Users, Clock, ArrowLeft, CalendarClock,
 } from 'lucide-react';
-import TimeGrid, { shiftDay, weekOf, holderTint } from './TimeGrid';
+import TimeGrid, {
+  shiftDay, weekOf, holderTint,
+  displayHHMM, readTimeFormatPref, writeTimeFormatPref,
+} from './TimeGrid';
 import { describeRules } from '../../lib/scheduleBlocks';
 
 const ICON_CHOICES = [
@@ -32,7 +35,9 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Most blocks want one of a handful of windows. Typing 09:00 and 18:00 into
 // two time fields is not hard, but it is friction on the common case, and the
 // presets double as a hint about what this field is for.
-// 23:59 rather than 24:00 because parseHHMM rejects hour 24.
+// 'All hours' ends at 24:00 — midnight at the end of the day. 23:59 used to
+// be the only expressible end, and because it lands on no slot boundary the
+// last hour of the day was silently unbookable.
 const WINDOW_PRESETS = [
   { label: 'Full day', start: '09:00', end: '18:00' },
   { label: 'First half', start: '09:00', end: '13:30' },
@@ -40,7 +45,7 @@ const WINDOW_PRESETS = [
   { label: 'Morning', start: '09:00', end: '12:00' },
   { label: 'Afternoon', start: '12:00', end: '17:00' },
   { label: 'Evening', start: '17:00', end: '21:00' },
-  { label: 'All hours', start: '00:00', end: '23:59' },
+  { label: 'All hours', start: '00:00', end: '24:00' },
 ];
 
 function BlockIcon({ name, className }) {
@@ -425,6 +430,7 @@ function BlockEditor({ block, onClose, onSaved }) {
     }
   };
 
+  const endsAtMidnight = form.window.endTime === '24:00';
   const icons = ICON_CHOICES.filter((n) => n.toLowerCase().includes(iconQuery.toLowerCase()));
   const last = step === STEPS.length - 1;
 
@@ -593,13 +599,41 @@ function BlockEditor({ block, onClose, onSaved }) {
                     </div>
                     <div>
                       <span className="block text-[11px] text-gray-400 mb-1">Until</span>
-                      <input type="time" value={form.window.endTime} onChange={(e) => setWin({ endTime: e.target.value })} className={UI.input} />
+                      {/* A native time input cannot express 24:00 — its range
+                          stops at 23:59 — so end-of-day gets its own control
+                          below and this field is stood down while it is on. */}
+                      <input
+                        type="time"
+                        value={endsAtMidnight ? '' : form.window.endTime}
+                        disabled={endsAtMidnight}
+                        placeholder="24:00"
+                        onChange={(e) => setWin({ endTime: e.target.value })}
+                        className={`${UI.input} disabled:bg-gray-100 disabled:text-gray-400`}
+                      />
                     </div>
                     <div>
                       <span className="block text-[11px] text-gray-400 mb-1">Slot size (min)</span>
                       <input type="number" min="15" step="5" value={form.window.granularityMinutes} onChange={(e) => setWin({ granularityMinutes: Number(e.target.value) })} className={UI.input} />
                     </div>
                   </div>
+
+                  <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={endsAtMidnight}
+                      onChange={(e) =>
+                        setWin({ endTime: e.target.checked ? '24:00' : '18:00' })
+                      }
+                      className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-gray-600">
+                      Runs until midnight
+                      <span className="block text-[11px] text-gray-400">
+                        Ends at 24:00 rather than 23:59, so the last slot of the day is a
+                        whole slot and can actually be claimed.
+                      </span>
+                    </span>
+                  </label>
                 </Field>
 
                 <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
@@ -825,6 +859,11 @@ function BlockDetail({ id, onBack }) {
   const [view, setView] = useState('week');
   const [anchor, setAnchor] = useState(null);
   const [displayTz, setDisplayTz] = useState(null);
+  // Display only. Everything on the wire stays 24-hour 'HH:MM'.
+  const [timeFormat, setTimeFormat] = useState('24h');
+  useEffect(() => { setTimeFormat(readTimeFormatPref()); }, []);
+  const use12h = timeFormat === '12h';
+  const setFormat = (v) => { setTimeFormat(v); writeTimeFormatPref(v); };
   const [pending, setPending] = useState(null);      // the drag-selected range
 
   const load = useCallback(async (anchorDate) => {
@@ -908,6 +947,12 @@ function BlockDetail({ id, onBack }) {
               className={`px-3 py-1 text-xs font-medium capitalize ${view === v ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>{v}</button>
           ))}
         </div>
+        <div className="flex rounded-lg border border-gray-300 overflow-hidden" title="Clock format">
+          {['24h', '12h'].map((f) => (
+            <button key={f} onClick={() => setFormat(f)}
+              className={`px-2.5 py-1 text-xs font-medium ${timeFormat === f ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>{f}</button>
+          ))}
+        </div>
         <select value={displayTz} onChange={(e) => setDisplayTz(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-lg text-xs text-gray-600">
           {[...new Set([block.timezone, ...TIMEZONES])].map((t) => <option key={t}>{t}</option>)}
         </select>
@@ -921,7 +966,7 @@ function BlockDetail({ id, onBack }) {
               <div key={c._id} className="flex items-center gap-2 text-sm bg-white rounded-lg px-3 py-1.5 border border-amber-100">
                 <span className="font-medium text-gray-800">{c.userName}</span>
                 <span className="text-gray-500 text-xs">
-                  {new Date(c.startTime).toLocaleString('en-GB', { timeZone: displayTz, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} · {c.minutes} min
+                  {new Date(c.startTime).toLocaleString('en-GB', { timeZone: displayTz, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: use12h })} · {c.minutes} min
                 </span>
                 {c.leaveWarning && <span className="text-[10px] text-amber-700 bg-amber-100 rounded px-1.5">on {c.leaveWarning.leaveTypeName}</span>}
                 <div className="flex-1" />
@@ -935,6 +980,7 @@ function BlockDetail({ id, onBack }) {
 
       <TimeGrid
         view={view}
+        use12h={use12h}
         anchorDate={anchor}
         timezone={displayTz}
         accent={block.color}
@@ -955,6 +1001,7 @@ function BlockDetail({ id, onBack }) {
         <ClaimPanel
           block={block}
           range={pending}
+          use12h={use12h}
           onClose={() => setPending(null)}
           onDone={() => { setPending(null); load(anchor); }}
         />
@@ -965,7 +1012,7 @@ function BlockDetail({ id, onBack }) {
 
 /* ─────────────────────────  The claim panel  ─────────────────────────── */
 
-function ClaimPanel({ block, range, onClose, onDone }) {
+function ClaimPanel({ block, range, use12h, onClose, onDone }) {
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -1008,7 +1055,9 @@ function ClaimPanel({ block, range, onClose, onDone }) {
           {error && <div className="bg-red-50 text-red-700 text-sm p-2 rounded flex gap-2"><AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />{error}</div>}
           <div className="rounded-lg border p-3" style={{ background: tint.bg, borderColor: tint.border, color: tint.text }}>
             <div className="font-semibold">{range.date}</div>
-            <div className="text-sm">{range.startTime} – {range.endTime} · {minutes} min</div>
+            <div className="text-sm">
+              {displayHHMM(range.startTime, use12h)} – {displayHHMM(range.endTime, use12h)} · {minutes} min
+            </div>
             <div className="text-xs opacity-70 mt-1">{block.timezone}</div>
           </div>
           <div>

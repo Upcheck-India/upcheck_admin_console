@@ -40,12 +40,31 @@ export function slugify(str) {
     .slice(0, 60) || 'meeting';
 }
 
-// "HH:MM" -> minutes since midnight (null if malformed).
+/**
+ * "HH:MM" -> minutes since midnight (null if malformed).
+ *
+ * `24:00` is accepted, and means the end of the day — 1440.
+ *
+ * Without it there is no way to say "open until midnight", and the closest
+ * available end, 23:59, is not on any slot boundary. A block running
+ * 00:00–23:59 at hourly granularity therefore stopped generating slots at
+ * 23:00, and with a five-hour minimum the last claimable start fell back to
+ * 18:00 — the end of the evening simply could not be booked, with nothing on
+ * screen explaining why.
+ *
+ * Nothing downstream needed changing to support it: Date.UTC normalises hour
+ * 24 into the next day, validateClaim already scores a claim ending at
+ * midnight as 1440, and hhmm(1440) prints "24:00". Only this guard stood in
+ * the way. It is deliberately the single value above 23:59 that parses — 24:30
+ * is still a typo, not a time.
+ */
 export function parseHHMM(s) {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
+  const raw = String(s || '').trim();
+  const m = /^(\d{1,2}):(\d{2})$/.exec(raw);
   if (!m) return null;
   const h = Number(m[1]);
   const mi = Number(m[2]);
+  if (h === 24 && mi === 0) return 1440;
   if (h < 0 || h > 23 || mi < 0 || mi > 59) return null;
   return h * 60 + mi;
 }

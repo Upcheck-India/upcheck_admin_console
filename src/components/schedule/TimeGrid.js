@@ -35,6 +35,55 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const pad2 = (n) => String(n).padStart(2, '0');
 export const hhmm = (mins) => `${pad2(Math.floor(mins / 60))}:${pad2(mins % 60)}`;
 
+/**
+ * The clock a person reads, as opposed to the one the data is stored in.
+ *
+ * Times are held, sent and compared as 24-hour "HH:MM" everywhere — that is
+ * the wire format and it never changes. This is display only, and it is a
+ * preference because half the world reads one and half the other.
+ *
+ * 24:00 stays "12:00 AM" rather than becoming "0:00 AM": it is midnight at the
+ * end of the day, and the surrounding label already says which day.
+ */
+export function displayTime(mins, use12h) {
+  if (!use12h) return hhmm(mins);
+  const total = ((mins % 1440) + 1440) % 1440;
+  const h24 = Math.floor(total / 60);
+  const m = total % 60;
+  const suffix = h24 < 12 ? 'AM' : 'PM';
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${pad2(m)} ${suffix}`;
+}
+
+/** The same, for an "HH:MM" string rather than a minute count. */
+export function displayHHMM(value, use12h) {
+  if (!use12h || !value) return value;
+  const [h, m] = String(value).split(':').map(Number);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return value;
+  return displayTime(h * 60 + m, true);
+}
+
+/** Remembered per browser: a clock preference is not worth a server round-trip. */
+export const TIME_FORMAT_KEY = 'upcheck_schedule_time_format';
+
+export function readTimeFormatPref() {
+  if (typeof window === 'undefined') return '24h';
+  try {
+    return window.localStorage.getItem(TIME_FORMAT_KEY) === '12h' ? '12h' : '24h';
+  } catch {
+    // Private mode and blocked storage both throw rather than return null.
+    return '24h';
+  }
+}
+
+export function writeTimeFormatPref(value) {
+  try {
+    window.localStorage.setItem(TIME_FORMAT_KEY, value);
+  } catch {
+    // A preference that cannot be saved is still worth honouring this session.
+  }
+}
+
 /** "2h 30m" — durations read faster than a minute count. */
 export function humanMinutes(mins) {
   const h = Math.floor(mins / 60);
@@ -122,6 +171,7 @@ function nowMinutesIn(tz) {
 
 export default function TimeGrid({
   view = 'week',
+  use12h = false,
   anchorDate,
   timezone = 'UTC',
   window: win,
@@ -225,7 +275,7 @@ export default function TimeGrid({
                         type="button"
                         key={c._id}
                         onClick={() => onClaimClick?.(c)}
-                        title={`${c.userName} · ${hhmm(c.at.startMin)}–${hhmm(c.at.endMin)}`}
+                        title={`${c.userName} · ${displayTime(c.at.startMin, use12h)}–${displayTime(c.at.endMin, use12h)}`}
                         className="w-full text-left truncate rounded px-1 py-0.5 text-[10px] font-medium border block"
                         style={{
                           background: t.bg,
@@ -235,7 +285,7 @@ export default function TimeGrid({
                           opacity: c.status === 'cancelled' ? 0.45 : 1,
                         }}
                       >
-                        <span className="tabular-nums opacity-70">{hhmm(c.at.startMin)}</span>{' '}
+                        <span className="tabular-nums opacity-70">{displayTime(c.at.startMin, use12h)}</span>{' '}
                         {mine ? 'You' : c.userName}
                       </button>
                     );
@@ -282,7 +332,7 @@ export default function TimeGrid({
         const a = Math.min(drag.a, drag.b);
         const b = Math.max(drag.a, drag.b);
         const mins = (b - a + 1) * gran;
-        return `${hhmm(winStart + a * gran)} – ${hhmm(winStart + (b + 1) * gran)} · ${humanMinutes(mins)}`;
+        return `${displayTime(winStart + a * gran, use12h)} – ${displayTime(winStart + (b + 1) * gran, use12h)} · ${humanMinutes(mins)}`;
       })()
     : null;
 
@@ -355,7 +405,7 @@ export default function TimeGrid({
                   className="absolute right-2 text-[11px] tabular-nums text-gray-400"
                   style={{ top: r * ROW_H, transform: first ? 'none' : 'translateY(-50%)' }}
                 >
-                  {hhmm(mins)}
+                  {displayTime(mins, use12h)}
                 </span>
               );
             })}
@@ -364,7 +414,7 @@ export default function TimeGrid({
                 className="absolute right-1 px-1 rounded text-[10px] font-semibold text-white tabular-nums"
                 style={{ top: nowTop, transform: 'translateY(-50%)', background: '#C42B2B' }}
               >
-                {hhmm(nowMin)}
+                {displayTime(nowMin, use12h)}
               </span>
             )}
           </div>
@@ -462,7 +512,7 @@ export default function TimeGrid({
                       key={c._id}
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={() => onClaimClick?.(c)}
-                      title={`${c.userName} · ${hhmm(c.at.startMin)}–${hhmm(c.at.endMin)} · ${humanMinutes(
+                      title={`${c.userName} · ${displayTime(c.at.startMin, use12h)}–${displayTime(c.at.endMin, use12h)} · ${humanMinutes(
                         c.at.endMin - c.at.startMin,
                       )}${c.status === 'pending' ? ' (awaiting approval)' : ''}`}
                       className="absolute z-10 rounded-lg px-2 py-1 text-left overflow-hidden leading-tight shadow-sm hover:shadow-md hover:z-20 transition-shadow"
@@ -484,7 +534,7 @@ export default function TimeGrid({
                       </span>
                       {tall && (
                         <span className="block truncate text-[10px] tabular-nums opacity-75">
-                          {hhmm(c.at.startMin)}–{hhmm(c.at.endMin)}
+                          {displayTime(c.at.startMin, use12h)}–{displayTime(c.at.endMin, use12h)}
                         </span>
                       )}
                       {tall && c.status === 'pending' && (
