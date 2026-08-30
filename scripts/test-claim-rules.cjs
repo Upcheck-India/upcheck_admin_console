@@ -288,6 +288,16 @@ function check(name, fn) {
     assert.match(normalizeBlock({ title: 'x', startDate: '2026-09-01', window: { days: [] } }).error, /at least one weekday/);
   });
 
+  check('a partial edit keeps the rules it did not mention', () => {
+    const next = normalizeBlock({ rules: { maxMinutes: 240 } }, BLOCK);
+    assert.strictEqual(next.error, undefined, next.error);
+    assert.strictEqual(next.block.rules.maxMinutes, 240);
+    assert.strictEqual(next.block.rules.maxMinutesPerWeek, 600, 'the weekly cap must survive a partial PUT');
+    assert.strictEqual(next.block.window.granularityMinutes, 30);
+    assert.strictEqual(next.block.title, 'Claude Code');
+    assert.strictEqual(next.block._id, undefined, 'normalizeBlock must never echo back an _id');
+  });
+
   console.log(`\n${passed} checks passed.`);
 })().catch((e) => {
   console.error('\nFAILED:', e.message);

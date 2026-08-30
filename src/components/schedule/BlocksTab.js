@@ -455,7 +455,9 @@ function BlockDetail({ id, onBack }) {
     setDisplayTz((t) => t || meta.block.timezone);
   }, [id, onBack]);
 
-  useEffect(() => { load(); }, [load]);
+  // The feed spans +/-40 days around the anchor, so refetch when the viewer
+  // navigates past that or their own claims would quietly vanish off the grid.
+  useEffect(() => { load(anchor); }, [load, anchor]);
 
   const { block, claims, canManage, userId, quota } = state;
   if (state.loading || !block || !anchor) {

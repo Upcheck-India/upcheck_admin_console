@@ -80,7 +80,15 @@ const nullableNum = (v) => (v === null || v === undefined || v === '' ? null : n
  * Returns { block } or { error: 'message' }.
  */
 export function normalizeBlock(input = {}, base = null) {
-  const src = { ...(base || {}), ...input };
+  // Nested groups merge too, so a partial PUT cannot silently reset the rules
+  // it did not mention back to their defaults.
+  const src = {
+    ...(base || {}),
+    ...input,
+    window: { ...(base?.window || {}), ...(input.window || {}) },
+    rules: { ...(base?.rules || {}), ...(input.rules || {}) },
+    access: { ...(base?.access || {}), ...(input.access || {}) },
+  };
   const title = String(src.title || '').trim();
   if (!title) return { error: 'Title is required' };
 
