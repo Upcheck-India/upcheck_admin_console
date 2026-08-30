@@ -1,3 +1,4 @@
+// @public-route validates a share token presented by an unauthenticated recipient
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 

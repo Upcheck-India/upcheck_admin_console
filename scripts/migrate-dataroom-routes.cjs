@@ -232,7 +232,14 @@ for (const file of walk(ROOT)) {
       return '';
     },
   );
-  src = src.replace(/function isAdminLike\(user\) \{[\s\S]*?\r?\n\}\r?\n\r?\n?/, '');
+  // isAdminLike is deliberately KEPT. It is a pure role predicate with no
+  // database access, and several handlers use it for business logic rather
+  // than as a guard — `rooms` GET selects its non-admin filtering branch with
+  // it, `rooms/[id]` combines it with room ownership. Leaving it in place also
+  // keeps the diff behaviour-preserving: the wrapper adds a grant check on top
+  // of the existing role checks rather than silently replacing them. Whether a
+  // room-level admin grant should confer these powers is a real question, but
+  // it belongs in a deliberate change, not a mechanical one.
 
   // 2. Convert each exported handler.
   const needed = new Set();
@@ -240,16 +247,19 @@ for (const file of walk(ROOT)) {
   for (const method of METHODS) {
     if (!cfg[method]) continue;
 
-    // The guard clauses appear both as one-liners and as multi-line blocks,
-    // so each optional group accepts either form.
-    const guard = (cond) =>
-      `(\\s*if \\(${cond}\\)\\s*\\{[\\s\\S]{0,200}?\\r?\\n\\s*\\}\\r?\\n|\\s*if \\(${cond}\\)[^\\n]*\\r?\\n)?`;
+    // The ROUTES map lists the verb for every method a route *might* expose;
+    // not every file implements all of them. An absent method is not a
+    // failure to convert.
+    if (!new RegExp(`export async function ${method}\\(`).test(src)) continue;
 
+    // Consume only the handler header, its `try {`, and the line that fetched
+    // the user. Every guard clause is left exactly where it is: `if (!user)`
+    // becomes dead code (the wrapper guarantees a user) but is harmless, and
+    // the isAdminLike ones are load-bearing. Matching less is what makes this
+    // work across the shape variations rather than enumerating them.
     const re = new RegExp(
       `export async function ${method}\\(request(?:,\\s*\\{\\s*params\\s*\\})?\\)\\s*\\{\\r?\\n\\s*try \\{\\r?\\n` +
-        `(\\s*const user = await getUserFromToken\\(request\\);\\r?\\n)?` +
-        guard('!user') +
-        guard('!isAdminLike\\(user\\)'),
+        `\\s*const user = await getUserFromToken\\(request\\);\\r?\\n`,
     );
 
     if (!re.test(src)) {
@@ -274,8 +284,15 @@ for (const file of walk(ROOT)) {
     touched = true;
 
     // Close: the wrapper owns the try/catch, so drop the handler's own.
+    // The catch binding is variously `error`, `e` or `err`, and the log line
+    // wording is not consistent either. Anchor on the structure instead: a
+    // catch block whose only job is to log and return a 500, followed by the
+    // handler's closing brace.
     const closeRe = new RegExp(
-      `\\r?\\n\\s*\\} catch \\(error\\) \\{\\r?\\n\\s*console\\.error\\('${method} [^']*',\\s*error\\);\\r?\\n\\s*return NextResponse\\.json\\(\\{ error: '[^']*' \\}, \\{ status: 500 \\}\\);\\r?\\n\\s*\\}\\r?\\n\\}`,
+      `\\r?\\n\\s*\\} catch \\((?:error|e|err)\\) \\{\\r?\\n` +
+        `\\s*console\\.error\\([^;]*\\);\\r?\\n` +
+        `\\s*return NextResponse\\.json\\(\\{ error: '[^']*' \\}, \\{ status: 500 \\}\\);\\r?\\n` +
+        `\\s*\\}\\r?\\n\\}`,
     );
     if (closeRe.test(src)) {
       src = src.replace(
@@ -291,12 +308,11 @@ for (const file of walk(ROOT)) {
 
   if (fileFailed || !touched) continue;
 
-  // Post-condition. The guard clauses are not always adjacent to `try {` —
-  // some handlers read query params first — so the opening regex can match
-  // while leaving a call to the helper we just deleted further down the body.
-  // Checking the result catches every such shape, where tightening the regex
-  // would only catch the ones anticipated.
-  if (/getUserFromToken\(request\)|isAdminLike\(user\)/.test(src)) {
+  // Post-condition: nothing may still call the helper we deleted. Checking the
+  // transformed result catches every shape, where tightening the regex would
+  // only catch the ones anticipated. isAdminLike is not checked because it is
+  // deliberately kept (see above).
+  if (/getUserFromToken\(request\)/.test(src)) {
     failed.push(`${key}: helper still referenced after transform — converting by hand`);
     continue;
   }

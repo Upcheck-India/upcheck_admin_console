@@ -28,10 +28,20 @@ function walk(dir, out = []) {
 const unwrapped = [];
 const wrapped = [];
 const selfScoped = [];
+const publicRoutes = [];
 let handlerCount = 0;
 
 for (const file of walk(ROOT)) {
   const src = fs.readFileSync(file, 'utf8');
+
+  // A route that is public by design declares it with an `@public-route`
+  // comment naming the reason. Without the marker a public route is
+  // indistinguishable from one whose guard was forgotten.
+  const publicMarker = /@public-route\s+(.+)/.exec(src);
+  if (publicMarker) {
+    publicRoutes.push(`${file} — ${publicMarker[1].trim()}`);
+    continue;
+  }
 
   // `selfScoped: true` is the deliberate opt-out for the handful of endpoints
   // that filter their own result set (cross-room lists) or cannot resolve a
@@ -67,10 +77,15 @@ if (selfScoped.length) {
   for (const s of selfScoped) console.log(`  ${s}`);
 }
 
+if (publicRoutes.length) {
+  console.log('\npublic by design (@public-route):');
+  for (const p of publicRoutes) console.log(`  ${p}`);
+}
+
 console.log(
   `\n${wrapped.length}/${handlerCount} handler(s) guarded by withDataroomAuth.` +
     (unwrapped.length ? `  ${unwrapped.length} remaining.` : '  All guarded.') +
-    `  ${selfScoped.length} file(s) self-scoped.`,
+    `  ${selfScoped.length} self-scoped, ${publicRoutes.length} public.`,
 );
 
 process.exit(unwrapped.length === 0 ? 0 : 1);

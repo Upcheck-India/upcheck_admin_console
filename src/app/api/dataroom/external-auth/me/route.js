@@ -1,3 +1,4 @@
+// @public-route reports the current external session, or 401
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 

@@ -1,33 +1,16 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { checkRoomAccess } from '../../../../../lib/dataroom/permission-checker';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 
 function isAdminLike(user) {
   return user && (user.role === 'Admin' || user.role === 'Console admin');
 }
 
 // GET /api/dataroom/rooms/[id] - Get single room
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
@@ -42,9 +25,6 @@ export async function GET(request, { params }) {
       }
       return NextResponse.json({ error: access.reason }, { status: 403 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const room = await db.collection('dataroom_rooms').findOne({
       _id: new ObjectId(id),
@@ -67,16 +47,16 @@ export async function GET(request, { params }) {
     });
 
     return NextResponse.json(room);
-  } catch (error) {
-    console.error('GET /api/dataroom/rooms/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', param: 'id' },
+  },
+);
 
 // PUT /api/dataroom/rooms/[id] - Update room
-export async function PUT(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
+export const PUT = withDataroomAuth(
+  async (request, { user, db, params }) => {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -97,9 +77,6 @@ export async function PUT(request, { params }) {
       settings,
       isLocked,
     } = body;
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const room = await db.collection('dataroom_rooms').findOne({
       _id: new ObjectId(id),
@@ -146,17 +123,16 @@ export async function PUT(request, { params }) {
 
     const updatedRoom = await db.collection('dataroom_rooms').findOne({ _id: new ObjectId(id) });
     return NextResponse.json(updatedRoom);
-
-  } catch (error) {
-    console.error('PUT /api/dataroom/rooms/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resource: { type: 'room', param: 'id' },
+  },
+);
 
 // DELETE /api/dataroom/rooms/[id] - Delete room
-export async function DELETE(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
+export const DELETE = withDataroomAuth(
+  async (request, { user, db, params }) => {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
@@ -167,9 +143,6 @@ export async function DELETE(request, { params }) {
 
     const { searchParams } = new URL(request.url);
     const permanent = searchParams.get('permanent') === 'true';
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const room = await db.collection('dataroom_rooms').findOne({
       _id: new ObjectId(id),
@@ -214,9 +187,9 @@ export async function DELETE(request, { params }) {
     });
 
     return NextResponse.json({ success: true, permanent });
-
-  } catch (error) {
-    console.error('DELETE /api/dataroom/rooms/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resource: { type: 'room', param: 'id' },
+  },
+);

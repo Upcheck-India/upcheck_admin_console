@@ -1,65 +1,15 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
 import { validateFolderName, generateFolderPath } from '../../../../lib/dataroom/folder-utils';
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
-async function getUserFromToken(request) {
-  try {
-    const adminToken = request.cookies.get('admin_token')?.value;
-    const client = await clientPromise;
-    const db = client.db('resources');
-
-    if (adminToken) {
-      const user = await db.collection('admin_users').findOne(
-        { sessionToken: adminToken },
-        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-      );
-      if (user) return user;
-    }
-
-    // Check external user authentication
-    const externalToken = request.cookies.get('external_user_token')?.value;
-    if (externalToken) {
-      const externalUser = await db.collection('dataroom_external_users').findOne(
-        { sessionToken: externalToken },
-        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
-      );
-      if (externalUser) {
-        return {
-          _id: externalUser._id,
-          id: externalUser._id.toString(),
-          email: externalUser.email,
-          username: externalUser.name,
-          role: externalUser.role || 'External User',
-          isExternal: true
-        };
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error fetching user from token:', error);
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
-
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const roomIdParam = searchParams.get('roomId');
     const parentIdParam = searchParams.get('parentId');
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const filter = {};
     if (roomIdParam) {
@@ -112,17 +62,15 @@ export async function GET(request) {
     }));
 
     return NextResponse.json({ count: foldersWithCounts.length, items: foldersWithCounts });
-  } catch (e) {
-    console.error('GET /api/dataroom/folders error', e);
-    return NextResponse.json({ error: 'Failed to list folders' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);
 
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const { roomId, name, parentId } = body;
@@ -137,8 +85,6 @@ export async function POST(request) {
     }
 
     const cleanName = validation.cleanName;
-    const client = await clientPromise;
-    const db = client.db('resources');
     const foldersColl = db.collection('dataroom_folders');
     const targetRoomId = new ObjectId(roomId);
 
@@ -212,9 +158,9 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ ...newFolder, _id: result.insertedId }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/folders error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);

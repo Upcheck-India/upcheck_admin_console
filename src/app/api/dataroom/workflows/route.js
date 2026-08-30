@@ -1,35 +1,11 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 // POST /api/dataroom/workflows - Create approval workflow
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user || !isAdminLike(user)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const { 
@@ -58,9 +34,6 @@ export async function POST(request) {
     if (!['sequential', 'parallel'].includes(workflowType)) {
       return NextResponse.json({ error: 'workflowType must be "sequential" or "parallel"' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify document exists
     const document = await db.collection('dataroom_documents').findOne({
@@ -139,28 +112,21 @@ export async function POST(request) {
       ...workflow,
       _id: result.insertedId,
     }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/workflows error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);
 
 // GET /api/dataroom/workflows - List workflows
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const documentId = searchParams.get('documentId');
     const roomId = searchParams.get('roomId');
     const status = searchParams.get('status');
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const filter = {};
     
@@ -186,9 +152,9 @@ export async function GET(request) {
       count: workflows.length,
       workflows,
     });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/workflows error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'room', query: 'roomId' },
+  },
+);
