@@ -48,16 +48,17 @@ export const ADMIN_ROLES = ['Admin', 'Console admin'];
  * Capabilities reported to handlers (and onward to the viewer UI) for the
  * resource under request.
  *
- * PRINT AND DOWNLOAD ARE NOW SEPARABLE, BUT NOT AIRTIGHT. The viewer no
- * longer hands the raw file to the browser's PDF plugin — it rasterises pages
- * to canvas and prints those — so `print` without `download` yields a
- * watermarked raster rather than the source file. What it does not stop is a
- * determined viewer reassembling the streamed bytes: the file still crosses
- * the wire to render it.
+ * PRINT AND DOWNLOAD ARE NOW GENUINELY SEPARABLE. A reader who lacks
+ * `download` is served server-rendered page images with their own identity
+ * watermarked into the pixels, and the PDF never reaches their browser — so
+ * there is nothing to reassemble from the network tab, and printing produces a
+ * watermarked raster of pages they were already allowed to see. A reader who
+ * holds `download` gets the file, because they may take it anyway.
  *
- * Phase 6 closes that by rendering pages server-side, so the source file never
- * reaches the browser at all. Until then `printImpliesEgress` stays true and
- * says so, rather than letting callers assume the control is airtight.
+ * `printImpliesEgress` therefore tracks `canDownload` rather than being
+ * permanently true. What no software can stop remains what it always was: a
+ * camera pointed at the screen. The watermark is aimed at exactly that, which
+ * is why it names the reader rather than saying CONFIDENTIAL at nobody.
  */
 const CAPABILITY_PERMISSIONS = ['view', 'comment', 'edit', 'download', 'print'];
 
@@ -97,9 +98,12 @@ async function resolveCapabilities(user, ref, roomId, room) {
     caps.canDownload = false;
   }
 
-  // See CAPABILITY_PERMISSIONS: printing is an egress path until the in-app
-  // viewer lands, so a caller that trusts canPrint should know that.
-  caps.printImpliesEgress = true;
+  // Whether printing hands over the source file. It does when the reader may
+  // download anyway — they get the canvas viewer, which fetches the PDF. It
+  // does not when they may not: that reader gets server-rendered page images,
+  // so the strongest thing a print can produce is a watermarked raster of
+  // pages they were already allowed to see.
+  caps.printImpliesEgress = caps.canDownload;
 
   return caps;
 }
@@ -523,7 +527,9 @@ export function withDataroomAuth(handler, options = {}) {
                 shareContext.share.permissions.includes('download') &&
                 room?.settings?.allowDownload !== false,
               canPrint: shareContext.share.permissions.includes('print'),
-              printImpliesEgress: true,
+              printImpliesEgress:
+                shareContext.share.permissions.includes('download') &&
+                room?.settings?.allowDownload !== false,
             }
           : await resolveCapabilities(user, ref, roomId, room);
       }

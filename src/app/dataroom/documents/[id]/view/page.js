@@ -22,6 +22,12 @@ const PdfCanvasViewer = dynamic(() => import('../../../../components/PdfCanvasVi
   ssr: false,
 });
 
+// The protected mode. Server-rendered page images, so the file itself never
+// reaches the browser.
+const PdfPagesViewer = dynamic(() => import('../../../../components/PdfPagesViewer'), {
+  ssr: false,
+});
+
 const HEARTBEAT_MS = 30_000;
 
 export default function DocumentViewerPage() {
@@ -157,6 +163,16 @@ export default function DocumentViewerPage() {
   const isPdf = doc?.mimeType === 'application/pdf';
   const isImage = doc?.mimeType?.startsWith('image/');
 
+  // Which reading mode this viewer gets, and why.
+  //
+  // A reader who may download is handed the file, because they may have it
+  // anyway — they get the canvas viewer, with selectable text and a small
+  // transfer. A reader who may not download gets server-rendered pages, where
+  // there is no file in the browser to reassemble and the watermark is in the
+  // pixels. The second mode is worse to read, which is exactly why it is not
+  // used on people who gain nothing from it.
+  const protectedMode = isPdf && !caps.canDownload;
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col">
       <header className="bg-slate-800 border-b border-slate-700 px-4 py-3">
@@ -257,14 +273,24 @@ export default function DocumentViewerPage() {
         <div className="max-w-5xl mx-auto flex justify-center">
           {isPdf && streamUrl && (
             <div className="bg-white rounded-lg shadow-2xl overflow-hidden">
-              <PdfCanvasViewer
-                url={streamUrl}
-                zoom={zoom}
-                page={currentPage}
-                watermark="CONFIDENTIAL"
-                onLoad={onPdfLoad}
-                registerPrinter={registerPrinter}
-              />
+              {protectedMode ? (
+                <PdfPagesViewer
+                  documentId={documentId}
+                  zoom={zoom}
+                  page={currentPage}
+                  onLoad={onPdfLoad}
+                  registerPrinter={registerPrinter}
+                />
+              ) : (
+                <PdfCanvasViewer
+                  url={streamUrl}
+                  zoom={zoom}
+                  page={currentPage}
+                  watermark="CONFIDENTIAL"
+                  onLoad={onPdfLoad}
+                  registerPrinter={registerPrinter}
+                />
+              )}
             </div>
           )}
 
@@ -319,7 +345,7 @@ export default function DocumentViewerPage() {
           </div>
           <div className="flex items-center space-x-2">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span>Secure connection</span>
+            <span>{protectedMode ? 'Protected view — watermarked' : 'Secure connection'}</span>
           </div>
         </div>
       </footer>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
 import { storeDocumentFile } from '../../../../../../lib/dataroom/document-storage';
+import { invalidateRenders } from '../../../../../../lib/dataroom/page-render';
 import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/versions - List all versions
@@ -128,6 +129,10 @@ export const POST = withDataroomAuth(
         },
       }
     );
+
+    // The cached page images belong to the bytes that were just replaced.
+    // Leaving them would serve the previous version to anyone reading pages.
+    await invalidateRenders(db, new ObjectId(id));
 
     await logAudit({
       action: AUDIT_ACTIONS.VERSION_CREATE,

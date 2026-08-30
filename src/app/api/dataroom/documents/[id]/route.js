@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 import { deleteDocumentFile } from '../../../../../lib/dataroom/document-storage';
+import { invalidateRenders } from '../../../../../lib/dataroom/page-render';
 
 // GET /api/dataroom/documents/[id] - Get single document
 export const GET = withDataroomAuth(
@@ -178,6 +179,8 @@ export const DELETE = withDataroomAuth(
           console.error('Failed to delete stored file:', err),
         );
       }
+
+      await invalidateRenders(db, new ObjectId(id));
 
       await db.collection('dataroom_versions').deleteMany({ documentId: new ObjectId(id) });
       await db.collection('dataroom_comments').deleteMany({ documentId: new ObjectId(id) });

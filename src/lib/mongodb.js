@@ -202,6 +202,13 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('dataroom_shares').createIndex({ targetEmail: 1 }),
       db.collection('dataroom_shares').createIndex({ allowedEmails: 1 }),
 
+      // Cached server-side page renders. The key is unique so two readers
+      // opening the same page at once cannot both leave a record behind.
+      db.collection('dataroom_page_renders').createIndex(
+        { documentId: 1, version: 1, page: 1, width: 1 },
+        { unique: true, name: 'page_render_key' },
+      ),
+
       // Documents imported from the Documentation module carry their origin.
       // Sparse because only imported documents have it, which is most rooms'
       // minority.
