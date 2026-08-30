@@ -259,6 +259,26 @@ clientPromise.then(async (resolvedClient) => {
         { expiresAt: 1 },
         { expireAfterSeconds: 0 },
       ),
+      // Claimable time blocks — the Blocks tab in /scheduling.
+      db.collection('schedule_blocks').createIndex({ ownerId: 1, status: 1 }),
+      db.collection('schedule_blocks').createIndex({ status: 1, updatedAt: -1 }),
+      // The grid feed: every day/week/month view is a range scan in one block.
+      db.collection('schedule_claims').createIndex({ blockId: 1, startTime: 1 }),
+      // Quota sums, as equality matches on keys bucketed in the block's zone.
+      db.collection('schedule_claims').createIndex({ blockId: 1, userId: 1, dayKey: 1 }),
+      db.collection('schedule_claims').createIndex({ blockId: 1, userId: 1, weekKey: 1 }),
+      db.collection('schedule_claims').createIndex({ userId: 1, startTime: -1 }),
+      // THE RACE FIX. Every claim expands into one row per granularity slot;
+      // `seat` runs 0..capacity-1, so a block with capacity 3 admits exactly
+      // three holders per slot. The loser of a race gets a duplicate-key error
+      // from Mongo — an authoritative refusal, not a read-then-write guess.
+      // A single { blockId, startTime } index would only protect a claim's
+      // first minute and a claim starting inside another would slip past it.
+      db.collection('schedule_claim_slots').createIndex(
+        { slotKey: 1, seat: 1 },
+        { unique: true, partialFilterExpression: { active: true } },
+      ),
+      db.collection('schedule_claim_slots').createIndex({ claimId: 1 }),
     ]);
 
     const failed = indexResults.filter((r) => r.status === 'rejected');
