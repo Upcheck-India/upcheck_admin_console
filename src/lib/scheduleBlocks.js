@@ -17,6 +17,8 @@
 
 import { tzOffsetMs, zonedWallTimeToUtc, parseHHMM } from './scheduling.js';
 
+export { parseHHMM };
+
 export const MIN_GRANULARITY_MINUTES = 15;
 export const CLAIM_STATUS = ['confirmed', 'pending', 'cancelled', 'rejected'];
 export const BLOCK_STATUS = ['open', 'paused', 'closed'];
