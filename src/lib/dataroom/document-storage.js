@@ -39,22 +39,38 @@ export function storageRef(document) {
  * one this layer imposes on the other two.)
  */
 export async function storeDocumentFile(db, file, { roomId, user }) {
-  const provider = await getActiveProvider(db);
-  const upload = provider.startUpload(db, {
+  return storeDocumentStream(db, Readable.fromWeb(file.stream()), {
     filename: file.name,
     contentType: file.type,
+    roomId,
+    user,
+  });
+}
+
+/**
+ * The same, from a Node readable.
+ *
+ * Used when the bytes do not arrive as an upload — importing a file that
+ * already lives elsewhere in the ERP, for instance, where the source is a
+ * GridFS download stream and never needs to become a File.
+ */
+export async function storeDocumentStream(db, source, { filename, contentType, roomId, user }) {
+  const provider = await getActiveProvider(db);
+  const upload = provider.startUpload(db, {
+    filename,
+    contentType,
     ...placementFor('dataroom', String(roomId)),
     metadata: {
       roomId,
       uploadedBy: user._id.toString(),
       uploadedByEmail: user.email,
-      originalName: file.name,
+      originalName: filename,
     },
   });
 
   let result;
   try {
-    await pipeline(Readable.fromWeb(file.stream()), upload.sink);
+    await pipeline(source, upload.sink);
     result = await upload.finalize();
   } catch (error) {
     // A half-written object is worse than none: it occupies quota and nothing

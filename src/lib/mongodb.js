@@ -202,6 +202,14 @@ clientPromise.then(async (resolvedClient) => {
       db.collection('dataroom_shares').createIndex({ targetEmail: 1 }),
       db.collection('dataroom_shares').createIndex({ allowedEmails: 1 }),
 
+      // Documents imported from the Documentation module carry their origin.
+      // Sparse because only imported documents have it, which is most rooms'
+      // minority.
+      db.collection('dataroom_documents').createIndex(
+        { 'source.resourceId': 1 },
+        { sparse: true, name: 'document_source_resource' },
+      ),
+
       // Share-link sessions and their one-time codes. Both expire on their
       // own via TTL indexes: a session left behind is a working credential,
       // and an unswept code collection grows for the life of the deployment.
