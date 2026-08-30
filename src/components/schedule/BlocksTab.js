@@ -431,6 +431,13 @@ function BlockEditor({ block, onClose, onSaved }) {
   };
 
   const endsAtMidnight = form.window.endTime === '24:00';
+  // How much of the window the whole slots do not cover.
+  const leftoverMinutes = (() => {
+    const toMin = (v) => { const [h, m] = String(v).split(':').map(Number); return h * 60 + m; };
+    const span = toMin(form.window.endTime) - toMin(form.window.startTime);
+    const g = Number(form.window.granularityMinutes) || 30;
+    return span > 0 && g > 0 ? span % g : 0;
+  })();
   const icons = ICON_CHOICES.filter((n) => n.toLowerCase().includes(iconQuery.toLowerCase()));
   const last = step === STEPS.length - 1;
 
@@ -618,6 +625,23 @@ function BlockEditor({ block, onClose, onSaved }) {
                   </div>
 
                   <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.window.allowPartialFinalSlot !== false}
+                      onChange={(e) => setWin({ allowPartialFinalSlot: e.target.checked })}
+                      className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-gray-600">
+                      Let the leftover at the end be claimed
+                      <span className="block text-[11px] text-gray-400">
+                        {leftoverMinutes > 0
+                          ? `This window leaves ${leftoverMinutes} min after the last full slot. With this on it can be taken as one shorter claim; with it off that time is unbookable.`
+                          : 'This window divides evenly into slots, so there is nothing left over.'}
+                      </span>
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={endsAtMidnight}

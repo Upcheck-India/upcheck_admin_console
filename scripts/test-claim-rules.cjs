@@ -387,6 +387,112 @@ function check(name, fn) {
     assert.ok(!res.ok, 'a claim crossing midnight must still be refused');
   });
 
+  /* ── the leftover at the end of a window ─────────────────────────────
+   *
+   * The reported case, exactly: a whole day in 5-hour slots. 24 hours does not
+   * divide by 5, so the slots run 00:00, 05:00, 10:00, 15:00 and stop — the
+   * last ending at 20:00. The remaining four hours generated no slot, and were
+   * shorter than the 5-hour minimum even if they had. 20:00 to midnight was
+   * unreachable no matter how the block was configured.
+   */
+  console.log('\nthe leftover at the end of a window');
+
+  const ALLDAY = (() => {
+    const b = normalizeBlock({
+      title: 'Claude Code seat', timezone: TZ,
+      startDate: '2026-09-01', endDate: '2026-09-30',
+      window: { days: [1, 2, 3, 4, 5], startTime: '00:00', endTime: '24:00', granularityMinutes: 300 },
+      rules: {
+        minMinutes: 300, maxMinutes: 300, maxMinutesPerDay: null,
+        maxMinutesPerWeek: null, maxClaimsPerDay: null, capacity: 1,
+        advanceNoticeMinutes: 0, horizonDays: null,
+      },
+    });
+    assert.strictEqual(b.error, undefined, b.error);
+    return { _id: 'allday', ownerId: 'owner1', ...b.block };
+  })();
+
+  check('the remainder is allowed by default', () => {
+    assert.strictEqual(ALLDAY.window.allowPartialFinalSlot, true);
+  });
+
+  check('20:00 to midnight is claimable, though it is only four hours', () => {
+    const res = validateClaim({
+      block: ALLDAY, user: RAM, now: NOW,
+      start: wallToUtc('2026-09-01', '20:00', TZ),
+      end: wallToUtc('2026-09-01', '24:00', TZ),
+    });
+    assert.ok(res.ok, `the leftover was refused: ${res.code} ${res.message}`);
+    assert.strictEqual(res.minutes, 240, 'four hours, under the five-hour minimum, and allowed anyway');
+  });
+
+  check('the full-length slots still work', () => {
+    const res = validateClaim({
+      block: ALLDAY, user: RAM, now: NOW,
+      start: wallToUtc('2026-09-01', '15:00', TZ),
+      end: wallToUtc('2026-09-01', '20:00', TZ),
+    });
+    assert.ok(res.ok, `${res.code} ${res.message}`);
+  });
+
+  check('a short claim that does NOT close out the window is still refused', () => {
+    // 20:00–22:00 is four hours short of the minimum and does not reach the
+    // window's end, so the partial-slot allowance must not cover it.
+    const res = validateClaim({
+      block: ALLDAY, user: RAM, now: NOW,
+      start: wallToUtc('2026-09-01', '20:00', TZ),
+      end: wallToUtc('2026-09-01', '22:00', TZ),
+    });
+    // Refused as 'granularity' rather than 'too_short': with 5-hour slots
+    // there is no boundary at 22:00 to land on in the first place. Either way
+    // it is refused, which is what this pins — the allowance must reach only
+    // the claim that actually closes out the window.
+    assert.ok(!res.ok, 'a short claim in the middle of the window must still be refused');
+  });
+
+  check('turning it off restores the strict behaviour', () => {
+    const off = normalizeBlock({
+      title: 'Strict', timezone: TZ, startDate: '2026-09-01', endDate: '2026-09-30',
+      window: {
+        days: [1, 2, 3, 4, 5], startTime: '00:00', endTime: '24:00',
+        granularityMinutes: 300, allowPartialFinalSlot: false,
+      },
+      rules: { minMinutes: 300, maxMinutes: 300, capacity: 1 },
+    });
+    assert.strictEqual(off.error, undefined, off.error);
+    assert.strictEqual(off.block.window.allowPartialFinalSlot, false);
+    const B = { _id: 'strict', ownerId: 'owner1', ...off.block };
+    const res = validateClaim({
+      block: B, user: RAM, now: NOW,
+      start: wallToUtc('2026-09-01', '20:00', TZ),
+      end: wallToUtc('2026-09-01', '24:00', TZ),
+    });
+    assert.ok(!res.ok, 'with the option off the leftover must be refused again');
+  });
+
+  check('a partial slot still cannot escape the window', () => {
+    const res = validateClaim({
+      block: ALLDAY, user: RAM, now: NOW,
+      start: wallToUtc('2026-09-01', '20:00', TZ),
+      end: wallToUtc('2026-09-02', '02:00', TZ),
+    });
+    assert.ok(!res.ok, 'the allowance must not let a claim run past midnight');
+  });
+
+  check('an evenly-dividing window is unaffected', () => {
+    // 09:00–19:00 in 30-minute slots has no remainder, so nothing changes and
+    // a below-minimum claim ending at 19:00 is still refused.
+    const res = validateClaim({
+      block: BLOCK, user: RAM, now: NOW,
+      start: wallToUtc('2026-09-01', '18:45', TZ),
+      end: wallToUtc('2026-09-01', '19:00', TZ),
+    });
+    // 09:00-19:00 divides evenly by 30, so partialFinal is never true here and
+    // a claim ending at the window's end gets no special treatment.
+    assert.ok(!res.ok, 'a 15-minute claim must still fail on a window with no remainder');
+    assert.strictEqual(BLOCK.window.allowPartialFinalSlot, true, 'on, and still irrelevant here');
+  });
+
   console.log(`\n${passed} checks passed.`);
 })().catch((e) => {
   console.error('\nFAILED:', e.message);

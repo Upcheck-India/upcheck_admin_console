@@ -164,6 +164,18 @@ export function normalizeBlock(input = {}, base = null) {
         startTime: `${pad2(Math.floor(startMin / 60))}:${pad2(startMin % 60)}`,
         endTime: `${pad2(Math.floor(endMin / 60))}:${pad2(endMin % 60)}`,
         granularityMinutes,
+        // Whether the leftover at the end of the window is claimable.
+        //
+        // A window rarely divides evenly by the slot size. 24 hours in 5-hour
+        // slots leaves 4 hours; 09:00–18:00 in 2-hour slots leaves 1. Without
+        // this that remainder is unreachable — it generates no slot, and it is
+        // shorter than minMinutes so it would be refused even if it did.
+        //
+        // Defaulting to on, and opt-*out*, because the remainder silently
+        // vanishing is the surprise. It can only ever permit a SHORTER claim
+        // inside the window that was already open; it never extends the window
+        // or overrides capacity, quota, notice or horizon.
+        allowPartialFinalSlot: w.allowPartialFinalSlot !== false,
       },
       rules,
       claimMode: src.claimMode === 'approval' ? 'approval' : 'instant',
@@ -287,10 +299,28 @@ export function validateClaim({ block, user, start, end, now = new Date(), overl
   const winEnd = parseHHMM(win.endTime);
   const gran = Number(win.granularityMinutes) || 30;
   if (winStart === null || winEnd === null) return fail('bad_window', 'Block has an invalid bookable window');
-  if ((sp.minutes - winStart) % gran !== 0 || (ep.minutes - winStart) % gran !== 0) {
+
+  // The window's own end is a legal edge even when it is not on a slot
+  // boundary — that leftover is exactly what allowPartialFinalSlot is for.
+  // Computed before the granularity check because both depend on it.
+  const endMinutesEarly = dayKeyFor(end, tz) === dayKey ? ep.minutes : 1440;
+  const partialFinal =
+    win.allowPartialFinalSlot !== false
+    && endMinutesEarly === winEnd
+    && (winEnd - winStart) % gran !== 0;
+
+  // The start always lands on a boundary. The end does too, unless this is the
+  // partial slot closing out the window.
+  if ((sp.minutes - winStart) % gran !== 0
+    || (!partialFinal && (endMinutesEarly - winStart) % gran !== 0)) {
     return fail('granularity', `Times must land on ${gran}-minute boundaries from ${win.startTime}`);
   }
-  if (minutes < rules.minMinutes) return fail('too_short', `Minimum claim is ${rules.minMinutes} minutes`);
+  // A remainder shorter than the minimum is the whole point of the partial
+  // slot: 4 hours left over cannot satisfy a 5-hour minimum, and refusing it
+  // is what made the end of the day unbookable.
+  if (!partialFinal && minutes < rules.minMinutes) {
+    return fail('too_short', `Minimum claim is ${rules.minMinutes} minutes`);
+  }
   if (minutes > rules.maxMinutes) return fail('too_long', `Maximum claim is ${rules.maxMinutes} minutes`);
 
   // 4 — inside the bookable window. A claim may not straddle midnight.
@@ -298,7 +328,7 @@ export function validateClaim({ block, user, start, end, now = new Date(), overl
   if (dayKeyFor(end, tz) !== dayKey && ep.minutes !== 0) {
     return fail('straddles_midnight', 'A claim cannot cross midnight');
   }
-  const endMinutes = dayKeyFor(end, tz) === dayKey ? ep.minutes : 1440;
+  const endMinutes = endMinutesEarly;
   if (sp.minutes < winStart || endMinutes > winEnd) {
     return fail('outside_window', `This block is claimable ${win.startTime}–${win.endTime}`);
   }

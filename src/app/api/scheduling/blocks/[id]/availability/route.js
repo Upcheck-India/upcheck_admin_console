@@ -63,11 +63,24 @@ export async function GET(req, { params }) {
     const earliest = now + (rules.advanceNoticeMinutes || 0) * 60000;
     const latest = rules.horizonDays == null ? Infinity : now + rules.horizonDays * 86400000;
 
+    // Slot boundaries, plus the leftover at the end of the window.
+    //
+    // A window seldom divides evenly by the slot size — 24 hours in 5-hour
+    // slots leaves 4. That remainder used to generate nothing at all, so the
+    // end of the day was unreachable however the block was configured.
+    const edges = [];
+    for (let m = winStart; m + gran <= winEnd; m += gran) edges.push([m, m + gran]);
+    const consumed = edges.length ? edges[edges.length - 1][1] : winStart;
+    const partialAllowed = win.allowPartialFinalSlot !== false;
+    if (partialAllowed && consumed < winEnd) edges.push([consumed, winEnd]);
+
     const slots = [];
-    for (let m = winStart; m + gran <= winEnd; m += gran) {
+    for (const [m, mEnd] of edges) {
       const start = wallToUtc(date, hhmm(m), tz);
-      const end = wallToUtc(date, hhmm(m + gran), tz);
+      const end = wallToUtc(date, hhmm(mEnd), tz);
       if (end.getTime() <= start.getTime()) continue;      // a DST gap swallowed this slot
+      const span = mEnd - m;
+      const isPartial = span !== gran;
       const held = peakOverlap(claims, start, end);
       const mine = claims.filter((c) => String(c.userId) === String(user._id))
         .some((c) => new Date(c.startTime) < end && new Date(c.endTime) > start);
@@ -75,13 +88,20 @@ export async function GET(req, { params }) {
         start: start.toISOString(),
         end: end.toISOString(),
         label: hhmm(m),
+        // The client needs the end too. Deriving it from the next slot's start
+        // breaks on the partial one, which is shorter than the rest.
+        endLabel: hhmm(mEnd),
+        minutes: span,
+        partial: isPartial,
         held,
         free: held < rules.capacity,
         mine,
         claimable: held < rules.capacity
           && !mine
           && claimsLeft >= 1
-          && allowance >= rules.minMinutes
+          // The partial slot cannot meet a minimum longer than itself — that
+          // is what it is for — so it is judged against its own length.
+          && allowance >= (isPartial ? span : rules.minMinutes)
           && start.getTime() >= earliest
           && start.getTime() <= latest,
       });

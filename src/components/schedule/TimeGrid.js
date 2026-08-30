@@ -195,7 +195,18 @@ export default function TimeGrid({
   const winStart = parseHHMM(win?.startTime || '09:00') ?? 540;
   const winEnd = parseHHMM(win?.endTime || '19:00') ?? 1140;
   const gran = win?.granularityMinutes || 30;
-  const rows = Math.max(1, Math.floor((winEnd - winStart) / gran));
+  // A window seldom divides evenly by the slot size. The remainder gets its
+  // own shorter row at the bottom rather than being dropped — dropping it is
+  // what made the end of a 5-hour-slot day unreachable.
+  const fullRows = Math.max(0, Math.floor((winEnd - winStart) / gran));
+  const remainder = (winEnd - winStart) - fullRows * gran;
+  const hasPartial = win?.allowPartialFinalSlot !== false && remainder > 0;
+  const rows = Math.max(1, fullRows + (hasPartial ? 1 : 0));
+  // Rows are laid out in minutes-to-pixels, so the short one is short.
+  const rowHeight = (i) => (i < fullRows ? ROW_H : (remainder / gran) * ROW_H);
+  const rowTop = (i) => Math.min(i, fullRows) * ROW_H;
+  // Minutes at the end of row i, never past the window's own end.
+  const rowEndMin = (i) => Math.min(winStart + (i + 1) * gran, winEnd);
   const openDays = win?.days || [0, 1, 2, 3, 4, 5, 6];
 
   const today = todayIn(timezone);
@@ -323,7 +334,7 @@ export default function TimeGrid({
     onSelectRange?.({
       date,
       startTime: hhmm(winStart + a * gran),
-      endTime: hhmm(winStart + (b + 1) * gran),
+      endTime: hhmm(rowEndMin(b)),
     });
   };
 
@@ -331,12 +342,13 @@ export default function TimeGrid({
     ? (() => {
         const a = Math.min(drag.a, drag.b);
         const b = Math.max(drag.a, drag.b);
-        const mins = (b - a + 1) * gran;
-        return `${displayTime(winStart + a * gran, use12h)} – ${displayTime(winStart + (b + 1) * gran, use12h)} · ${humanMinutes(mins)}`;
+        const startMin = winStart + a * gran;
+        const endMin = rowEndMin(b);
+        return `${displayTime(startMin, use12h)} – ${displayTime(endMin, use12h)} · ${humanMinutes(endMin - startMin)}`;
       })()
     : null;
 
-  const gridHeight = rows * ROW_H;
+  const gridHeight = fullRows * ROW_H + (hasPartial ? (remainder / gran) * ROW_H : 0);
   const nowVisible = nowMin >= winStart && nowMin <= winEnd;
   const nowTop = ((nowMin - winStart) / gran) * ROW_H;
 
@@ -464,8 +476,8 @@ export default function TimeGrid({
                           selected ? '' : 'hover:bg-blue-100/40'
                         }`}
                         style={{
-                          top: r * ROW_H,
-                          height: ROW_H,
+                          top: rowTop(r),
+                          height: rowHeight(r),
                           background: selected ? `${accent}33` : undefined,
                           touchAction: 'none',
                         }}
