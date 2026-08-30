@@ -75,15 +75,25 @@ export async function GET(request) {
       delete baseQuery.$and;
       const timeFilter = filter === 'upcoming' ? { $gte: now } : filter === 'past' ? { $lt: now } : filter === 'today' ? { $gte: new Date(new Date().setHours(0,0,0,0)), $lte: new Date(new Date().setHours(23,59,59,999)) } : undefined;
       
+      // "Mine" and "matches the search" are both disjunctions, so they must be
+      // combined under $and. As two sibling `$or` keys the second silently
+      // overwrote the first, dropping the ownership filter — a search returned
+      // every user's meetings, not the caller's.
       const finalQuery = {
         status: { $ne: 'cancelled' },
-        $or: [
-          { host: { $regex: `^${userEmail}$`, $options: 'i' } },
-          { participants: { $regex: userEmail, $options: 'i' } },
-        ],
-        $or: [
-          { title: { $regex: search, $options: 'i' } },
-          { description: { $regex: search, $options: 'i' } },
+        $and: [
+          {
+            $or: [
+              { host: { $regex: `^${userEmail}$`, $options: 'i' } },
+              { participants: { $regex: userEmail, $options: 'i' } },
+            ],
+          },
+          {
+            $or: [
+              { title: { $regex: search, $options: 'i' } },
+              { description: { $regex: search, $options: 'i' } },
+            ],
+          },
         ],
       };
       if (timeFilter) finalQuery.startTime = timeFilter;

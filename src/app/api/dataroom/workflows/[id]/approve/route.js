@@ -1,32 +1,11 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth, roomOf } from '../../../../../../lib/dataroom/withDataroomAuth';
 
 // POST /api/dataroom/workflows/[id]/approve - Approve workflow step
-export async function POST(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
     const { id } = await params;
     
     if (!ObjectId.isValid(id)) {
@@ -40,8 +19,6 @@ export async function POST(request, { params }) {
       return NextResponse.json({ error: 'Valid stepNumber required' }, { status: 400 });
     }
 
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const workflow = await db.collection('dataroom_workflows').findOne({
       _id: new ObjectId(id),
@@ -128,8 +105,6 @@ export async function POST(request, { params }) {
       workflow,
     });
 
-  } catch (error) {
-    console.error('POST /api/dataroom/workflows/[id]/approve error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  { requires: 'admin', resolve: roomOf('dataroom_workflows', 'id') },
+);

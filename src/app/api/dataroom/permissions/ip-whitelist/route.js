@@ -1,27 +1,7 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth, resourceFromBody } from '../../../../../lib/dataroom/withDataroomAuth';
 
 function isValidIP(ip) {
   const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
@@ -36,12 +16,8 @@ function isValidIP(ip) {
 }
 
 // POST /api/dataroom/permissions/ip-whitelist - Configure IP whitelist for room/user
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user || !isAdminLike(user)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const { targetType, targetId, ipAddresses, enabled = true } = body;
@@ -67,9 +43,6 @@ export async function POST(request) {
         invalidIPs 
       }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify target exists
     let targetExists = false;
@@ -138,20 +111,16 @@ export async function POST(request) {
         _id: result.upsertedId || targetId,
       },
     }, { status: result.upsertedId ? 201 : 200 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/permissions/ip-whitelist error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resolve: resourceFromBody('resourceType', 'resourceId'),
+  },
+);
 
 // GET /api/dataroom/permissions/ip-whitelist?targetType=room&targetId=xxx
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const targetType = searchParams.get('targetType');
@@ -160,9 +129,6 @@ export async function GET(request) {
     if (!targetType || !targetId || !ObjectId.isValid(targetId)) {
       return NextResponse.json({ error: 'Valid targetType and targetId required' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const config = await db.collection('dataroom_ip_whitelist').findOne({
       targetType,
@@ -181,9 +147,9 @@ export async function GET(request) {
       exists: true,
       ...config,
     });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/permissions/ip-whitelist error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'admin',
+    resolve: resourceFromBody('resourceType', 'resourceId'),
+  },
+);

@@ -2,29 +2,15 @@
 // src/app/page.js
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '../hooks/useAuth';
-import { useClerk } from '@clerk/nextjs';
 import Login from "./login/page";
 import { Loader2 } from 'lucide-react';
 
 export default function Home() {
   const { isLoading } = useAuth(false); // false because this is a public route
-  const clerk = useClerk();
-  const router = useRouter();
 
-  useEffect(() => {
-    // Check if user has Clerk session (external user)
-    const checkClerkSession = async () => {
-      if (clerk?.user) {
-        // User is signed in with Clerk, redirect to external dashboard
-        router.push('/dataroom/external/dashboard');
-      }
-    };
-
-    checkClerkSession();
-  }, [clerk, router]);
+  // An external user landing here is redirected to their portal by the
+  // middleware, which can read the httpOnly session cookie this page cannot.
 
   if (isLoading) {
     return (

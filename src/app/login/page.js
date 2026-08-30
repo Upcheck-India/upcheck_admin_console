@@ -6,7 +6,6 @@ import { User, Lock, Loader2, Fingerprint, KeyRound, TriangleAlert, ChevronDown 
 import { AlertMessage } from "../components/AlertMessage";
 import Link from 'next/link';
 import Image from 'next/image';
-import { useClerk } from '@clerk/nextjs';
 import { authenticateWithPasskey, isWebAuthnSupported } from '../../lib/webauthnClient';
 
 export default function Login() {
@@ -16,7 +15,6 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const clerk = useClerk();
 
   const [redirectUrl, setRedirectUrl] = useState('');
   const [passkeySupported, setPasskeySupported] = useState(false);
@@ -281,16 +279,14 @@ export default function Login() {
     };
   };
 
-  // Shared post-authentication step: confirm the session, drop any external
-  // (Clerk) session, then redirect into the console.
+  // Shared post-authentication step: confirm the session, then redirect into
+  // the console. Any external portal session is cleared by POST /api/auth,
+  // which cannot be done here — the cookie is httpOnly.
   const finishLogin = async () => {
     localStorage.setItem('username', username);
     const checkAuth = await fetch('/api/auth/check', { credentials: 'include' });
     if (!checkAuth.ok) {
       throw new Error('Authentication failed');
-    }
-    if (clerk?.user) {
-      await clerk.signOut({ redirectUrl: '/login' });
     }
     const destination = redirectUrl || '/console';
     router.push(destination);

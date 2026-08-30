@@ -1,29 +1,13 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
+import { withDataroomAuth, roomOf } from '../../../../../lib/dataroom/withDataroomAuth';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
 // GET /api/dataroom/comments/[id] - Get single comment
-export async function GET(request, { params }) {
+export const GET = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -47,13 +31,14 @@ export async function GET(request, { params }) {
     console.error('GET /api/dataroom/comments/[id] error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { requires: 'view', resolve: roomOf('dataroom_comments', 'id'), allowExternal: true },
+);
 
 // PUT /api/dataroom/comments/[id] - Edit comment
-export async function PUT(request, { params }) {
+export const PUT = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -121,13 +106,14 @@ export async function PUT(request, { params }) {
     console.error('PUT /api/dataroom/comments/[id] error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { requires: 'comment', resolve: roomOf('dataroom_comments', 'id'), allowExternal: true },
+);
 
 // DELETE /api/dataroom/comments/[id] - Delete comment
-export async function DELETE(request, { params }) {
+export const DELETE = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -190,4 +176,6 @@ export async function DELETE(request, { params }) {
     console.error('DELETE /api/dataroom/comments/[id] error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { requires: 'comment', resolve: roomOf('dataroom_comments', 'id'), allowExternal: true },
+);

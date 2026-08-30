@@ -18,7 +18,6 @@ const ROLE_COLORS = {
 export default function ExternalUsersTab({ users, onApprove, onReject, onDelete, onUpdate, onAdd, currentUser, loading }) {
   const [processingId, setProcessingId] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [deleteOptions, setDeleteOptions] = useState({ deleteFromClerk: true });
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(null);
   const [expandedRows, setExpandedRows] = useState([]);
@@ -51,17 +50,15 @@ export default function ExternalUsersTab({ users, onApprove, onReject, onDelete,
     setDeleteConfirmId(userId);
   };
 
-  const handleDeleteConfirm = async (userId, clerkId) => {
+  const handleDeleteConfirm = async (userId) => {
     setProcessingId(userId);
-    await onDelete(userId, clerkId, deleteOptions.deleteFromClerk);
+    await onDelete(userId);
     setProcessingId(null);
     setDeleteConfirmId(null);
-    setDeleteOptions({ deleteFromClerk: true });
   };
 
   const handleDeleteCancel = () => {
     setDeleteConfirmId(null);
-    setDeleteOptions({ deleteFromClerk: true });
   };
 
   const handleAddUser = async (e) => {
@@ -653,18 +650,9 @@ export default function ExternalUsersTab({ users, onApprove, onReject, onDelete,
               <p className="text-sm text-gray-600 mb-4">
                 Are you sure you want to delete this external user? This action cannot be undone.
               </p>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={deleteOptions.deleteFromClerk}
-                    onChange={(e) => setDeleteOptions({ deleteFromClerk: e.target.checked })}
-                    className="rounded border-gray-300 text-red-600 focus:ring-red-500"
-                  />
-                  <span className="ml-2 text-sm text-amber-800">
-                    Also delete from Clerk (removes login ability)
-                  </span>
-                </label>
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                Their password and any active session are stored on this record and
+                go with it, so the account loses access immediately.
               </div>
             </div>
             <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3">
@@ -676,10 +664,7 @@ export default function ExternalUsersTab({ users, onApprove, onReject, onDelete,
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const user = users.find(u => u._id === deleteConfirmId);
-                  handleDeleteConfirm(deleteConfirmId, user?.clerkId);
-                }}
+                onClick={() => handleDeleteConfirm(deleteConfirmId)}
                 disabled={processingId === deleteConfirmId}
                 className="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
               >

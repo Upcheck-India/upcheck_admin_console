@@ -1,42 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { validateFolderName, moveFolder, deleteFolder } from '../../../../../lib/dataroom/folder-utils';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/folders/[id] - Get single folder
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid folder ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const folder = await db.collection('dataroom_folders').findOne({
       _id: new ObjectId(id),
@@ -48,18 +23,18 @@ export async function GET(request, { params }) {
     }
 
     return NextResponse.json(folder);
-  } catch (error) {
-    console.error('GET /api/dataroom/folders/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'folder', param: 'id' },
+    allowExternal: true,
+    allowShare: true,
+  },
+);
 
 // PUT /api/dataroom/folders/[id] - Rename or move folder
-export async function PUT(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const PUT = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -68,9 +43,6 @@ export async function PUT(request, { params }) {
 
     const body = await request.json();
     const { name, parentId, meta } = body;
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const folder = await db.collection('dataroom_folders').findOne({
       _id: new ObjectId(id),
@@ -161,19 +133,16 @@ export async function PUT(request, { params }) {
 
     const updatedFolder = await db.collection('dataroom_folders').findOne({ _id: new ObjectId(id) });
     return NextResponse.json(updatedFolder);
-
-  } catch (error) {
-    console.error('PUT /api/dataroom/folders/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'folder', param: 'id' },
+  },
+);
 
 // DELETE /api/dataroom/folders/[id] - Delete folder and contents
-export async function DELETE(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const DELETE = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -182,9 +151,6 @@ export async function DELETE(request, { params }) {
 
     const { searchParams } = new URL(request.url);
     const permanent = searchParams.get('permanent') === 'true';
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const folder = await db.collection('dataroom_folders').findOne({
       _id: new ObjectId(id),
@@ -225,12 +191,12 @@ export async function DELETE(request, { params }) {
       deletedFolders: result.deletedFolders,
       deletedDocuments: result.deletedDocuments,
     });
-
-  } catch (error) {
-    console.error('DELETE /api/dataroom/folders/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'folder', param: 'id' },
+  },
+);
 
 function escapeRegex(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

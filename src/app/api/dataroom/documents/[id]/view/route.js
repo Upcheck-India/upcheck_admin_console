@@ -1,69 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../lib/mongodb';
-import { GridFSBucket, ObjectId } from 'mongodb';
-import { hasPermission } from '../../../../../../lib/dataroom/permission-checker';
+import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const adminToken = request.cookies.get('admin_token')?.value;
-    const client = await clientPromise;
-    const db = client.db('resources');
-
-    if (adminToken) {
-      const user = await db.collection('admin_users').findOne(
-        { sessionToken: adminToken },
-        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-      );
-      if (user) return user;
-    }
-
-    // Check external user authentication
-    const externalToken = request.cookies.get('external_user_token')?.value;
-    if (externalToken) {
-      const externalUser = await db.collection('dataroom_external_users').findOne(
-        { sessionToken: externalToken },
-        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
-      );
-      if (externalUser) {
-        return {
-          _id: externalUser._id,
-          id: externalUser._id.toString(),
-          email: externalUser.email,
-          username: externalUser.name,
-          role: externalUser.role || 'External User',
-          isExternal: true
-        };
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error fetching user from token:', error);
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../../../lib/dataroom/withDataroomAuth';
+import { openDocumentStream, parseRange } from '../../../../../../lib/dataroom/document-storage';
 
 // GET /api/dataroom/documents/[id]/view - Stream document securely for viewing
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+//
+// Identity, the `view` grant, room expiry and the room IP whitelist are all
+// enforced by the wrapper before this handler runs.
+export const GET = withDataroomAuth(
+  async (request, { user, db, params, capabilities }) => {
+    const { id } = params;
 
-    const { id } = await params;
-    const { searchParams } = new URL(request.url);
-    const chunk = searchParams.get('chunk'); // For chunk-based streaming
-
-    if (!ObjectId.isValid(id)) {
-      return NextResponse.json({ error: 'Invalid document ID' }, { status: 400 });
-    }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
-
-    // Get document
     const document = await db.collection('dataroom_documents').findOne({
       _id: new ObjectId(id),
       isDeleted: { $ne: true },
@@ -73,136 +21,107 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // Check view permission
-    const canView = await hasPermission({
-      user,
-      resourceType: 'document',
-      resourceId: id,
-      permission: 'view',
-      roomId: document.roomId,
-    });
+    const requested = parseRange(request.headers.get('range'), document.fileSize);
 
-    if (!canView) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
-
-    // Get room settings
-    const room = await db.collection('dataroom_rooms').findOne({
-      _id: document.roomId,
-    });
-
-    // Track view
-    await db.collection('dataroom_documents').updateOne(
-      { _id: new ObjectId(id) },
-      {
-        $inc: { viewCount: 1 },
-        $set: { lastViewedAt: new Date() }
-      }
-    );
-
-    // Update analytics
-    await db.collection('dataroom_analytics').updateOne(
-      { documentId: new ObjectId(id), userId: user._id },
-      {
-        $set: {
-          documentId: new ObjectId(id),
-          roomId: document.roomId,
-          userId: user._id,
-          userEmail: user.email,
-          lastViewedAt: new Date(),
-        },
-        $inc: { viewCount: 1 },
-        $setOnInsert: {
-          firstViewedAt: new Date(),
-          downloadCount: 0,
-          printCount: 0,
-        },
-      },
-      { upsert: true }
-    );
-
-    // Audit log
-    await logAudit({
-      action: AUDIT_ACTIONS.DOCUMENT_VIEWED,
-      resourceType: 'document',
-      resourceId: new ObjectId(id),
-      roomId: document.roomId,
-      user,
-      details: {
-        documentName: document.name,
-        fileName: document.fileName,
-      },
-      request,
-    });
-
-    // Stream file from GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-
-    try {
-      const downloadStream = bucket.openDownloadStream(document.fileId);
-
-      // For chunk-based streaming (security feature)
-      if (chunk) {
-        const chunkSize = 1024 * 1024; // 1MB chunks
-        const chunkNumber = parseInt(chunk);
-        const skipBytes = chunkNumber * chunkSize;
-
-        const chunks = [];
-        let bytesRead = 0;
-        let bytesSkipped = 0;
-
-        for await (const data of downloadStream) {
-          if (bytesSkipped < skipBytes) {
-            bytesSkipped += data.length;
-            continue;
-          }
-
-          chunks.push(data);
-          bytesRead += data.length;
-
-          if (bytesRead >= chunkSize) {
-            break;
-          }
-        }
-
-        const chunkBuffer = Buffer.concat(chunks);
-
-        return new NextResponse(chunkBuffer, {
-          headers: {
-            'Content-Type': document.mimeType || 'application/octet-stream',
-            'Content-Length': chunkBuffer.length.toString(),
-            'X-Chunk-Number': chunk,
-            'Cache-Control': 'no-store, no-cache, must-revalidate',
-          },
-        });
-      }
-
-      // Full file streaming (with caching disabled for security)
-      const chunks = [];
-      for await (const chunk of downloadStream) {
-        chunks.push(chunk);
-      }
-
-      const fileBuffer = Buffer.concat(chunks);
-
-      return new NextResponse(fileBuffer, {
+    if (requested?.unsatisfiable) {
+      return new NextResponse(null, {
+        status: 416,
         headers: {
-          'Content-Type': document.mimeType || 'application/octet-stream',
-          'Content-Disposition': `inline; filename="${document.fileName}"`,
-          'Content-Length': fileBuffer.length.toString(),
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'X-Content-Type-Options': 'nosniff',
-          'X-Frame-Options': 'SAMEORIGIN',
+          'Content-Range': `bytes */${document.fileSize}`,
+          'Accept-Ranges': 'bytes',
         },
       });
+    }
 
-    } catch (gridfsError) {
-      console.error('GridFS streaming error:', gridfsError);
+    // A single document view is one view, not one per range request. pdf.js
+    // issues a dozen or more of these for a large file; counting them all is
+    // how the view counts and the audit log became unreadable.
+    if (!requested) {
+      await Promise.all([
+        db.collection('dataroom_documents').updateOne(
+          { _id: new ObjectId(id) },
+          { $inc: { viewCount: 1 }, $set: { lastViewedAt: new Date() } },
+        ),
+        db.collection('dataroom_analytics').updateOne(
+          { documentId: new ObjectId(id), userId: user._id },
+          {
+            $set: {
+              documentId: new ObjectId(id),
+              roomId: document.roomId,
+              userId: user._id,
+              userEmail: user.email,
+              lastViewedAt: new Date(),
+            },
+            $inc: { viewCount: 1 },
+            $setOnInsert: { firstViewedAt: new Date(), downloadCount: 0, printCount: 0 },
+          },
+          { upsert: true },
+        ),
+        logAudit({
+          action: AUDIT_ACTIONS.DOCUMENT_VIEWED,
+          resourceType: 'document',
+          resourceId: new ObjectId(id),
+          roomId: document.roomId,
+          user,
+          details: { documentName: document.name, fileName: document.fileName },
+          request,
+        }),
+      ]);
+    }
+
+    // Whichever provider actually holds this document's bytes. Nothing is
+    // buffered: the previous implementation did Buffer.concat over every chunk
+    // before sending a byte, which put each document's full size against the
+    // function's memory limit and delayed the response until the last chunk
+    // arrived from storage.
+    const stream = await openDocumentStream(db, document, requested || undefined);
+
+    if (!stream) {
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 });
     }
 
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/view error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    // A client that navigates away mid-stream leaves the storage cursor open
+    // otherwise, one per abandoned view.
+    if (stream.nodeStream) {
+      request.signal?.addEventListener('abort', () => stream.nodeStream.destroy(), { once: true });
+      stream.nodeStream.on('error', (err) => console.error('Document stream error:', err));
+    }
+
+    const headers = {
+      'Content-Type': document.mimeType || stream.contentType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename="${encodeURIComponent(document.fileName || 'document')}"`,
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      // Effective capabilities for this viewer on this document, so the UI can
+      // hide controls it must not offer.
+      'X-Dataroom-Can-Download': String(!!capabilities?.canDownload),
+      'X-Dataroom-Can-Print': String(!!capabilities?.canPrint),
+      'X-Dataroom-Can-Comment': String(!!capabilities?.canComment),
+    };
+
+    if (stream.size != null) headers['Content-Length'] = String(stream.size);
+
+    // `stream.range` is what the provider actually delivered, not what was
+    // asked for. Vercel Blob may ignore a Range and return the whole object;
+    // answering 206 in that case would make the client wait forever for bytes
+    // that already arrived under a different offset.
+    if (stream.range) {
+      headers['Content-Range'] =
+        `bytes ${stream.range.start}-${stream.range.end}/${stream.range.total ?? document.fileSize}`;
+    }
+
+    return new NextResponse(stream.webStream, {
+      status: stream.range ? 206 : 200,
+      headers,
+    });
+  },
+  {
+    requires: 'view',
+    resource: { type: 'document', param: 'id' },
+    allowExternal: true,
+    allowShare: true,
+    capabilities: true,
+  },
+);

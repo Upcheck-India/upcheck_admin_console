@@ -1,53 +1,66 @@
 import { GridFSBucket, ObjectId } from 'mongodb';
 import { Readable } from 'stream';
 
-// The original App Store binary storage backend — kept available as a
-// selectable option (no external account/credentials needed, since it
-// just uses the same MongoDB the rest of the app already talks to) even
-// though Vercel Blob is now the default.
+// MongoDB-backed binary storage — a selectable option for both the App Store
+// and the data room (no external account or credentials needed, since it uses
+// the same MongoDB the rest of the app already talks to).
 export const PROVIDER_ID = 'gridfs';
 export const PROVIDER_LABEL = 'MongoDB GridFS (built-in, no extra setup)';
 
-function getBucket(db) {
-  // Default GridFS chunk size is 255KB, which turns a 100MB+ APK into
-  // 400+ separate chunk-document inserts. 1MB chunks cut that overhead.
-  return new GridFSBucket(db, { bucketName: 'appstore_apks', chunkSizeBytes: 1024 * 1024 });
+// Each area of the app keeps its files in its own bucket. The bucket a file
+// lives in is recorded on the file's own record at upload time, so a file
+// stays readable no matter what the current default is — the same reason
+// `storageProvider` is recorded.
+export const DEFAULT_BUCKET = 'appstore_apks';
+
+function getBucket(db, bucketName = DEFAULT_BUCKET) {
+  // The GridFS default chunk size is 255KB, which turns a 100MB file into
+  // 400+ separate chunk-document inserts. 1MB chunks cut that overhead by
+  // four. This affects writes only: files already stored at 255KB read back
+  // exactly as before.
+  return new GridFSBucket(db, { bucketName, chunkSizeBytes: 1024 * 1024 });
 }
 
 /** Starts a GridFS upload. `sink` is a Writable the caller's stream
  * pipeline writes into; `finalize()` resolves once the write is flushed. */
-export function startUpload(db, { filename, contentType, appId, version, uploadedBy }) {
-  const bucket = getBucket(db);
-  const sink = bucket.openUploadStream(filename, {
+export function startUpload(db, { filename, contentType, bucket, metadata }) {
+  const bucketName = bucket || DEFAULT_BUCKET;
+  const gridBucket = getBucket(db, bucketName);
+  const sink = gridBucket.openUploadStream(filename, {
     contentType,
-    metadata: { appId, version, uploadedBy, uploadedAt: new Date() },
+    metadata: { ...metadata, uploadedAt: new Date() },
   });
   return {
     sink,
-    finalize: async () => ({ storageProvider: PROVIDER_ID, fileId: sink.id.toString() }),
+    finalize: async () => ({
+      storageProvider: PROVIDER_ID,
+      fileId: sink.id,
+      storageBucket: bucketName,
+    }),
     cleanup: async () => {
-      if (sink.id) await bucket.delete(sink.id).catch(() => {});
+      if (sink.id) await gridBucket.delete(sink.id).catch(() => {});
     },
   };
 }
 
 /** `range`, if given, is `{ start, end }` byte offsets (both inclusive,
- * HTTP Range header convention) — used to support resumable downloads via
- * expo-file-system's createDownloadResumable, which retries a dropped
- * download by requesting only the remaining bytes instead of starting
- * over. GridFS supports this precisely via openDownloadStream's own
- * start/end options. */
-export async function getDownloadStream(db, version, range) {
-  if (!version.fileId || !ObjectId.isValid(version.fileId)) return null;
-  const bucket = getBucket(db);
-  const files = await bucket.find({ _id: new ObjectId(version.fileId) }).toArray();
+ * HTTP Range header convention). GridFS supports this precisely via
+ * openDownloadStream's own start/end options, so a range costs the range
+ * rather than a read-and-discard from the front of the file. */
+export async function getDownloadStream(db, ref, range) {
+  if (!ref.fileId || !ObjectId.isValid(ref.fileId)) return null;
+  const fileId = new ObjectId(ref.fileId);
+  const bucket = getBucket(db, ref.storageBucket);
+  const files = await bucket.find({ _id: fileId }).toArray();
   if (files.length === 0) return null;
   const totalSize = files[0].length;
 
   if (range) {
     const end = Math.min(range.end, totalSize - 1);
-    const nodeStream = bucket.openDownloadStream(new ObjectId(version.fileId), { start: range.start, end: end + 1 });
+    // GridFS `end` is exclusive; HTTP Range `end` is inclusive.
+    const nodeStream = bucket.openDownloadStream(fileId, { start: range.start, end: end + 1 });
     return {
+      nodeStream,
       webStream: Readable.toWeb(nodeStream),
       size: end - range.start + 1,
       contentType: files[0].contentType,
@@ -55,18 +68,23 @@ export async function getDownloadStream(db, version, range) {
     };
   }
 
-  const nodeStream = bucket.openDownloadStream(new ObjectId(version.fileId));
-  return { webStream: Readable.toWeb(nodeStream), size: totalSize, contentType: files[0].contentType, range: null };
+  const nodeStream = bucket.openDownloadStream(fileId);
+  return {
+    nodeStream,
+    webStream: Readable.toWeb(nodeStream),
+    size: totalSize,
+    contentType: files[0].contentType,
+    range: null,
+  };
 }
 
-export async function deleteFile(db, version) {
-  if (!version.fileId || !ObjectId.isValid(version.fileId)) return;
-  const bucket = getBucket(db);
-  await bucket.delete(new ObjectId(version.fileId)).catch(() => {});
+export async function deleteFile(db, ref) {
+  if (!ref.fileId || !ObjectId.isValid(ref.fileId)) return;
+  await getBucket(db, ref.storageBucket).delete(new ObjectId(ref.fileId)).catch(() => {});
 }
 
-export async function getUsage(db) {
-  const stats = await db.collection('appstore_apks.files')
+export async function getUsage(db, { bucket = DEFAULT_BUCKET } = {}) {
+  const stats = await db.collection(`${bucket}.files`)
     .aggregate([{ $group: { _id: null, totalBytes: { $sum: '$length' }, fileCount: { $sum: 1 } } }])
     .toArray();
   const s = stats[0] || { totalBytes: 0, fileCount: 0 };

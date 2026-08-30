@@ -1,33 +1,12 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
+import { withDataroomAuth, ADMIN_ROLES } from '../../../../lib/dataroom/withDataroomAuth';
 import { queryAuditLogs } from '../../../../lib/dataroom/audit-logger';
 
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
-
 // GET /api/dataroom/audit - Query audit logs
-export async function GET(request) {
+export const GET = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const { searchParams } = new URL(request.url);
     
@@ -71,17 +50,17 @@ export async function GET(request) {
     console.error('GET /api/dataroom/audit error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { roles: ADMIN_ROLES },
+);
 
 // GET /api/dataroom/audit/user/[userId] would be a separate route
 // For now, we can use query params: ?userId=xxx&summary=true
 
 // POST /api/dataroom/audit/export - Export audit logs (placeholder)
-export async function POST(request) {
+export const POST = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const body = await request.json();
     const { roomId, fromDate, toDate, format = 'json' } = body;
@@ -121,4 +100,6 @@ export async function POST(request) {
     console.error('POST /api/dataroom/audit error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { roles: ADMIN_ROLES },
+);

@@ -3,7 +3,6 @@
 import './globals.css';
 import { Nunito, DM_Sans, DM_Mono } from 'next/font/google';
 import { ThemeProvider } from './utils/ThemeContext';
-import { ClerkProvider } from '@clerk/nextjs';
 import useHeartbeat from '../hooks/useHeartbeat';
 import GlobalChatWrapper from '../components/GlobalChatWrapper';
 
@@ -38,12 +37,10 @@ export default function RootLayout({ children }) {
       className={`${dmSans.variable} ${nunito.variable} ${dmMono.variable}`}
     >
       <body className={dmSans.className}>
-        <ClerkProvider>
-          <ThemeProvider>
-            <GlobalChatWrapper />
-            {children}
-          </ThemeProvider>
-        </ClerkProvider>
+        <ThemeProvider>
+          <GlobalChatWrapper />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

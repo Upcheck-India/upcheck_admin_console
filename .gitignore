@@ -40,3 +40,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env
+
+# Agent worktrees — separate checkouts, never part of this tree
+.claude/worktrees/

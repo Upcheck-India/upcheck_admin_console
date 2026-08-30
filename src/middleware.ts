@@ -1,103 +1,101 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
 
-// Public routes that don't require authentication
-const isPublicRoute = createRouteMatcher([
-  '/dataroom/external/login(.*)',
-  '/dataroom/external/register(.*)',
-  '/login(.*)',
-  '/register(.*)',
-  '/api/auth(.*)',
-  '/api/clerk/webhook(.*)', // Clerk webhook endpoint
-  '/.well-known(.*)', // Digital Asset Links / Apple App Site Association — must be servable unauthenticated
+// Two session cookies, two audiences, and they are mutually exclusive:
+//   admin_token         — internal staff, issued by /api/auth
+//   external_user_token — external portal users, issued by
+//                         /api/dataroom/external-auth/login
+//
+// Presence of a cookie is all this layer checks. Whether the token is valid,
+// unexpired and belongs to an active account is decided by the route handlers
+// (withDataroomAuth for the dataroom API), because only they can reach the
+// database. Middleware runs on every matched request; making it hit Mongo
+// would put a round-trip in front of every asset and page.
+
+const match = (patterns: RegExp[]) => (req: NextRequest) =>
+  patterns.some((p) => p.test(req.nextUrl.pathname))
+
+const isPublicRoute = match([
+  /^\/dataroom\/external\/login/,
+  /^\/dataroom\/external\/register/,
+  /^\/dataroom\/external\/verify/,
+  /^\/dataroom\/auth-gate/,
+  /^\/login/,
+  /^\/register/,
+  /^\/api\/auth/,
+  /^\/api\/dataroom\/external-auth/,
+  // Digital Asset Links / Apple App Site Association — must be servable
+  // unauthenticated or the mobile apps cannot verify their domain link.
+  /^\/\.well-known/,
 ])
 
-// Routes protected by Clerk (external user routes)
-const isClerkRoute = createRouteMatcher([
-  '/dataroom/external(.*)',
+const isExternalRoute = match([/^\/dataroom\/external/])
+
+const isAdminRoute = match([
+  /^\/console/,
+  /^\/console-admin/,
+  /^\/api\/admin/,
+  /^\/api\/documentation/,
+  /^\/documentation/,
 ])
 
-// Internal admin/staff routes (protected by admin_token cookie)
-const isAdminRoute = createRouteMatcher([
-  '/console(.*)',
-  '/console-admin(.*)',
-  '/api/admin(.*)',
-  '/api/documentation(.*)',
-  '/documentation(.*)',
-])
-
-export default clerkMiddleware(async (auth, req) => {
-  // Extract token from Authorization header if present (for mobile app)
-  const authHeader = req.headers.get('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7).trim();
+export default function middleware(req: NextRequest) {
+  // The mobile app sends its session as a Bearer header rather than a cookie.
+  // Promote it to `admin_token` so everything downstream sees one shape.
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.substring(7).trim()
     if (token && token !== 'null' && token !== 'undefined') {
-      req.cookies.set('admin_token', token);
-      
-      // Also inject it into the raw Cookie header for compatibility with Next.js cookies() API
-      const existingCookie = req.headers.get('cookie') || '';
-      const newCookie = `admin_token=${token}${existingCookie ? `; ${existingCookie}` : ''}`;
-      req.headers.set('cookie', newCookie);
+      req.cookies.set('admin_token', token)
+      const existingCookie = req.headers.get('cookie') || ''
+      req.headers.set(
+        'cookie',
+        `admin_token=${token}${existingCookie ? `; ${existingCookie}` : ''}`,
+      )
     }
   }
 
-  const { userId: clerkUserId } = await auth()
+  const pass = () => NextResponse.next({ request: { headers: req.headers } })
+
   const hasAdminToken = req.cookies.has('admin_token')
+  const hasExternalToken = req.cookies.has('external_user_token')
 
-  // Handle root path - redirect based on session type
   if (req.nextUrl.pathname === '/') {
-    if (clerkUserId) {
+    if (hasAdminToken) return NextResponse.redirect(new URL('/console', req.url))
+    if (hasExternalToken) {
       return NextResponse.redirect(new URL('/dataroom/external/dashboard', req.url))
     }
-    if (hasAdminToken) {
-      return NextResponse.redirect(new URL('/console', req.url))
-    }
-    return NextResponse.next({ request: { headers: req.headers } })
+    return pass()
   }
 
-  // Allow public routes without authentication
   if (isPublicRoute(req)) {
-    // If user has Clerk session but trying to access internal login,
-    // redirect them to external dashboard
-    if (clerkUserId && req.nextUrl.pathname.startsWith('/login')) {
+    if (hasExternalToken && !hasAdminToken && req.nextUrl.pathname.startsWith('/login')) {
       return NextResponse.redirect(new URL('/dataroom/external/dashboard', req.url))
     }
-    return NextResponse.next({ request: { headers: req.headers } })
+    return pass()
   }
 
-  // Handle Clerk routes (external users)
-  if (isClerkRoute(req)) {
-    // Block access if user has admin token (internal session)
-    if (hasAdminToken) {
-      return NextResponse.redirect(new URL('/console', req.url))
-    }
-
-    // Require Clerk authentication for external routes
-    if (!clerkUserId) {
+  if (isExternalRoute(req)) {
+    // An internal session wins: staff browsing to the external portal are sent
+    // back to the console rather than shown someone else's audience.
+    if (hasAdminToken) return NextResponse.redirect(new URL('/console', req.url))
+    if (!hasExternalToken) {
       return NextResponse.redirect(new URL('/dataroom/external/login', req.url))
     }
-    return NextResponse.next({ request: { headers: req.headers } })
+    return pass()
   }
 
-  // Handle internal admin/staff routes
   if (isAdminRoute(req)) {
-    // Block access if user has Clerk session (external user)
-    if (clerkUserId) {
-      return NextResponse.redirect(new URL('/dataroom/external/dashboard', req.url))
-    }
-
-    // Require admin token for internal routes
     if (!hasAdminToken) {
       const loginUrl = new URL('/login', req.url)
       loginUrl.searchParams.set('redirect', req.nextUrl.pathname)
       return NextResponse.redirect(loginUrl)
     }
-    return NextResponse.next({ request: { headers: req.headers } })
+    return pass()
   }
 
-  // Other routes - allow with no special protection
-  return NextResponse.next({ request: { headers: req.headers } })
-})
+  return pass()
+}
 
 export const config = {
   matcher: [

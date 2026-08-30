@@ -1,3 +1,4 @@
+// @public-route sends an email verification code
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { sendEmail } from '../../../../../lib/emailService';

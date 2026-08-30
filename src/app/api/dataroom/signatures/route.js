@@ -1,38 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit } from '../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/signatures - List NDA signatures for a room or user
-export async function GET(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
     const userId = searchParams.get('userId');
     const ndaDocumentId = searchParams.get('ndaDocumentId');
     const status = searchParams.get('status'); // signed | pending | declined
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const filter = {};
 
@@ -70,18 +49,17 @@ export async function GET(request) {
       count: signatures.length,
       signatures,
     });
-
-  } catch (error) {
-    console.error('GET /api/dataroom/signatures error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+    allowExternal: true,
+  },
+);
 
 // POST /api/dataroom/signatures - Record NDA signature
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const POST = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const body = await request.json();
     const {
@@ -104,9 +82,6 @@ export async function POST(request) {
     if (!agreedToTerms) {
       return NextResponse.json({ error: 'Must agree to terms to sign NDA' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Verify room and NDA document exist
     const room = await db.collection('dataroom_rooms').findOne({
@@ -174,9 +149,10 @@ export async function POST(request) {
     });
 
     return NextResponse.json({ ...signature, _id: result.insertedId }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/signatures error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'view',
+    resource: { type: 'room', query: 'roomId' },
+    allowExternal: true,
+  },
+);

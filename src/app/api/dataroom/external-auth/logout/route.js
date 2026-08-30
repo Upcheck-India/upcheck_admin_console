@@ -1,3 +1,4 @@
+// @public-route clears the external session cookie
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 

@@ -47,6 +47,9 @@ export async function hasPermission({
   const client = await clientPromise;
   const db = client.db('resources');
 
+  // Internal users carry `_id`; external users are normalised to carry `id`.
+  const userIdStr = user._id?.toString() || user.id;
+
   // Check room ownership directly first if roomId is provided
   if (roomId) {
     const room = await db.collection('dataroom_rooms').findOne({
@@ -75,18 +78,21 @@ export async function hasPermission({
 
     const permsToCheck = permission === 'admin' ? ['admin'] : [permission, 'admin'];
 
-    // 1. Check direct user permission
+    // 1. Check direct user permission.
+    //
+    // Both the identity clause and the expiry clause are disjunctions, so they
+    // MUST be combined under $and. Writing them as two sibling `$or` keys is
+    // valid JavaScript but the second silently overwrites the first, dropping
+    // the identity check entirely — which made every document readable by
+    // every authenticated account. Do not collapse this back into bare $or
+    // keys. See scripts/find-duplicate-query-keys.cjs.
     const directPermission = await db.collection('dataroom_permissions').findOne({
       resourceType: type,
       resourceId: id.toString(),
-      $or: [
-        { userId: user._id?.toString() || user.id },
-        { userEmail: user.email },
-      ],
       permissions: { $in: permsToCheck },
-      $or: [
-        { expiresAt: null },
-        { expiresAt: { $gt: new Date() } },
+      $and: [
+        { $or: [{ userId: userIdStr }, { userEmail: user.email }] },
+        { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
       ],
     });
 
@@ -96,7 +102,7 @@ export async function hasPermission({
     const userGroups = await db.collection('dataroom_user_groups')
       .find({
         $or: [
-          { 'members.userId': user._id?.toString() || user.id },
+          { 'members.userId': userIdStr },
           { 'members.email': user.email },
         ],
       })
@@ -122,8 +128,8 @@ export async function hasPermission({
     const userTeams = await db.collection('teams')
       .find({
         $or: [
-          { 'members': user._id?.toString() || user.id },
-          { 'lead': user._id?.toString() || user.id },
+          { 'members': userIdStr },
+          { 'lead': userIdStr },
         ],
       })
       .toArray();
@@ -339,6 +345,9 @@ export async function checkRoomAccess(user, roomId) {
     return { allowed: false, reason: 'Invalid user or room' };
   }
 
+  // Internal users carry `_id`; external users are normalised to carry `id`.
+  const userIdStr = user._id?.toString() || user.id;
+
   // Admins always have access
   if (user.role === 'Admin' || user.role === 'Console admin') {
     return { allowed: true, isAdmin: true };
@@ -386,7 +395,7 @@ export async function checkRoomAccess(user, roomId) {
   if (room.requireNda) {
     const signature = await db.collection('dataroom_signatures').findOne({
       roomId: roomId.toString(),
-      userId: user._id?.toString() || user.id,
+      userId: userIdStr,
       type: 'nda',
       status: 'signed',
     });
@@ -414,6 +423,9 @@ export async function getUserAccessibleRooms(user) {
   const client = await clientPromise;
   const db = client.db('resources');
 
+  // Internal users carry `_id`; external users are normalised to carry `id`.
+  const userIdStr = user._id?.toString() || user.id;
+
   // Admins can see all rooms
   if (user.role === 'Admin' || user.role === 'Console admin') {
     return db.collection('dataroom_rooms').find({}).toArray();
@@ -423,8 +435,8 @@ export async function getUserAccessibleRooms(user) {
   const userTeams = await db.collection('teams')
     .find({
       $or: [
-        { 'members': user._id?.toString() || user.id },
-        { 'lead': user._id?.toString() || user.id },
+        { 'members': userIdStr },
+        { 'lead': userIdStr },
       ],
     })
     .toArray();
@@ -432,7 +444,7 @@ export async function getUserAccessibleRooms(user) {
   const userGroups = await db.collection('dataroom_user_groups')
     .find({
       $or: [
-        { 'members.userId': user._id?.toString() || user.id },
+        { 'members.userId': userIdStr },
         { 'members.email': user.email },
       ],
     })
@@ -447,7 +459,7 @@ export async function getUserAccessibleRooms(user) {
     .find({
       resourceType: 'room',
       $or: [
-        { userId: user._id?.toString() || user.id },
+        { userId: userIdStr },
         { userEmail: user.email },
         { groupId: { $in: groupIds } },
         { teamId: { $in: teamIds } },
@@ -462,13 +474,107 @@ export async function getUserAccessibleRooms(user) {
     .find({
       $or: [
         { _id: { $in: roomIds } },
-        { ownerId: user._id?.toString() || user.id },
+        { ownerId: userIdStr },
       ],
       isDeleted: { $ne: true },
     })
     .toArray();
 
   return rooms;
+}
+
+/**
+ * Build a MongoDB filter fragment restricting a `dataroom_documents` query to
+ * the documents this user may see.
+ *
+ * `hasPermission` answers "may this user touch THIS document", which is the
+ * wrong shape for a list endpoint — calling it per row is both an N+1 and easy
+ * to forget entirely (which is exactly what GET /api/dataroom/documents did:
+ * it returned every document in every room to any authenticated account).
+ *
+ * The fragment mirrors `hasPermission`'s grant semantics, which are additive:
+ * a grant at room, folder or document level all admit the document. So a user
+ * may see a document when ANY of these hold:
+ *   - they can access its room (room-level grant, or they own the room)
+ *   - they hold a grant on its folder
+ *   - they hold a grant on the document itself
+ *   - they created it
+ *
+ * Returns `null` for callers who may see everything (Admin / Console admin),
+ * meaning "apply no restriction".
+ *
+ * @param {Object} user
+ * @returns {Promise<Object|null>} filter fragment, or null for unrestricted
+ */
+export async function getAccessibleDocumentsFilter(user) {
+  if (!user) return { _id: { $in: [] } }; // deny-all rather than allow-all
+  if (user.role === 'Admin' || user.role === 'Console admin') return null;
+
+  const client = await clientPromise;
+  const db = client.db('resources');
+  const userIdStr = user._id?.toString() || user.id;
+
+  const [userTeams, userGroups] = await Promise.all([
+    db.collection('teams')
+      .find({ $or: [{ members: userIdStr }, { lead: userIdStr }] })
+      .project({ _id: 1 })
+      .toArray(),
+    db.collection('dataroom_user_groups')
+      .find({
+        $or: [
+          { 'members.userId': userIdStr },
+          { 'members.email': user.email },
+        ],
+      })
+      .project({ _id: 1 })
+      .toArray(),
+  ]);
+
+  const teamIds = userTeams.map((t) => t._id.toString());
+  const groupIds = userGroups.map((g) => g._id.toString());
+
+  // Every unexpired grant this user holds, at any resource level, in one read.
+  const grants = await db.collection('dataroom_permissions')
+    .find({
+      $and: [
+        {
+          $or: [
+            { userId: userIdStr },
+            { userEmail: user.email },
+            ...(groupIds.length ? [{ groupId: { $in: groupIds } }] : []),
+            ...(teamIds.length ? [{ teamId: { $in: teamIds } }] : []),
+          ],
+        },
+        { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+      ],
+    })
+    .project({ resourceType: 1, resourceId: 1 })
+    .toArray();
+
+  const toObjectIds = (type) =>
+    grants
+      .filter((g) => g.resourceType === type && ObjectId.isValid(g.resourceId))
+      .map((g) => new ObjectId(g.resourceId));
+
+  const grantedRoomIds = toObjectIds('room');
+  const grantedFolderIds = toObjectIds('folder');
+  const grantedDocumentIds = toObjectIds('document');
+
+  // Rooms they own count as accessible even without an explicit grant row.
+  const ownedRooms = await db.collection('dataroom_rooms')
+    .find({ ownerId: userIdStr, isDeleted: { $ne: true } })
+    .project({ _id: 1 })
+    .toArray();
+
+  const roomIds = [...grantedRoomIds, ...ownedRooms.map((r) => r._id)];
+
+  const clauses = [];
+  if (roomIds.length) clauses.push({ roomId: { $in: roomIds } });
+  if (grantedFolderIds.length) clauses.push({ folderId: { $in: grantedFolderIds } });
+  if (grantedDocumentIds.length) clauses.push({ _id: { $in: grantedDocumentIds } });
+  clauses.push({ 'createdBy.id': userIdStr });
+
+  return { $or: clauses };
 }
 
 const permissionChecker = {
@@ -478,6 +584,7 @@ const permissionChecker = {
   revokePermission,
   checkRoomAccess,
   getUserAccessibleRooms,
+  getAccessibleDocumentsFilter,
   PERMISSION_LEVELS,
   PERMISSION_TYPES,
 };

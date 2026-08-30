@@ -1,3 +1,4 @@
+// @public-route external user self-registration
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';

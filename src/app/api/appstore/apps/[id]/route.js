@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../lib/auth';
 import { ObjectId } from 'mongodb';
-import { getProviderForVersion } from '../../../../../lib/storage/index.js';
+import { getProviderForRef } from '../../../../../lib/storage/index.js';
 
 export async function GET(request, { params }) {
   try {
@@ -226,7 +226,7 @@ export async function DELETE(request, { params }) {
     // actually stored with.
     const versions = app.versions || [];
     for (const v of versions) {
-      await getProviderForVersion(v).deleteFile(db, v).catch(() => {});
+      await getProviderForRef(v).deleteFile(db, v).catch(() => {});
     }
 
     // 2. Delete app metadata document

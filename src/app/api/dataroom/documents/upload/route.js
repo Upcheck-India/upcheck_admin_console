@@ -1,28 +1,10 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
-import { GridFSBucket, ObjectId } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 import { scanFile } from '../../../../../lib/dataroom/virus-scanner';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { hasPermission } from '../../../../../lib/dataroom/permission-checker';
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
+import { storeDocumentFile } from '../../../../../lib/dataroom/document-storage';
 
 // Allowed file types
 const ALLOWED_TYPES = [
@@ -43,13 +25,18 @@ const ALLOWED_TYPES = [
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
 
-// POST /api/dataroom/documents/upload - Upload file to GridFS and create document
-export async function POST(request) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-
+// POST /api/dataroom/documents/upload - Store a file and create the document
+//
+// selfScoped: the destination roomId arrives inside the multipart body. Having
+// the wrapper resolve it would mean parsing the whole upload twice — for a
+// 100 MB file that is not acceptable — so the room grant is checked here,
+// immediately after the form is parsed and before anything is written.
+//
+// The bytes go to whichever provider is active (Vercel Blob, GridFS or
+// UploadThing) via lib/storage, and the document records which one, so a file
+// stays readable after the setting changes.
+export const POST = withDataroomAuth(
+  async (request, { user, db }) => {
     const formData = await request.formData();
     const file = formData.get('file');
     const roomId = formData.get('roomId');
@@ -65,6 +52,26 @@ export async function POST(request) {
 
     if (!roomId || !ObjectId.isValid(roomId)) {
       return NextResponse.json({ error: 'Valid roomId is required' }, { status: 400 });
+    }
+
+    // ACCESS CONTROL. Replaces a blanket admin-only gate: a room manager who is
+    // not a platform admin can now upload into rooms they administer, and an
+    // admin's access is a recorded grant rather than a role side-effect.
+    // Checked before the virus scan so an unauthorised caller cannot use this
+    // endpoint as a free scanning service.
+    const canUpload = await hasPermission({
+      user,
+      resourceType: 'room',
+      resourceId: roomId,
+      permission: 'edit',
+      roomId,
+    });
+
+    if (!canUpload) {
+      return NextResponse.json(
+        { error: 'You do not have permission to upload to this room' },
+        { status: 403 },
+      );
     }
 
     // Validate file size
@@ -104,9 +111,6 @@ export async function POST(request) {
       }, { status: 403 });
     }
 
-    const client = await clientPromise;
-    const db = client.db('resources');
-
     // Verify room exists
     const room = await db.collection('dataroom_rooms').findOne({
       _id: new ObjectId(roomId),
@@ -134,29 +138,15 @@ export async function POST(request) {
       targetFolderId = new ObjectId(folderId);
     }
 
-    // Upload file to GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    const uploadStream = bucket.openUploadStream(file.name, {
-      contentType: file.type,
-      metadata: {
-        roomId: new ObjectId(roomId),
-        uploadedBy: user._id.toString(),
-        uploadedByEmail: user.email,
-        originalName: file.name,
-      },
-    });
-
-    await new Promise((resolve, reject) => {
-      uploadStream.write(buffer);
-      uploadStream.end();
-      uploadStream.on('finish', resolve);
-      uploadStream.on('error', reject);
-    });
-
-    const fileId = uploadStream.id;
+    // Streamed into storage rather than read into a Buffer first: a 100MB
+    // upload no longer has to exist in the function's memory in one piece.
+    let storage;
+    try {
+      storage = await storeDocumentFile(db, file, { roomId: new ObjectId(roomId), user });
+    } catch (error) {
+      console.error('Document storage failed:', error);
+      return NextResponse.json({ error: 'Could not store the uploaded file' }, { status: 502 });
+    }
 
     // Generate document index number
     const lastDoc = await db.collection('dataroom_documents')
@@ -185,7 +175,7 @@ export async function POST(request) {
       description: description.trim(),
       documentType,
       indexNumber,
-      fileId,
+      ...storage,
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
@@ -211,7 +201,7 @@ export async function POST(request) {
     await db.collection('dataroom_versions').insertOne({
       documentId: result.insertedId,
       versionNumber: 1,
-      fileId,
+      ...storage,
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
@@ -267,9 +257,6 @@ export async function POST(request) {
         fileHash: scanResult.fileHash,
       }
     }, { status: 201 });
-
-  } catch (error) {
-    console.error('POST /api/dataroom/documents/upload error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  { selfScoped: true },
+);

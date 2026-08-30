@@ -1,3 +1,4 @@
+// @public-route external user sign-in; validates credentials itself
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
 import bcrypt from 'bcryptjs';

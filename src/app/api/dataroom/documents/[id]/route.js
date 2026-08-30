@@ -1,66 +1,18 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
-
-async function getUserFromToken(request) {
-  try {
-    const adminToken = request.cookies.get('admin_token')?.value;
-    const client = await clientPromise;
-    const db = client.db('resources');
-
-    if (adminToken) {
-      const user = await db.collection('admin_users').findOne(
-        { sessionToken: adminToken },
-        { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-      );
-      if (user) return user;
-    }
-
-    // Check external user authentication
-    const externalToken = request.cookies.get('external_user_token')?.value;
-    if (externalToken) {
-      const externalUser = await db.collection('dataroom_external_users').findOne(
-        { sessionToken: externalToken },
-        { projection: { _id: 1, email: 1, name: 1, company: 1, role: 1 } }
-      );
-      if (externalUser) {
-        // Map external user to unified format
-        return {
-          _id: externalUser._id,
-          id: externalUser._id.toString(),
-          email: externalUser.email,
-          username: externalUser.name,
-          role: externalUser.role || 'External User',
-          isExternal: true
-        };
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error('Error fetching user from token:', error);
-    return null;
-  }
-}
-
-function isAdminLike(user) {
-  return user && (user.role === 'Admin' || user.role === 'Console admin');
-}
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
+import { deleteDocumentFile } from '../../../../../lib/dataroom/document-storage';
+import { invalidateRenders } from '../../../../../lib/dataroom/page-render';
 
 // GET /api/dataroom/documents/[id] - Get single document
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params, capabilities }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ error: 'Invalid document ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const document = await db.collection('dataroom_documents').findOne({
       _id: new ObjectId(id),
@@ -71,19 +23,9 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // Enforce permissions for view access
-    const { hasPermission } = await import('../../../../../lib/dataroom/permission-checker');
-    const canView = await hasPermission({
-      user,
-      resourceType: 'document',
-      resourceId: id,
-      permission: 'view',
-      roomId: document.roomId
-    });
-
-    if (!canView) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 });
-    }
+    // The `view` grant is checked by the wrapper before this handler runs; the
+    // hand-rolled hasPermission call that used to sit here asked the same
+    // question a second time, one dynamic import and one round-trip later.
 
     // Log document view
     await logAudit({
@@ -112,19 +54,23 @@ export async function GET(request, { params }) {
       { upsert: true }
     );
 
-    return NextResponse.json(document);
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    // Capabilities travel with the metadata so the viewer knows which controls
+    // to render before it starts streaming bytes, rather than discovering it
+    // from response headers once the file is already on its way.
+    return NextResponse.json({ ...document, capabilities });
+  },
+  {
+    requires: 'view',
+    resource: { type: 'document', param: 'id' },
+    allowExternal: true,
+    allowShare: true,
+    capabilities: true,
+  },
+);
 
 // PUT /api/dataroom/documents/[id] - Update document
-export async function PUT(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const PUT = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -133,9 +79,6 @@ export async function PUT(request, { params }) {
 
     const body = await request.json();
     const { name, description, documentType, metadata, state, folderId } = body;
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const document = await db.collection('dataroom_documents').findOne({
       _id: new ObjectId(id),
@@ -195,19 +138,16 @@ export async function PUT(request, { params }) {
 
     const updatedDocument = await db.collection('dataroom_documents').findOne({ _id: new ObjectId(id) });
     return NextResponse.json(updatedDocument);
-
-  } catch (error) {
-    console.error('PUT /api/dataroom/documents/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'document', param: 'id' },
+  },
+);
 
 // DELETE /api/dataroom/documents/[id] - Delete document
-export async function DELETE(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (!isAdminLike(user)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export const DELETE = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id } = await params;
     if (!ObjectId.isValid(id)) {
@@ -216,9 +156,6 @@ export async function DELETE(request, { params }) {
 
     const { searchParams } = new URL(request.url);
     const permanent = searchParams.get('permanent') === 'true';
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     const document = await db.collection('dataroom_documents').findOne({
       _id: new ObjectId(id),
@@ -229,11 +166,24 @@ export async function DELETE(request, { params }) {
     }
 
     if (permanent) {
-      // Delete versions
+      // The stored bytes go too. Deleting only the records left every version
+      // of every permanently-deleted document sitting in storage with nothing
+      // referencing it, so nothing would ever find it to clean up.
+      const versions = await db
+        .collection('dataroom_versions')
+        .find({ documentId: new ObjectId(id) })
+        .toArray();
+
+      for (const version of [...versions, document]) {
+        await deleteDocumentFile(db, version).catch((err) =>
+          console.error('Failed to delete stored file:', err),
+        );
+      }
+
+      await invalidateRenders(db, new ObjectId(id));
+
       await db.collection('dataroom_versions').deleteMany({ documentId: new ObjectId(id) });
-      // Delete comments
       await db.collection('dataroom_comments').deleteMany({ documentId: new ObjectId(id) });
-      // Delete document
       await db.collection('dataroom_documents').deleteOne({ _id: new ObjectId(id) });
     } else {
       // Soft delete
@@ -260,9 +210,9 @@ export async function DELETE(request, { params }) {
     });
 
     return NextResponse.json({ success: true, permanent });
-
-  } catch (error) {
-    console.error('DELETE /api/dataroom/documents/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+  },
+  {
+    requires: 'edit',
+    resource: { type: 'document', param: 'id' },
+  },
+);

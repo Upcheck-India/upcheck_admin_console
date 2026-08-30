@@ -1,37 +1,17 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../../../../lib/mongodb';
-import { GridFSBucket, ObjectId } from 'mongodb';
-
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
+import { ObjectId } from 'mongodb';
+import { openDocumentStream } from '../../../../../../../lib/dataroom/document-storage';
+import { withDataroomAuth } from '../../../../../../../lib/dataroom/withDataroomAuth';
 
 // GET /api/dataroom/documents/[id]/versions/[versionId] - Get specific version
-export async function GET(request, { params }) {
-  try {
-    const user = await getUserFromToken(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export const GET = withDataroomAuth(
+  async (request, { user, db, params }) => {
 
     const { id, versionId } = await params;
 
     if (!ObjectId.isValid(id) || !ObjectId.isValid(versionId)) {
       return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
     }
-
-    const client = await clientPromise;
-    const db = client.db('resources');
 
     // Get the document
     const document = await db.collection('dataroom_documents').findOne({
@@ -53,33 +33,34 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Version not found' }, { status: 404 });
     }
 
-    // Get file from GridFS
-    const bucket = new GridFSBucket(db, { bucketName: 'dataroom_files' });
-    
-    try {
-      const downloadStream = bucket.openDownloadStream(version.fileId);
-      const chunks = [];
-      
-      for await (const chunk of downloadStream) {
-        chunks.push(chunk);
-      }
-      
-      const fileBuffer = Buffer.concat(chunks);
-      
-      return new NextResponse(fileBuffer, {
-        headers: {
-          'Content-Type': version.mimeType || 'application/octet-stream',
-          'Content-Disposition': `attachment; filename="${version.fileName}"`,
-          'Content-Length': fileBuffer.length.toString(),
-        },
-      });
-    } catch (gridfsError) {
-      console.error('GridFS download error:', gridfsError);
+    // A version record carries the same storage fields as a document, so the
+    // same reader finds it whichever provider it was written to.
+    const stream = await openDocumentStream(db, version);
+
+    if (!stream) {
       return NextResponse.json({ error: 'File not found in storage' }, { status: 404 });
     }
 
-  } catch (error) {
-    console.error('GET /api/dataroom/documents/[id]/versions/[versionId] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
-  }
-}
+    if (stream.nodeStream) {
+      request.signal?.addEventListener('abort', () => stream.nodeStream.destroy(), { once: true });
+      stream.nodeStream.on('error', (err) => console.error('Version download error:', err));
+    }
+
+    const headers = {
+      'Content-Type': version.mimeType || stream.contentType || 'application/octet-stream',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(version.fileName || 'document')}"`,
+    };
+    if (stream.size != null) headers['Content-Length'] = String(stream.size);
+
+    return new NextResponse(stream.webStream, { headers });
+  },
+  {
+    // This endpoint returns the file as an attachment, so it is a download
+    // however the URL is spelled. It required only 'view', which let anyone
+    // who could read a document take away every historical version of it.
+    requires: 'download',
+    resource: { type: 'document', param: 'id' },
+    allowExternal: true,
+    allowShare: true,
+  },
+);

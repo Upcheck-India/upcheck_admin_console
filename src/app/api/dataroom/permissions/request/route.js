@@ -1,31 +1,13 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
+import { withDataroomAuth } from '../../../../../lib/dataroom/withDataroomAuth';
 import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../../lib/dataroom/audit-logger';
 
-async function getUserFromToken(request) {
-  try {
-    const token = request.cookies.get('admin_token')?.value;
-    if (!token) return null;
-    const client = await clientPromise;
-    const db = client.db('resources');
-    const user = await db.collection('admin_users').findOne(
-      { sessionToken: token },
-      { projection: { _id: 1, email: 1, username: 1, role: 1 } }
-    );
-    return user;
-  } catch {
-    return null;
-  }
-}
-
 // POST /api/dataroom/permissions/request - Request access to room/document
-export async function POST(request) {
+export const POST = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const body = await request.json();
     const { targetType, targetId, permissionLevel, reason } = body;
@@ -139,15 +121,14 @@ export async function POST(request) {
     console.error('POST /api/dataroom/permissions/request error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { selfScoped: true },
+);
 
 // GET /api/dataroom/permissions/request - List access requests
-export async function GET(request) {
+export const GET = withDataroomAuth(
+  async (request, { user, params }) => {
   try {
-    const user = await getUserFromToken(request);
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status'); // pending, approved, rejected
@@ -184,4 +165,6 @@ export async function GET(request) {
     console.error('GET /api/dataroom/permissions/request error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
+},
+  { selfScoped: true },
+);
