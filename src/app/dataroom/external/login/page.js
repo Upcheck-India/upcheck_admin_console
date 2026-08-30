@@ -28,9 +28,19 @@ export default function ExternalLoginPage() {
         setError(data.error || 'Login failed');
         return;
       }
+      // A share link that demands a registered account sends the visitor here
+      // with ?redirect=, so they land back on the link rather than on a
+      // dashboard with no idea what they came for. Only same-site paths are
+      // honoured: an absolute URL here would make this an open redirect.
+      const requested = new URLSearchParams(window.location.search).get('redirect');
+      const destination =
+        requested && requested.startsWith('/') && !requested.startsWith('//')
+          ? requested
+          : '/dataroom/external/dashboard';
+
       // replace(), not push(): the login page must not sit in the back stack
       // of a signed-in session.
-      router.replace('/dataroom/external/dashboard');
+      router.replace(destination);
       router.refresh();
     } catch {
       setError('Could not reach the server. Please try again.');

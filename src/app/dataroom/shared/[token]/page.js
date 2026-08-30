@@ -1,319 +1,294 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { use, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, FileText, Calendar, CheckCircle, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import {
+  AlertCircle,
+  Calendar,
+  FileText,
+  Loader2,
+  Lock,
+  Mail,
+  ShieldCheck,
+} from 'lucide-react';
+
+const PERMISSION_LABELS = {
+  view: 'View',
+  comment: 'Comment',
+  edit: 'Edit',
+  download: 'Download',
+  print: 'Print',
+};
+
+const PROTECTION_BLURB = {
+  none: 'This link can be opened by anyone who has it.',
+  collect_email: 'Tell us who you are before opening this.',
+  verify_email: 'We will email you a code to confirm your address.',
+  external_account: 'This link is for registered external users.',
+};
 
 export default function SharedResourcePage({ params }) {
   const router = useRouter();
-  const { token } = params;
-  
+  const { token } = use(params);
+
+  const [share, setShare] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [shareInfo, setShareInfo] = useState(null);
-  const [error, setError] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   useEffect(() => {
-    validateShareToken();
-    checkAuthentication();
+    let cancelled = false;
+
+    fetch(`/api/dataroom/share/validate?token=${encodeURIComponent(token)}`)
+      .then(async (res) => ({ ok: res.ok, body: await res.json().catch(() => ({})) }))
+      .then(({ ok, body }) => {
+        if (cancelled) return;
+        if (ok) setShare(body.share);
+        else setError(body.error || 'This share link is not valid.');
+      })
+      .catch(() => {
+        if (!cancelled) setError('Could not reach the server.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
-  async function validateShareToken() {
-    try {
-      const response = await fetch(`/api/dataroom/share/validate?token=${token}`);
-      const data = await response.json();
+  const openResource = useCallback(
+    (type, id) => {
+      // No token in the URL: the session lives in an httpOnly cookie the
+      // access call set. A token in a link is a credential in browser history,
+      // in referrer headers, and in whatever the recipient pastes to a
+      // colleague.
+      const destination = {
+        document: `/dataroom/documents/${id}/view`,
+        folder: `/dataroom/folders/${id}`,
+        room: `/dataroom/rooms/${id}`,
+      }[type];
+      router.push(destination || '/dataroom');
+    },
+    [router],
+  );
 
-      if (response.ok) {
-        setShareInfo(data.share);
-      } else {
-        setError(data.error || 'Invalid or expired share link');
+  async function submit(extra = {}) {
+    setBusy(true);
+    setNotice(null);
+    try {
+      const res = await fetch('/api/dataroom/share/access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ token, email: email || undefined, code: code || undefined, ...extra }),
+      });
+      const body = await res.json().catch(() => ({}));
+
+      if (res.ok && body.codeSent) {
+        setCodeSent(true);
+        setNotice(`We sent a code to ${email}. It expires in 15 minutes.`);
+        return;
       }
-    } catch (err) {
-      setError('Failed to validate share link');
+
+      if (!res.ok) {
+        setNotice(body.error || 'Could not open this link.');
+        return;
+      }
+
+      openResource(body.resourceType, body.resourceId);
+    } catch {
+      setNotice('Could not reach the server.');
     } finally {
-      setLoading(false);
-    }
-  }
-
-  async function checkAuthentication() {
-    try {
-      const response = await fetch('/api/dataroom/external-auth/me');
-      if (response.ok) {
-        setIsAuthenticated(true);
-      }
-    } catch (err) {
-      setIsAuthenticated(false);
-    }
-  }
-
-  async function handleAccessResource() {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
-
-    // Redirect to the actual resource
-    if (shareInfo.resourceType === 'document') {
-      router.push(`/dataroom/documents/${shareInfo.resourceId}?shareToken=${token}`);
-    } else if (shareInfo.resourceType === 'folder') {
-      router.push(`/dataroom/folders/${shareInfo.resourceId}?shareToken=${token}`);
-    } else if (shareInfo.resourceType === 'room') {
-      router.push(`/dataroom/rooms/${shareInfo.resourceId}?shareToken=${token}`);
+      setBusy(false);
     }
   }
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-slate-600">Validating share link...</p>
+      <Shell>
+        <div className="flex flex-col items-center gap-3 py-8">
+          <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+          <p className="text-slate-600">Checking this link…</p>
         </div>
-      </div>
+      </Shell>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
+      <Shell tone="error">
+        <div className="text-center">
           <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">This link cannot be opened</h1>
           <p className="text-slate-600 mb-6">{error}</p>
-          <button
-            onClick={() => router.push('/dataroom')}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          <Link
+            href="/dataroom/auth-gate"
+            className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
-            Go to Data Room
-          </button>
+            Sign in instead
+          </Link>
         </div>
-      </div>
+      </Shell>
     );
   }
 
+  const returnTo = typeof window === 'undefined' ? '' : window.location.pathname;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-10 h-10 text-blue-600" />
-          </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Shared Resource</h1>
-          <p className="text-slate-600">You've been invited to access a shared {shareInfo?.resourceType}</p>
+    <Shell>
+      <div className="text-center mb-8">
+        <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <FileText className="w-10 h-10 text-blue-600" />
         </div>
-
-        {/* Resource Info */}
-        <div className="bg-slate-50 rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-slate-900 mb-4">{shareInfo?.resourceName}</h2>
-          
-          <div className="space-y-3">
-            <div className="flex items-center space-x-2 text-slate-600">
-              <Lock className="w-5 h-5" />
-              <span className="font-medium">Permissions:</span>
-              <div className="flex flex-wrap gap-2">
-                {shareInfo?.permissions.map((perm) => (
-                  <span key={perm} className="px-3 py-1 bg-green-100 text-green-700 text-sm rounded-full">
-                    {perm}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {shareInfo?.expiresAt && (
-              <div className="flex items-center space-x-2 text-slate-600">
-                <Calendar className="w-5 h-5" />
-                <span className="font-medium">Expires:</span>
-                <span>{new Date(shareInfo.expiresAt).toLocaleString()}</span>
-              </div>
-            )}
-
-            <div className="flex items-center space-x-2 text-slate-600">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-medium">Shared with:</span>
-              <span>{shareInfo?.targetEmail}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Authentication Status */}
-        {!isAuthenticated && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800 font-medium mb-2">Authentication Required</p>
-            <p className="text-yellow-700 text-sm">
-              You need to sign in or create an account to access this shared resource.
-            </p>
-          </div>
-        )}
-
-        {/* Action Button */}
-        <button
-          onClick={handleAccessResource}
-          className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-lg"
-        >
-          {isAuthenticated ? 'Access Resource' : 'Sign In to Access'}
-        </button>
-
-        {/* Auth Modal */}
-        {showAuthModal && (
-          <ExternalAuthModal
-            targetEmail={shareInfo?.targetEmail}
-            onClose={() => setShowAuthModal(false)}
-            onSuccess={() => {
-              setIsAuthenticated(true);
-              setShowAuthModal(false);
-            }}
-          />
-        )}
+        <h1 className="text-3xl font-bold text-slate-900 mb-2">{share.resourceName}</h1>
+        <p className="text-slate-600">A shared {share.resourceType} in the Upcheck data room</p>
       </div>
-    </div>
-  );
-}
 
-function ExternalAuthModal({ targetEmail, onClose, onSuccess }) {
-  const [mode, setMode] = useState('login');
-  const [formData, setFormData] = useState({
-    email: targetEmail || '',
-    password: '',
-    name: '',
-    organization: '',
-    reason: '',
-  });
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      const endpoint = mode === 'login' 
-        ? '/api/dataroom/external-auth/login'
-        : '/api/dataroom/external-auth/register';
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        onSuccess();
-      } else {
-        setError(data.error || 'Authentication failed');
-      }
-    } catch (err) {
-      setError('Network error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-        <h2 className="text-2xl font-bold text-slate-900 mb-4">
-          {mode === 'login' ? 'Sign In' : 'Create Account'}
-        </h2>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              required
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-            />
+      <div className="bg-slate-50 rounded-lg p-6 mb-6 space-y-3">
+        <div className="flex items-start gap-2 text-slate-600">
+          <Lock className="w-5 h-5 mt-0.5 shrink-0" />
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">You may:</span>
+            {share.permissions.map((p) => (
+              <span key={p} className="px-3 py-1 bg-emerald-100 text-emerald-700 text-sm rounded-full">
+                {PERMISSION_LABELS[p] || p}
+              </span>
+            ))}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              required
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-            />
+        {share.expiresAt && (
+          <div className="flex items-center gap-2 text-slate-600">
+            <Calendar className="w-5 h-5 shrink-0" />
+            <span className="font-medium">Expires:</span>
+            <span>{new Date(share.expiresAt).toLocaleString()}</span>
           </div>
+        )}
 
-          {mode === 'register' && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+        <div className="flex items-start gap-2 text-slate-600">
+          <ShieldCheck className="w-5 h-5 mt-0.5 shrink-0" />
+          <span>{PROTECTION_BLURB[share.protection] || PROTECTION_BLURB.none}</span>
+        </div>
+      </div>
+
+      {notice && (
+        <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          {notice}
+        </div>
+      )}
+
+      {share.needsExternalAccount ? (
+        <div className="space-y-3">
+          <button
+            onClick={() => submit()}
+            disabled={busy}
+            className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium text-lg flex items-center justify-center gap-2"
+          >
+            {busy && <Loader2 className="w-5 h-5 animate-spin" />}
+            Open
+          </button>
+          <p className="text-center text-sm text-slate-600">
+            Not signed in?{' '}
+            <Link
+              href={`/dataroom/external/login?redirect=${encodeURIComponent(returnTo)}`}
+              className="text-blue-600 hover:underline font-medium"
+            >
+              Sign in as an external user
+            </Link>
+          </p>
+        </div>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            // A `verify_email` link takes two passes: the first asks for a
+            // code, the second spends it.
+            submit(share.needsCode && !codeSent ? { requestCode: true } : {});
+          }}
+          className="space-y-4"
+        >
+          {share.needsEmail && (
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">
+                Your email address
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  id="email"
+                  type="email"
                   required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={codeSent}
+                  className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-100"
                 />
               </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Organization</label>
-                <input
-                  type="text"
-                  value={formData.organization}
-                  onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                  required
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Reason for Access
-                </label>
-                <textarea
-                  value={formData.reason}
-                  onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-                  required
-                  rows={3}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg"
-                  placeholder="Please explain why you need access..."
-                />
-              </div>
-            </>
+            </div>
           )}
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-              {error}
+          {share.needsCode && codeSent && (
+            <div>
+              <label htmlFor="code" className="block text-sm font-medium text-slate-700 mb-1">
+                Access code
+              </label>
+              <input
+                id="code"
+                inputMode="numeric"
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full px-4 py-3 tracking-[0.4em] text-center font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
             </div>
           )}
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            disabled={busy}
+            className="w-full px-6 py-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium text-lg flex items-center justify-center gap-2"
           >
-            {loading ? 'Processing...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            {busy && <Loader2 className="w-5 h-5 animate-spin" />}
+            {share.needsCode && !codeSent ? 'Send me a code' : 'Open'}
           </button>
+
+          {share.needsCode && codeSent && (
+            <button
+              type="button"
+              onClick={() => submit({ requestCode: true })}
+              disabled={busy}
+              className="w-full text-sm text-blue-600 hover:underline disabled:opacity-60"
+            >
+              Send another code
+            </button>
+          )}
         </form>
+      )}
 
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-            className="text-blue-600 hover:underline text-sm"
-          >
-            {mode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign In'}
-          </button>
-        </div>
+      <p className="mt-6 text-center text-xs text-slate-500">
+        Access through this link is recorded, and it can be revoked at any time.
+      </p>
+    </Shell>
+  );
+}
 
-        <button
-          onClick={onClose}
-          className="mt-4 w-full px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
-        >
-          Cancel
-        </button>
-      </div>
+function Shell({ children, tone = 'default' }) {
+  const bg =
+    tone === 'error'
+      ? 'from-red-50 to-orange-50'
+      : 'from-blue-50 to-indigo-50';
+  return (
+    <div className={`min-h-screen bg-gradient-to-br ${bg} flex items-center justify-center p-4`}>
+      <div className="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full">{children}</div>
     </div>
   );
 }
