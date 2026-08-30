@@ -3,6 +3,7 @@ import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
 import { getAccessibleDocumentsFilter } from '../../../../lib/dataroom/permission-checker';
 import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
+import { shareDocumentsFilter } from '../../../../lib/dataroom/share-links';
 
 // GET /api/dataroom/documents - List documents
 //
@@ -11,7 +12,7 @@ import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
 // wrapper's per-resource gate does not apply. The scoping lives in the query
 // below and must stay there.
 export const GET = withDataroomAuth(
-  async (request, { user, db }) => {
+  async (request, { user, db, share }) => {
     const { searchParams } = new URL(request.url);
     const roomId = searchParams.get('roomId');
     const folderId = searchParams.get('folderId');
@@ -60,7 +61,14 @@ export const GET = withDataroomAuth(
     //
     // Combined under $and so it can never be clobbered by the caller-supplied
     // `search` clause, which also uses $or.
-    const accessFilter = await getAccessibleDocumentsFilter(user);
+    //
+    // A share-link visitor holds no grants at all, so the grant filter is the
+    // wrong question to ask about them. Their bound is the link itself: the
+    // shared document, or everything under the shared folder or room.
+    const accessFilter = share
+      ? await shareDocumentsFilter(db, share)
+      : await getAccessibleDocumentsFilter(user);
+
     const scopedFilter = accessFilter
       ? { $and: [filter, accessFilter] }
       : filter;
@@ -83,7 +91,7 @@ export const GET = withDataroomAuth(
       items: documents,
     });
   },
-  { selfScoped: true, allowExternal: true },
+  { selfScoped: true, allowExternal: true, allowShare: true, shareScoped: true },
 );
 
 // POST /api/dataroom/documents - Create document metadata (file upload handled separately)

@@ -70,14 +70,17 @@ export default function SharedResourcePage({ params }) {
       // access call set. A token in a link is a credential in browser history,
       // in referrer headers, and in whatever the recipient pastes to a
       // colleague.
-      const destination = {
-        document: `/dataroom/documents/${id}/view`,
-        folder: `/dataroom/folders/${id}`,
-        room: `/dataroom/rooms/${id}`,
-      }[type];
-      router.push(destination || '/dataroom');
+      // A folder or room link lands on the share's own browse view rather than
+      // the internal room page: that page is built for staff, and most of what
+      // it offers — upload, permissions, workflows, audit — is refused for a
+      // link visitor, so it would render a screen of controls that error.
+      router.push(
+        type === 'document'
+          ? `/dataroom/documents/${id}/view`
+          : `/dataroom/shared/${token}/browse`,
+      );
     },
-    [router],
+    [router, token],
   );
 
   async function submit(extra = {}) {

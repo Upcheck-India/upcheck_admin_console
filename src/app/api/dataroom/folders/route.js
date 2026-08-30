@@ -3,9 +3,10 @@ import { ObjectId } from 'mongodb';
 import { logAudit, AUDIT_ACTIONS } from '../../../../lib/dataroom/audit-logger';
 import { validateFolderName, generateFolderPath } from '../../../../lib/dataroom/folder-utils';
 import { withDataroomAuth } from '../../../../lib/dataroom/withDataroomAuth';
+import { shareFoldersFilter } from '../../../../lib/dataroom/share-links';
 
 export const GET = withDataroomAuth(
-  async (request, { user, db, params }) => {
+  async (request, { user, db, params, share }) => {
 
     const { searchParams } = new URL(request.url);
     const roomIdParam = searchParams.get('roomId');
@@ -30,7 +31,13 @@ export const GET = withDataroomAuth(
       filter.parentId = null;
     }
 
-    const folders = await db.collection('dataroom_folders').find(filter).limit(200).toArray();
+    // A share-link visitor sees the shared folder and its descendants, or the
+    // whole tree for a room link. A document link grants nothing here.
+    const scopedFilter = share
+      ? { $and: [filter, await shareFoldersFilter(db, share)] }
+      : filter;
+
+    const folders = await db.collection('dataroom_folders').find(scopedFilter).limit(200).toArray();
 
     // Add document counts to each folder
     const folderIds = folders.map(f => f._id);
@@ -66,6 +73,9 @@ export const GET = withDataroomAuth(
   {
     requires: 'view',
     resource: { type: 'room', query: 'roomId' },
+    allowExternal: true,
+    allowShare: true,
+    shareScoped: true,
   },
 );
 

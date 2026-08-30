@@ -168,6 +168,69 @@ export async function shareCovers(db, share, ref, roomId) {
   return false;
 }
 
+/** Escape a string for safe use inside a RegExp. */
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A MongoDB filter restricting a listing to what this share covers — the
+ * listing counterpart of shareCovers().
+ *
+ * List endpoints scope their own results, so they cannot be bounded by the
+ * gate's per-resource check. They ask for this instead. Returning a deny-all
+ * filter for an unrecognised shape is deliberate: a listing that cannot work
+ * out its own bounds must return nothing, not everything.
+ */
+export async function shareDocumentsFilter(db, share) {
+  if (share.resourceType === 'document') {
+    return { _id: share.resourceId };
+  }
+  if (share.resourceType === 'room') {
+    return { roomId: share.resourceId };
+  }
+  if (share.resourceType === 'folder') {
+    const folder = await db
+      .collection('dataroom_folders')
+      .findOne({ _id: share.resourceId }, { projection: { path: 1 } });
+    if (!folder) return { _id: { $in: [] } };
+
+    return {
+      $or: [
+        { folderId: share.resourceId },
+        { folderPath: folder.path },
+        { folderPath: { $regex: `^${escapeRegex(folder.path.replace(/\/$/, ''))}/` } },
+      ],
+    };
+  }
+  return { _id: { $in: [] } };
+}
+
+/** The same, for a folder listing. */
+export async function shareFoldersFilter(db, share) {
+  if (share.resourceType === 'document') {
+    // A document link grants nothing over the folder tree it happens to sit in.
+    return { _id: { $in: [] } };
+  }
+  if (share.resourceType === 'room') {
+    return { roomId: share.resourceId };
+  }
+  if (share.resourceType === 'folder') {
+    const folder = await db
+      .collection('dataroom_folders')
+      .findOne({ _id: share.resourceId }, { projection: { path: 1 } });
+    if (!folder) return { _id: { $in: [] } };
+
+    return {
+      $or: [
+        { _id: share.resourceId },
+        { path: { $regex: `^${escapeRegex(folder.path.replace(/\/$/, ''))}/` } },
+      ],
+    };
+  }
+  return { _id: { $in: [] } };
+}
+
 /**
  * Path containment. The separator matters: without it, `/Legal Archive` reads
  * as being inside `/Legal`.

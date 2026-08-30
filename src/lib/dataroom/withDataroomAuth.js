@@ -279,6 +279,7 @@ export function resourceFromBody(typeKey, idKey, fixedType = null) {
  * @param {string}  [options.roomQuery]         query param naming the room, when not resource-scoped
  * @param {boolean} [options.allowExternal]     admit external users (default false)
  * @param {boolean} [options.allowShare]        admit share-link sessions (default false)
+ * @param {boolean} [options.shareScoped]       list route that filters its own results by ctx.share
  * @param {boolean} [options.selfScoped]        route filters its own results; skips the resource check
  * @param {boolean} [options.skipRoomChecks]    skip expiry/IP enforcement (rare; say why at the call site)
  */
@@ -291,6 +292,7 @@ export function withDataroomAuth(handler, options = {}) {
     roomQuery = 'roomId',
     allowExternal = false,
     allowShare = false,
+    shareScoped = false,
     selfScoped = false,
     skipRoomChecks = false,
     capabilities = false,
@@ -431,32 +433,44 @@ export function withDataroomAuth(handler, options = {}) {
       if (shareContext) {
         const { share } = shareContext;
 
-        if (!requiredPermissions.length || !ref) {
-          // A route that scopes itself (`selfScoped`) or names no resource
-          // cannot be bounded to the link's scope, so it is not reachable
-          // through a link at all.
-          return json({ error: 'Access denied' }, 403);
-        }
+        // A listing cannot be bounded by the per-resource check below — it has
+        // no single resource. `shareScoped` is the explicit, greppable promise
+        // that the handler bounds itself with shareDocumentsFilter /
+        // shareFoldersFilter against ctx.share. It is named separately from
+        // `selfScoped` so that opening a list endpoint to link visitors is a
+        // deliberate act, not a side effect of it already filtering for
+        // signed-in users — that filter is about grants, and a link holder has
+        // none, so reusing it would either show nothing or show everything
+        // depending on which way the filter happens to fail.
+        const granted = requiredPermissions.length
+          ? requiredPermissions.every((p) => share.permissions.includes(p))
+          : share.permissions.includes('view');
 
-        const covered = await shareCovers(db, share, ref, roomId);
-        const granted = requiredPermissions.every((p) => share.permissions.includes(p));
-
-        if (!covered || !granted) {
-          await logAudit({
-            action: 'SHARE_ACCESS_DENIED',
-            resourceType: ref.type,
-            resourceId: ref.id,
-            roomId: room?._id || null,
-            user,
-            details: {
-              shareId: share._id?.toString(),
-              permission: requiredPermissions.join(','),
-              reason: covered ? 'permission_not_granted' : 'outside_share_scope',
-              path: new URL(request.url).pathname,
-            },
-            request,
-          }).catch(() => {});
+        if (shareScoped) {
+          if (!granted) return json({ error: 'Access denied' }, 403);
+        } else if (!requiredPermissions.length || !ref) {
+          // Any other route that names no resource cannot be bounded to the
+          // link's scope, so it is not reachable through a link at all.
           return json({ error: 'Access denied' }, 403);
+        } else {
+          const covered = await shareCovers(db, share, ref, roomId);
+          if (!covered || !granted) {
+            await logAudit({
+              action: 'SHARE_ACCESS_DENIED',
+              resourceType: ref.type,
+              resourceId: ref.id,
+              roomId: room?._id || null,
+              user,
+              details: {
+                shareId: share._id?.toString(),
+                permission: requiredPermissions.join(','),
+                reason: covered ? 'permission_not_granted' : 'outside_share_scope',
+                path: new URL(request.url).pathname,
+              },
+              request,
+            }).catch(() => {});
+            return json({ error: 'Access denied' }, 403);
+          }
         }
       }
 

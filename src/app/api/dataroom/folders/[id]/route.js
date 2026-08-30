@@ -27,6 +27,8 @@ export const GET = withDataroomAuth(
   {
     requires: 'view',
     resource: { type: 'folder', param: 'id' },
+    allowExternal: true,
+    allowShare: true,
   },
 );
 

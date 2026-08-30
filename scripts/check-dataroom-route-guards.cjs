@@ -28,6 +28,7 @@ function walk(dir, out = []) {
 const unwrapped = [];
 const wrapped = [];
 const selfScoped = [];
+const shareScoped = [];
 const publicRoutes = [];
 let handlerCount = 0;
 
@@ -49,6 +50,12 @@ for (const file of walk(ROOT)) {
   // listed rather than merely permitted: the module previously drifted to 55
   // unguarded routes precisely because nothing counted the exceptions.
   if (/selfScoped:\s*true/.test(src)) selfScoped.push(file);
+
+  // `shareScoped: true` is a promise that the handler bounds its own results
+  // to a share link's scope. A route that declares it and then forgets to
+  // apply shareDocumentsFilter / shareFoldersFilter hands a link holder the
+  // whole corpus, so these are listed for review the same way.
+  if (/shareScoped:\s*true/.test(src)) shareScoped.push(file);
 
   for (const method of METHODS) {
     // `export const GET = withDataroomAuth(...)`  → guarded
@@ -77,6 +84,11 @@ if (selfScoped.length) {
   for (const s of selfScoped) console.log(`  ${s}`);
 }
 
+if (shareScoped.length) {
+  console.log('\nshareScoped (must bound results by ctx.share — verify the query):');
+  for (const s of shareScoped) console.log(`  ${s}`);
+}
+
 if (publicRoutes.length) {
   console.log('\npublic by design (@public-route):');
   for (const p of publicRoutes) console.log(`  ${p}`);
@@ -85,7 +97,8 @@ if (publicRoutes.length) {
 console.log(
   `\n${wrapped.length}/${handlerCount} handler(s) guarded by withDataroomAuth.` +
     (unwrapped.length ? `  ${unwrapped.length} remaining.` : '  All guarded.') +
-    `  ${selfScoped.length} self-scoped, ${publicRoutes.length} public.`,
+    `  ${selfScoped.length} self-scoped, ${shareScoped.length} share-scoped, ` +
+    `${publicRoutes.length} public.`,
 );
 
 process.exit(unwrapped.length === 0 ? 0 : 1);
