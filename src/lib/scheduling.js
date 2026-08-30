@@ -41,7 +41,7 @@ export function slugify(str) {
 }
 
 // "HH:MM" -> minutes since midnight (null if malformed).
-function parseHHMM(s) {
+export function parseHHMM(s) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || '').trim());
   if (!m) return null;
   const h = Number(m[1]);
@@ -54,7 +54,7 @@ function parseHHMM(s) {
  * Offset (ms) of `timeZone` at instant `date`, i.e. localWallTime - UTC.
  * Uses Intl to read the zone's wall clock, then diffs against the UTC instant.
  */
-function tzOffsetMs(date, timeZone) {
+export function tzOffsetMs(date, timeZone) {
   const dtf = new Intl.DateTimeFormat('en-US', {
     timeZone,
     hourCycle: 'h23',
