@@ -8,6 +8,7 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, AlertTriangle
 } from 'lucide-react';
 import { WEEKDAYS } from '../../lib/scheduling';
+import BlocksTab from '../../components/schedule/BlocksTab';
 
 const COMMON_TIMEZONES = [
   'UTC', 'Asia/Kolkata', 'America/New_York', 'America/Los_Angeles',
@@ -21,7 +22,7 @@ const fmtDateTime = (d) =>
 
 export default function SchedulingPage() {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
-  const [tab, setTab] = useState('types');
+  const [tab, setTab] = useState('blocks');
   const [unreadCount, setUnreadCount] = useState(0);
 
   const loadUnreadCount = useCallback(async () => {
@@ -48,6 +49,7 @@ export default function SchedulingPage() {
   if (!isAuthenticated) return null;
 
   const tabs = [
+    { id: 'blocks', label: 'Blocks' },
     { id: 'types', label: 'Event Types' },
     { id: 'availability', label: 'Availability' },
     { id: 'bookings', label: 'Bookings' },
@@ -87,6 +89,9 @@ export default function SchedulingPage() {
         <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3 text-sm text-blue-800 shadow-sm">
           <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
           <div>
+            {tab === 'blocks' && (
+              <p><strong>Blocks:</strong> Open a shared resource — a seat, a room, a machine — set the rules for it, and let the team claim non-overlapping time inside it. Everyone who can see a block sees who holds what.</p>
+            )}
             {tab === 'types' && (
               <p><strong>Event Types:</strong> These are individual booking templates that others can pick to join you. Copy and share the links to allow self-scheduling.</p>
             )}
@@ -99,6 +104,7 @@ export default function SchedulingPage() {
           </div>
         </div>
 
+        {tab === 'blocks' && <BlocksTab />}
         {tab === 'types' && <EventTypesTab />}
         {tab === 'availability' && <AvailabilityTab />}
         {tab === 'bookings' && <BookingsTab onBookingsUpdated={loadUnreadCount} />}
