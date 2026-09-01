@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
+import { normalizePostingPolicy, normalizeReactionVisibility } from '../../../lib/chatSystemMessages';
 
 async function getAuthUser(req) {
   const authHeader = req.headers.get('authorization');
@@ -198,6 +199,8 @@ export async function POST(req) {
       members,
       teams,
       createdBy: creatorObjId,
+      postingPolicy: normalizePostingPolicy(body?.postingPolicy),
+      reactionVisibility: normalizeReactionVisibility(body?.reactionVisibility),
       // The creator is automatically the first group admin. Stored as its
       // own array (rather than reusing `members`, which is broader — team
       // members can be inherited members without being admins) so multiple

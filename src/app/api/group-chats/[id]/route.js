@@ -3,6 +3,20 @@ import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 import { isGroupAdmin, canManageGroup } from '../../../../lib/groupPermissions';
+import {
+  describeChanges,
+  normalizePostingPolicy,
+  normalizeReactionVisibility,
+  postSystemMessage,
+} from '../../../../lib/chatSystemMessages';
+
+// The notices name who made the change, so they need a human label rather than
+// a username where a real name exists.
+function displayNameOf(u) {
+  if (!u) return 'An admin';
+  const full = [u.firstName, u.lastName].map((p) => (p || '').trim()).filter(Boolean).join(' ');
+  return full || u.name || u.username || 'An admin';
+}
 
 async function getAuthUser(req) {
   const authHeader = req.headers.get('authorization');
@@ -130,27 +144,37 @@ export async function PUT(req, { params }) {
     }
 
     const data = await req.json();
-    if (!data.name || !data.name.trim()) {
+    // A name may be omitted (a partial edit) but never blanked.
+    if (data.name !== undefined && !String(data.name).trim()) {
       return NextResponse.json({ error: 'Group name is required' }, { status: 400 });
     }
 
-    const members = (data.members || []).map(id => {
+    // Absent means UNCHANGED. This used to read `data.members || []`, so a body
+    // that simply did not mention members emptied the group — one forgetful
+    // caller away from wiping a membership list with no way back.
+    const toIds = (list) => list.map(id => {
       try { return new ObjectId(id); } catch { return id; }
     });
-    const teams = (data.teams || []).map(id => {
-      try { return new ObjectId(id); } catch { return id; }
-    });
-    const excludedMembers = (data.excludedMembers || []).map(id => {
-      try { return new ObjectId(id); } catch { return id; }
-    });
+    const members = data.members !== undefined ? toIds(data.members) : (group.members || []);
+    const teams = data.teams !== undefined ? toIds(data.teams) : (group.teams || []);
+    const excludedMembers = data.excludedMembers !== undefined
+      ? toIds(data.excludedMembers)
+      : (group.excludedMembers || []);
 
     const updateDoc = {
-      name: data.name.trim(),
-      description: data.description?.trim() || '',
+      name: data.name !== undefined ? String(data.name).trim() : group.name,
+      description: data.description !== undefined ? (data.description?.trim() || '') : (group.description || ''),
       members,
       teams,
       excludedMembers,
       avatar: data.avatar !== undefined ? data.avatar : (group.avatar || null),
+      // Absent in the body means "leave it alone", so an older client that does
+      // not know about this field cannot silently reset it to everyone.
+      postingPolicy: normalizePostingPolicy(data.postingPolicy, normalizePostingPolicy(group.postingPolicy)),
+      reactionVisibility: normalizeReactionVisibility(
+        data.reactionVisibility,
+        normalizeReactionVisibility(group.reactionVisibility),
+      ),
       updatedAt: new Date()
     };
 
@@ -158,6 +182,13 @@ export async function PUT(req, { params }) {
       { _id: new ObjectId(groupId) },
       { $set: updateDoc }
     );
+
+    // Announce the change in the chat itself. Computed from the diff, so an
+    // untouched save says nothing — a change log nobody can trust is worse
+    // than none. Never blocks the response.
+    for (const line of describeChanges(group, updateDoc, displayNameOf(authUser))) {
+      await postSystemMessage(db, 'group', groupId, line);
+    }
 
     return NextResponse.json({ success: true, message: 'Group updated successfully' });
   } catch (error) {

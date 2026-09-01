@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
 import clientPromise from '../../../../../lib/mongodb';
+import { isGroupAdmin } from '../../../../../lib/groupPermissions';
+import {
+  normalizePostingPolicy,
+  normalizeReactionVisibility,
+  redactReactions,
+} from '../../../../../lib/chatSystemMessages';
 import { ObjectId } from 'mongodb';
 import { cookies } from 'next/headers';
 import { sendPushNotificationsBatch } from '../../../../../lib/pushNotifications';
@@ -97,6 +103,14 @@ export async function GET(req, { params }) {
       return acc;
     }, {});
 
+    // Resolved once, not per message. The group is read here purely for its
+    // reaction-privacy setting and this viewer's admin status.
+    const groupDoc = await db
+      .collection('group_chats')
+      .findOne({ _id: new ObjectId(groupId) }, { projection: { reactionVisibility: 1, admins: 1, createdBy: 1 } });
+    const reactionVisibility = normalizeReactionVisibility(groupDoc?.reactionVisibility);
+    const viewerIsGroupAdmin = isGroupAdmin(groupDoc, userId);
+
     const serialized = messages.map(m => {
       const sender = userMap[m.senderId];
       let senderName;
@@ -112,6 +126,13 @@ export async function GET(req, { params }) {
         ...m,
         _id: m._id.toString(),
         senderName,
+        // Who reacted is governed by the group's setting; the emoji and the
+        // count are not. Redacted here rather than in the UI, because the
+        // names would otherwise still be in the response body.
+        reactions: redactReactions(m.reactions, reactionVisibility, {
+          isAdmin: viewerIsGroupAdmin,
+          isMessageAuthor: String(m.senderId) === String(userId),
+        }),
         replyToId: m.replyToId ? m.replyToId.toString() : null,
         replyToBody: m.replyToBody || null,
         replyToName: m.replyToName || null,
@@ -183,6 +204,16 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: 'Group chat not found' }, { status: 404 });
     }
  
+    // Only admins may post when the group is set that way. Enforced here
+    // rather than by hiding the composer: a hidden input is a suggestion, and
+    // this endpoint is reachable without it.
+    if (normalizePostingPolicy(group.postingPolicy) === 'admins' && !isGroupAdmin(group, userId)) {
+      return NextResponse.json(
+        { error: 'Only admins can send messages in this group', code: 'posting_restricted' },
+        { status: 403 },
+      );
+    }
+
     const botId = "600000000000000000000001";
     const cleanBody = body?.trim() || '';
     const isBotMentioned = cleanBody.toLowerCase().includes('@upcheck_admin_bot');

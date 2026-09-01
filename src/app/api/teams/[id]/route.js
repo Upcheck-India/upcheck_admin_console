@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server';
 import clientPromise from '../../../../lib/mongodb';
 import { ObjectId } from 'mongodb';
 import { getAuthUser } from '../../../../lib/auth';
+import {
+  describeChanges,
+  normalizePostingPolicy,
+  normalizeReactionVisibility,
+  postSystemMessage,
+} from '../../../../lib/chatSystemMessages';
 
 // GET - Get single team details
 export async function GET(req, { params }) {
@@ -140,6 +146,21 @@ export async function PUT(req, { params }) {
       updateData.logo = data.logo?.trim() || '';
     }
 
+    // Undefined means "leave it alone", so an older client that does not know
+    // these fields cannot silently reset them.
+    if (data.postingPolicy !== undefined) {
+      updateData.postingPolicy = normalizePostingPolicy(
+        data.postingPolicy,
+        normalizePostingPolicy(team.postingPolicy),
+      );
+    }
+    if (data.reactionVisibility !== undefined) {
+      updateData.reactionVisibility = normalizeReactionVisibility(
+        data.reactionVisibility,
+        normalizeReactionVisibility(team.reactionVisibility),
+      );
+    }
+
     // Allow changing team lead (Admin/Console admin or current lead)
     if (data.lead) {
       if (!ObjectId.isValid(data.lead)) {
@@ -160,10 +181,22 @@ export async function PUT(req, { params }) {
       updateData.lead = newLeadId;
     }
 
+    // Announce the change in the team chat itself, computed from the diff so
+    // an untouched save says nothing.
+    const actorName =
+      [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ').trim() ||
+      currentUser?.username ||
+      'An admin';
+    const notices = describeChanges(team, updateData, actorName);
+
     const result = await db.collection('teams').updateOne(
       { _id: new ObjectId(teamId) },
       { $set: updateData }
     );
+
+    for (const line of notices) {
+      await postSystemMessage(db, 'team', teamId, line);
+    }
 
     return NextResponse.json({ message: 'Team updated successfully' });
   } catch (error) {

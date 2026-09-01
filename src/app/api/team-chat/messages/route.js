@@ -5,6 +5,19 @@ import { ObjectId } from 'mongodb';
 import { sendPushNotificationsBatch } from '../../../../lib/pushNotifications';
 import { tryDispatchSlashCommand, postPluginResponse } from '../../../../lib/plugins/dispatch.js';
 import { mediaFallbackBody } from '../../../../lib/mediaType.js';
+import {
+  normalizePostingPolicy,
+  normalizeReactionVisibility,
+  redactReactions,
+} from '../../../../lib/chatSystemMessages';
+
+// A team's admins are its lead plus the platform's own admins — teams have no
+// per-chat admins array the way group chats do.
+function isTeamAdmin(team, user) {
+  if (!team || !user) return false;
+  if (user.role === 'Admin' || user.role === 'Console admin') return true;
+  return String(team.lead || '') === String(user._id);
+}
 
 import { getAuthUser } from '../../../../lib/auth';
 
@@ -109,6 +122,12 @@ export async function GET(request) {
       const pinExpired = m.pinned && m.pinExpiresAt && new Date(m.pinExpiresAt) < new Date();
       return {
         ...m,
+        // Who reacted is governed by the team's setting; the emoji and count
+        // are not. Done server-side so the names never leave the database.
+        reactions: redactReactions(m.reactions, normalizeReactionVisibility(team?.reactionVisibility), {
+          isAdmin: isTeamAdmin(team, currentUser),
+          isMessageAuthor: String(m.senderId) === String(currentUser._id),
+        }),
         _id: m._id.toString(),
         senderName: resolvedName,
         senderAvatar: resolvedAvatar,
@@ -149,6 +168,15 @@ export async function POST(request) {
  
     const team = await verifyTeamMember(db, teamId, currentUser._id.toString());
     if (!team) return NextResponse.json({ error: 'Not a team member' }, { status: 403 });
+
+    // Enforced here, not by hiding the composer — a hidden input is a
+    // suggestion, and this endpoint is reachable without one.
+    if (normalizePostingPolicy(team.postingPolicy) === 'admins' && !isTeamAdmin(team, currentUser)) {
+      return NextResponse.json(
+        { error: 'Only admins can send messages in this team', code: 'posting_restricted' },
+        { status: 403 },
+      );
+    }
  
     const botId = "600000000000000000000001";
     const cleanBody = body?.trim() || '';
