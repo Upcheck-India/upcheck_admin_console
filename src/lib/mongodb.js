@@ -349,11 +349,34 @@ clientPromise.then(async (resolvedClient) => {
     ]);
 
     const failed = indexResults.filter((r) => r.status === 'rejected');
-    if (failed.length) {
-      console.error(
-        `Failed to ensure ${failed.length} of ${indexResults.length} index(es) on startup:`,
+
+    // 85 IndexOptionsConflict / 86 IndexKeySpecsConflict: an equivalent index
+    // is already there under a different name, or with the keys in a different
+    // order. The index EXISTS — the only thing wrong is the label — so the
+    // query it was meant to serve is covered either way.
+    //
+    // These never succeed on a retry, which matters more than it looks: this
+    // deployment has seven of them, and rolling the marker back on any failure
+    // meant the version never stuck and all ~180 createIndex calls ran on
+    // every cold instance regardless. The gate above was doing nothing. Only a
+    // failure that might succeed later is worth retrying for.
+    const isNameConflict = (r) => r.reason?.code === 85 || r.reason?.code === 86;
+    const conflicts = failed.filter(isNameConflict);
+    const retryable = failed.filter((r) => !isNameConflict(r));
+
+    if (conflicts.length) {
+      console.warn(
+        `${conflicts.length} index(es) already exist under a different name — ` +
+          'harmless, and not retried. Rename them in Atlas to silence this:',
       );
-      for (const f of failed) console.error('  -', f.reason?.message || f.reason);
+      for (const f of conflicts) console.warn('  -', f.reason?.message || f.reason);
+    }
+
+    if (retryable.length) {
+      console.error(
+        `Failed to ensure ${retryable.length} of ${indexResults.length} index(es) on startup:`,
+      );
+      for (const f of retryable) console.error('  -', f.reason?.message || f.reason);
       // Roll the marker back so the next cold instance retries rather than
       // leaving an index permanently missing because one attempt half-failed.
       await db
