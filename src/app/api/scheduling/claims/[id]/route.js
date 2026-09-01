@@ -7,12 +7,15 @@ import {
   reserveSlots, releaseSlots, displayName,
 } from '../../../../../lib/scheduleClaimStore';
 import { sendEmail } from '../../../../../lib/emailService';
+import { notifyClaimDecided } from '../../../../../lib/scheduleNotifications';
 
 const fmt = (d, tz) => new Date(d).toLocaleString('en-GB', {
   timeZone: tz, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
 });
 
-// Best-effort: a claim decision must not fail because SMTP is down.
+// Best-effort: a claim decision must not fail because SMTP is down. Callers
+// deliberately do not await it — its result is ignored either way, and awaiting
+// put an SMTP round trip in front of every approve/reject response.
 async function notify(claim, block, verb, by) {
   if (!claim.userEmail) return;
   try {
@@ -73,7 +76,7 @@ export async function PATCH(req, { params }) {
         action: 'schedule_claim_cancelled', actor: user, targetType: 'schedule_claim',
         targetId: claim._id, targetName: block.title,
       });
-      if (!isHolder) await notify(claim, block, 'cancelled', displayName(user));
+      if (!isHolder) notify(claim, block, 'cancelled', displayName(user));
       return NextResponse.json({ ok: true, status: 'cancelled' });
     }
 
@@ -90,7 +93,10 @@ export async function PATCH(req, { params }) {
         action: 'schedule_claim_rejected', actor: user, targetType: 'schedule_claim',
         targetId: claim._id, targetName: block.title,
       });
-      await notify(claim, block, 'rejected', displayName(user));
+      notify(claim, block, 'rejected', displayName(user));
+      notifyClaimDecided(block, claim, 'rejected', user._id).catch((e) =>
+        console.error('[schedule] claim-decision push failed', e),
+      );
       return NextResponse.json({ ok: true, status: 'rejected' });
     }
 
@@ -152,7 +158,10 @@ export async function PATCH(req, { params }) {
         action: 'schedule_claim_approved', actor: user, targetType: 'schedule_claim',
         targetId: claim._id, targetName: block.title,
       });
-      await notify(claim, block, 'approved', displayName(user));
+      notify(claim, block, 'approved', displayName(user));
+      notifyClaimDecided(block, claim, 'approved', user._id).catch((e) =>
+        console.error('[schedule] claim-decision push failed', e),
+      );
       return NextResponse.json({ ok: true, status: 'confirmed' });
     }
 

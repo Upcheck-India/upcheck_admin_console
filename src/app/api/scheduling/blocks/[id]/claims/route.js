@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAuth, logActivity } from '../../../../../../lib/serverAuth';
+import { notifyClaimRequested } from '../../../../../../lib/scheduleNotifications';
 import {
   validateClaim, isAdmitted, isBlockAdmin, dayKeyFor, weekKeyFor, wallToUtc,
 } from '../../../../../../lib/scheduleBlocks';
@@ -123,6 +124,13 @@ export async function POST(req, { params }) {
         action: 'schedule_claim_requested', actor: user, targetType: 'schedule_claim',
         targetId: res.insertedId, targetName: block.title, metadata: { dayKey, minutes: doc.minutes },
       });
+      // A pending claim that notifies nobody just sits there: the owner has no
+      // idea it exists and the claimant is told "awaiting approval" by someone
+      // who was never asked. Fire-and-forget — a claim must not fail because a
+      // notification could not be sent.
+      notifyClaimRequested(block, { ...claim, _id: res.insertedId }).catch((e) =>
+        console.error('[schedule] claim-request push failed', e),
+      );
       return NextResponse.json({ claim: { ...claim, _id: res.insertedId } }, { status: 201 });
     }
 
