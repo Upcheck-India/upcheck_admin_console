@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getAuthUserResult } from '../../../../lib/auth';
-import { signRealtimeToken, TOKEN_TTL_SECONDS } from '../../../../lib/realtimeToken';
+import {
+  signRealtimeToken,
+  TOKEN_TTL_SECONDS,
+  realtimeSecretFingerprint,
+} from '../../../../lib/realtimeToken';
 
 // POST /api/realtime/token
 // Authenticated exactly like every other route (admin_token cookie or Bearer).
@@ -40,6 +44,10 @@ export async function POST(request) {
       token,
       expiresIn: TOKEN_TTL_SECONDS,
       userId: user._id.toString(),
+      // Must equal the value in the realtime service's GET /health. If it does
+      // not, every handshake will be rejected and clients stay on polling.
+      // Truncated SHA-256, so it identifies the secret without revealing it.
+      secretFingerprint: realtimeSecretFingerprint(),
     });
   } catch (err) {
     console.error('Realtime token error:', err);

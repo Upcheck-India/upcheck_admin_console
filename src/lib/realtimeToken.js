@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { createHash } from 'crypto';
 
 // Signs the short-lived token that clients present to upcheck_realtime's
 // Socket.IO handshake. Kept deliberately tiny: the realtime server verifies
@@ -26,6 +27,12 @@ export function signRealtimeToken({ userId, username }) {
     getSecret(),
     { algorithm: 'HS256', expiresIn: TOKEN_TTL_SECONDS }
   );
+}
+
+// See upcheck_realtime's config.js — the two must be byte-identical strings,
+// and this is how you check that without either side printing the secret.
+export function realtimeSecretFingerprint() {
+  return createHash('sha256').update(getSecret()).digest('hex').slice(0, 8);
 }
 
 export { TOKEN_TTL_SECONDS };

@@ -11,7 +11,27 @@ if (!process.env.MONGODB_URI) {
 }
 
 const uri = process.env.MONGODB_URI;
-const options = {};
+
+// Deployment note, because it is not visible from this file and it dominates
+// every other number in the system: the Atlas cluster is in AWS Mumbai
+// (ap-south-1), so the Vercel functions are pinned to bom1 in vercel.json.
+// They previously ran in iad1, which put roughly 220ms of ocean between this
+// process and the database — on a route doing five queries that was over a
+// second of latency before any work happened. If either side is ever moved,
+// move the other with it.
+const options = {
+  // Default is 100 PER CLIENT, and every serverless instance builds its own.
+  // The M0 tier caps the whole cluster at 500 connections, so a handful of
+  // concurrent instances could exhaust it and start refusing connections
+  // outright — and mongoose (below) opens a second pool per instance on top of
+  // this one. Ten is comfortably more than one instance can use in parallel
+  // now that a query is a couple of milliseconds rather than a couple of
+  // hundred.
+  maxPoolSize: 10,
+  // An unreachable cluster should fail the request, not hold it for the 30s
+  // default while the client's socket and the caller's screen both wait.
+  serverSelectionTimeoutMS: 8000,
+};
 
 let client;
 let clientPromise;
@@ -27,10 +47,51 @@ if (process.env.NODE_ENV === 'development') {
   clientPromise = client.connect();
 }
 
-// Automatically clear stale bot locks on startup/restart
+// Bump whenever an index is added to or changed in the list below. That is the
+// only thing that makes the ~180 createIndex calls run again.
+const INDEX_SET_VERSION = 1;
+
+// How often stale bot-processing locks are swept, at most.
+const BOT_LOCK_SWEEP_MS = 5 * 60 * 1000;
+
+// Both blocks below used to run on EVERY module load. On Vercel that is every
+// cold serverless instance, not "on startup" — so each new instance fired three
+// collection-wide updateMany writes plus ~180 createIndex round trips at Atlas
+// before, and concurrently with, the first real query it was spun up to serve.
+// They are no-ops in effect but not in cost, and they were competing for the
+// same connection pool as the request the user was waiting on.
+//
+// This gate turns each into a single findOne against a tiny marker collection.
+// The work still happens — when the index set actually changes, or when the
+// lock sweep is genuinely due — just not once per instance.
+//
+// Returns true if the caller should do the work (and records that it did).
+async function claimBootstrap(db, id, isDue) {
+  try {
+    const marker = await db.collection('_bootstrap').findOne({ _id: id });
+    if (!isDue(marker)) return false;
+    // Best-effort. A race between two cold instances costs one duplicated
+    // sweep, which is harmless; a lock here would cost more than it saves.
+    await db
+      .collection('_bootstrap')
+      .updateOne({ _id: id }, { $set: { at: new Date(), version: INDEX_SET_VERSION } }, { upsert: true });
+    return true;
+  } catch (err) {
+    // Marker unreadable — do the work rather than silently skipping it, which
+    // is the behaviour this code had before the gate existed.
+    console.error(`Bootstrap marker '${id}' check failed, running anyway:`, err?.message || err);
+    return true;
+  }
+}
+
+// Clear stale bot locks, at most once every BOT_LOCK_SWEEP_MS across the fleet.
 clientPromise.then(async (resolvedClient) => {
   try {
     const db = resolvedClient.db('resources');
+    const due = await claimBootstrap(db, 'botlocks', (m) =>
+      !m?.at || Date.now() - new Date(m.at).getTime() > BOT_LOCK_SWEEP_MS
+    );
+    if (!due) return;
     await Promise.all([
       db.collection('conversations').updateMany({ isBotProcessing: true }, { $set: { isBotProcessing: false }, $unset: { botProcessingStartedAt: "" } }),
       db.collection('group_chats').updateMany({ isBotProcessing: true }, { $set: { isBotProcessing: false }, $unset: { botProcessingStartedAt: "" } }),
@@ -50,6 +111,12 @@ clientPromise.then(async (resolvedClient) => {
 clientPromise.then(async (resolvedClient) => {
   try {
     const db = resolvedClient.db('resources');
+    const due = await claimBootstrap(
+      db,
+      'indexes',
+      (m) => m?.version !== INDEX_SET_VERSION
+    );
+    if (!due) return;
     // allSettled, not all: a single index that cannot be built (a unique index
     // over data that already has duplicates, say) must not mask the outcome of
     // the ~120 others. Each failure is reported on its own below.
@@ -287,6 +354,12 @@ clientPromise.then(async (resolvedClient) => {
         `Failed to ensure ${failed.length} of ${indexResults.length} index(es) on startup:`,
       );
       for (const f of failed) console.error('  -', f.reason?.message || f.reason);
+      // Roll the marker back so the next cold instance retries rather than
+      // leaving an index permanently missing because one attempt half-failed.
+      await db
+        .collection('_bootstrap')
+        .updateOne({ _id: 'indexes' }, { $unset: { version: '' } })
+        .catch(() => {});
     }
   } catch (err) {
     console.error('Failed to ensure indexes on startup:', err);

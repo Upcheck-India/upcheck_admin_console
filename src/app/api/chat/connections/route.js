@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 
+// The bot row is seeded with $setOnInsert, so after the first time it is a
+// write command that changes nothing — but it was still a round trip on every
+// call, and this endpoint is polled by every mobile client every few seconds.
+// Once per serverless instance is all the guarantee the upsert was ever
+// providing.
+let botSeeded = false;
+
 export async function GET(request) {
   try {
     const auth = await getAuthUser(request);
@@ -23,11 +30,14 @@ export async function GET(request) {
       messagingPrivacy: "everyone",
       createdAt: new Date(),
     };
-    await db.collection('admin_users').updateOne(
-      { _id: new ObjectId(botId) },
-      { $setOnInsert: botDetails },
-      { upsert: true }
-    );
+    if (!botSeeded) {
+      await db.collection('admin_users').updateOne(
+        { _id: new ObjectId(botId) },
+        { $setOnInsert: botDetails },
+        { upsert: true }
+      );
+      botSeeded = true;
+    }
 
     // Ensure connection with bot exists by default
     const botConnection = await db.collection('chat_connections').findOne({

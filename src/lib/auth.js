@@ -1,6 +1,34 @@
 import { cookies } from 'next/headers';
 import clientPromise from './mongodb.js';
 
+// Last time this instance stamped lastUsedAt for a given session token.
+//
+// The stamp is a "when was this session last active" display value on the
+// devices/sessions screen, but it was written on EVERY authenticated request.
+// The mobile app polls several endpoints every few seconds per user, so this
+// was the single most frequent write in the system, to buy a field nobody reads
+// at second resolution. Once a minute is the same information at a fraction of
+// the write load. Per-instance, so the worst case across a fleet is one write
+// per minute per instance — still orders of magnitude below one per request.
+const LAST_USED_STAMP_INTERVAL_MS = 60 * 1000;
+const lastUsedStampedAt = new Map();
+
+function shouldStampLastUsed(token) {
+  const now = Date.now();
+  const prev = lastUsedStampedAt.get(token);
+  if (prev && now - prev < LAST_USED_STAMP_INTERVAL_MS) return false;
+  lastUsedStampedAt.set(token, now);
+  // Unbounded growth would be a leak in a long-lived instance; the map only
+  // needs the recent past, so drop everything older than one interval whenever
+  // it gets large.
+  if (lastUsedStampedAt.size > 500) {
+    for (const [t, at] of lastUsedStampedAt) {
+      if (now - at >= LAST_USED_STAMP_INTERVAL_MS) lastUsedStampedAt.delete(t);
+    }
+  }
+  return true;
+}
+
 function extractToken(req) {
   let token = null;
 
@@ -42,7 +70,7 @@ async function resolveAuthOnce(req, token) {
 
     if (session) {
       user = await db.collection('admin_users').findOne({ _id: session.userId });
-      if (user) {
+      if (user && shouldStampLastUsed(token)) {
         db.collection('admin_sessions').updateOne(
           { _id: session._id },
           { $set: { lastUsedAt: new Date() } }

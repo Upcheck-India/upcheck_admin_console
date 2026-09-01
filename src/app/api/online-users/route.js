@@ -39,7 +39,13 @@ export async function GET(req) {
 
     // Authenticate scanner/logged-in user
     const auth = await getAuthUser(req);
-    let myTeamIds = [];
+    // My teams, once. The documents already contain their own member and lead
+    // lists, so who my teammates are is answerable from these in memory —
+    // it was previously re-queried against the teams collection once per
+    // online user, turning a status poll into N+1 round trips for an answer
+    // already sitting in `myTeams`.
+    const teammateIds = new Set();
+    const myIdStr = auth?.user?._id?.toString();
     if (auth && auth.user) {
       const myId = auth.user._id;
       const myTeams = await db.collection('teams').find({
@@ -50,35 +56,27 @@ export async function GET(req) {
           { lead: myId.toString() }
         ]
       }).toArray();
-      myTeamIds = myTeams.map(t => t._id.toString());
+      for (const t of myTeams) {
+        for (const m of (Array.isArray(t.members) ? t.members : [])) {
+          if (m) teammateIds.add(m.toString());
+        }
+        // `lead` may be a single id or an array, and is stored as an ObjectId
+        // in some documents and a string in others — same tolerance the query
+        // above had to have.
+        for (const l of (Array.isArray(t.lead) ? t.lead : [t.lead])) {
+          if (l) teammateIds.add(l.toString());
+        }
+      }
     }
 
-    const resolved = await Promise.all(online.map(async (u) => {
-      let isTeammate = false;
+    const resolved = online.map((u) => {
       const uIdStr = u._id.toString();
-      const myIdStr = auth?.user?._id?.toString();
-      
-      if (myIdStr && uIdStr === myIdStr) {
-        isTeammate = true;
-      } else if (myTeamIds.length > 0) {
-        const targetTeams = await db.collection('teams').find({
-          _id: { $in: myTeamIds.map(id => new ObjectId(id)) },
-          $or: [
-            { members: u._id },
-            { members: uIdStr },
-            { lead: u._id },
-            { lead: uIdStr }
-          ]
-        }).limit(1).toArray();
-        isTeammate = targetTeams.length > 0;
-      }
-      
       return {
         ...u,
         _id: uIdStr,
-        isTeammate
+        isTeammate: (myIdStr && uIdStr === myIdStr) || teammateIds.has(uIdStr),
       };
-    }));
+    });
 
     return NextResponse.json(resolved);
   } catch (error) {
