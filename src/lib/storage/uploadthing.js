@@ -76,7 +76,8 @@ export async function getDownloadStream(_db, ref, range) {
 }
 
 export async function deleteFile(_db, ref) {
-  if (ref.utKey) await getApi().deleteFiles(ref.utKey).catch(() => {});
+  if (!ref.utKey) throw new Error('ref has no utKey to delete');
+  await getApi().deleteFiles(ref.utKey); // idempotent; errors must propagate
 }
 
 export async function getUsage() {

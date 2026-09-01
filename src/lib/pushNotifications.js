@@ -108,7 +108,16 @@ async function claimQuietWindow(db, pairs) {
 }
 
 function collapseKeyForData(data) {
-  return threadKeyForData(data) || undefined;
+  const thread = threadKeyForData(data);
+  if (thread) return thread;
+  // All notifications about one claim share a tag, so a withdrawal REPLACES
+  // the "approve me" already sitting in the owner's tray. A delivered
+  // notification cannot be dismissed remotely; replacing it is the only way to
+  // stop a cancelled request still asking to be approved.
+  if (data && data.claimId && String(data.type || '').startsWith('schedule_claim')) {
+    return `claim:${data.claimId}`;
+  }
+  return undefined;
 }
 
 function categoryIdForType(type) {
@@ -136,7 +145,7 @@ async function removeStaleToken(db, userId, token) {
  * @param {string} body - The notification body text
  * @param {object} data - Optional extra data payload
  */
-export async function sendPushNotification(userId, title, body, data = {}) {
+export async function sendPushNotification(userId, title, body, data = {}, options = {}) {
   try {
     const client = await clientPromise;
     const db = client.db('resources');
@@ -177,7 +186,10 @@ export async function sendPushNotification(userId, title, body, data = {}) {
     const collapseKey = collapseKeyForData(data);
     const messages = deliverTo.map((token) => ({
       to: token,
-      sound,
+      // A silent send still replaces the visible notification via its tag; it
+      // just does not buzz. Correcting something already on screen should not
+      // demand attention a second time.
+      sound: options.silent ? null : sound,
       priority: 'high',
       channelId,
       ...(categoryId ? { categoryId } : {}),

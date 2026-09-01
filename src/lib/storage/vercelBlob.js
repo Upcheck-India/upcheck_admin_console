@@ -81,7 +81,9 @@ export async function getDownloadStream(_db, ref, range) {
 
 export async function deleteFile(_db, ref) {
   const target = ref.blobUrl || ref.blobPathname;
-  if (target) await del(target, { token: TOKEN }).catch(() => {});
+  // No reference is not a success — that is how a file becomes unreachable.
+  if (!target) throw new Error('ref has no blobUrl/blobPathname to delete');
+  await del(target, { token: TOKEN }); // idempotent; errors must propagate
 }
 
 export async function getUsage(_db, { prefix = DEFAULT_PREFIX } = {}) {

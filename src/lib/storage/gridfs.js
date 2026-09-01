@@ -79,8 +79,16 @@ export async function getDownloadStream(db, ref, range) {
 }
 
 export async function deleteFile(db, ref) {
-  if (!ref.fileId || !ObjectId.isValid(ref.fileId)) return;
-  await getBucket(db, ref.storageBucket).delete(new ObjectId(ref.fileId)).catch(() => {});
+  if (!ref.fileId || !ObjectId.isValid(ref.fileId)) {
+    throw new Error('ref has no valid fileId to delete');
+  }
+  try {
+    await getBucket(db, ref.storageBucket).delete(new ObjectId(ref.fileId));
+  } catch (err) {
+    // Already gone is the outcome we wanted; anything else must reach the
+    // caller rather than being reported as a successful delete.
+    if (!/file not found|filenotfound/i.test(String(err && err.message))) throw err;
+  }
 }
 
 export async function getUsage(db, { bucket = DEFAULT_BUCKET } = {}) {

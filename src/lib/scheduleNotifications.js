@@ -60,6 +60,35 @@ export async function notifyClaimRequested(block, claim) {
   );
 }
 
+/**
+ * A claim was withdrawn: replace whatever it already put in the owner's tray.
+ *
+ * Without this, cancelling a request left the owner holding a notification
+ * asking them to approve something that no longer exists. It shares the
+ * claim's tag (see collapseKeyForData) so it overwrites rather than stacks,
+ * and it is silent because it corrects a notification instead of raising a
+ * new concern.
+ */
+export async function notifyClaimCancelled(block, claim, cancelledBy) {
+  const ownerId = block?.ownerId && String(block.ownerId);
+  if (!ownerId || ownerId === String(cancelledBy)) return;
+  // Only an approval-mode request ever asked the owner for anything.
+  if (block.claimMode !== 'approval') return;
+
+  const who = claim.userName || 'Someone';
+  await sendPushNotification(
+    ownerId,
+    `${who} withdrew their request`,
+    `${block.title} · ${describeSlot(block, claim)}`,
+    {
+      type: 'schedule_claim_cancelled',
+      blockId: String(block._id),
+      claimId: String(claim._id),
+    },
+    { silent: true },
+  );
+}
+
 /** A pending claim was approved or rejected: tell whoever asked. */
 export async function notifyClaimDecided(block, claim, decision, decidedBy) {
   const holderId = claim?.userId && String(claim.userId);

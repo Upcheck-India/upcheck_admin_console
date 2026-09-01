@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAuthUser } from '../../../../../lib/auth';
 import { ObjectId } from 'mongodb';
 import { getProviderForRef } from '../../../../../lib/storage/index.js';
+import { deleteVersionFile } from '../../../../../lib/appstoreOrphans';
 
 export async function GET(request, { params }) {
   try {
@@ -224,15 +225,34 @@ export async function DELETE(request, { params }) {
 
     // 1. Delete all version files, each from whichever backend it was
     // actually stored with.
+    //
+    // The .catch(() => {}) this replaces was worse than it looked: the provider
+    // deleteFile it guarded swallowed its own errors too, so a failed delete
+    // was indistinguishable from a successful one. The app document then went
+    // anyway, leaving bytes in the provider with nothing referencing them —
+    // unreachable and uncountable. Failures are now recorded and retried by the
+    // realtime service's sweep.
     const versions = app.versions || [];
+    let orphaned = 0;
     for (const v of versions) {
-      await getProviderForRef(v).deleteFile(db, v).catch(() => {});
+      const ok = await deleteVersionFile(db, v, getProviderForRef(v), {
+        appId: String(id),
+        version: v.version || null,
+        reason: 'app_deleted',
+      });
+      if (!ok) orphaned += 1;
     }
 
     // 2. Delete app metadata document
     await db.collection('appstore_apps').deleteOne({ _id: new ObjectId(id) });
 
-    return NextResponse.json({ success: true, message: 'App and all associated files deleted successfully' });
+    return NextResponse.json({
+      success: true,
+      message: orphaned
+        ? `App deleted. ${orphaned} file(s) could not be removed from storage yet and will be retried.`
+        : 'App and all associated files deleted successfully',
+      orphanedFiles: orphaned,
+    });
   } catch (error) {
     console.error('App Store apps single DELETE error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

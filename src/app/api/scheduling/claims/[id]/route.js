@@ -7,7 +7,7 @@ import {
   reserveSlots, releaseSlots, displayName,
 } from '../../../../../lib/scheduleClaimStore';
 import { sendEmail } from '../../../../../lib/emailService';
-import { notifyClaimDecided } from '../../../../../lib/scheduleNotifications';
+import { notifyClaimCancelled, notifyClaimDecided } from '../../../../../lib/scheduleNotifications';
 
 const fmt = (d, tz) => new Date(d).toLocaleString('en-GB', {
   timeZone: tz, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -77,6 +77,10 @@ export async function PATCH(req, { params }) {
         targetId: claim._id, targetName: block.title,
       });
       if (!isHolder) notify(claim, block, 'cancelled', displayName(user));
+      // Void the owner's pending "approve this" — see notifyClaimCancelled.
+      notifyClaimCancelled(block, claim, user._id).catch((e) =>
+        console.error('[schedule] claim-cancel push failed', e),
+      );
       return NextResponse.json({ ok: true, status: 'cancelled' });
     }
 
