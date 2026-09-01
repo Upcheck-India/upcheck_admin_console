@@ -1,4 +1,5 @@
 import clientPromise from './mongodb.js';
+import { threadKeyForData, tokensViewingThread } from './activeChatViewers';
 import { ObjectId } from 'mongodb';
 
 // Two different namespaces that look similar but must not be conflated:
@@ -48,6 +49,68 @@ function resolveNotificationRouting(user, type) {
 // Chat notifications get a "Reply" quick action (client registers a matching
 // notification category with a text-input action under this id) so a
 // message can be answered directly from the tray without opening the app.
+// Android replaces an already-displayed notification carrying the same `tag`,
+// and `collapseId` coalesces messages still in transit. Keying both on the
+// conversation is what turns "thirty buzzes from one busy group" into a single
+// notification that updates in place — the behaviour people expect from every
+// other messenger. Non-chat notifications get no tag, so a meeting reminder
+// never replaces an unrelated one.
+// A busy group should not buzz once per message.
+//
+// `tag` above already collapses the notifications visually, so the user sees
+// one entry per conversation rather than thirty. This handles the other half:
+// within the quiet window, the replacement is delivered SILENTLY. The content
+// still updates instantly and nothing is lost — only the sound and vibration
+// are suppressed, and only for a conversation that just made a noise.
+//
+// Direct messages are exempt: a DM is a person talking to you specifically,
+// and the flood problem is a group-chat problem. A mention is exempt for the
+// same reason.
+const QUIET_WINDOW_MS = 45 * 1000;
+const THROTTLE_COLLECTION = 'chat_push_throttle';
+
+function isFloodProne(data) {
+  return data?.type === 'team_message' || data?.type === 'group_message';
+}
+
+/**
+ * Of the given {userId, threadKey} pairs, those that made a sound recently.
+ * Marks all of them as having just notified.
+ *
+ * Fails open: on any error nothing is considered recent, so every notification
+ * keeps its sound. Being noisy is a far better failure than being silent.
+ */
+async function claimQuietWindow(db, pairs) {
+  if (!pairs.length) return new Set();
+  const ids = pairs.map((p) => `${p.userId}|${p.threadKey}`);
+  try {
+    const now = new Date();
+    const recent = await db
+      .collection(THROTTLE_COLLECTION)
+      .find({ _id: { $in: ids }, expiresAt: { $gt: now } }, { projection: { _id: 1 } })
+      .toArray();
+    const quiet = new Set(recent.map((r) => r._id));
+    await db.collection(THROTTLE_COLLECTION).bulkWrite(
+      ids.map((_id) => ({
+        updateOne: {
+          filter: { _id },
+          update: { $set: { expiresAt: new Date(now.getTime() + QUIET_WINDOW_MS) } },
+          upsert: true,
+        },
+      })),
+      { ordered: false },
+    );
+    return quiet;
+  } catch (err) {
+    console.error('[Push] quiet-window check failed, notifying with sound:', err?.message || err);
+    return new Set();
+  }
+}
+
+function collapseKeyForData(data) {
+  return threadKeyForData(data) || undefined;
+}
+
 function categoryIdForType(type) {
   if (type === 'chat_message' || type === 'team_message' || type === 'group_message') {
     return 'chat_reply';
@@ -92,18 +155,33 @@ export async function sendPushNotification(userId, title, body, data = {}) {
       return;
     }
 
+    // Drop any device that currently has this exact conversation open. The
+    // user is already looking at the message; notifying them about it is the
+    // complaint this whole mechanism exists to fix. This filters tokens rather
+    // than returning early, so the user's OTHER devices still get notified.
+    const viewing = await tokensViewingThread(db, tokens, threadKeyForData(data));
+    const deliverTo = tokens.filter((t) => !viewing.has(t));
+    if (deliverTo.length === 0) {
+      console.log(
+        `[Push Notification] every device of ${userId} has this thread open; not sending`
+      );
+      return;
+    }
+
     const { channelId, sound } = resolveNotificationRouting(user, data?.type);
     const categoryId = categoryIdForType(data?.type);
     // Tag the payload with its intended recipient so the client can refuse
     // to surface it if a different account is logged in on this device by
     // the time it arrives (a stale/shared token from a previous logout).
     const dataWithRecipient = { ...data, recipientUserId: user._id.toString() };
-    const messages = tokens.map((token) => ({
+    const collapseKey = collapseKeyForData(data);
+    const messages = deliverTo.map((token) => ({
       to: token,
       sound,
       priority: 'high',
       channelId,
       ...(categoryId ? { categoryId } : {}),
+      ...(collapseKey ? { tag: collapseKey, collapseId: collapseKey } : {}),
       title,
       body,
       data: dataWithRecipient,
@@ -128,8 +206,8 @@ export async function sendPushNotification(userId, title, body, data = {}) {
         // Stop re-sending to tokens Expo/the OS has permanently rejected,
         // so a stale token from an uninstalled app doesn't keep silently
         // eating this user's notification for good.
-        if (ticket.details?.error === 'DeviceNotRegistered' && tokens[i]) {
-          await removeStaleToken(db, userId, tokens[i]);
+        if (ticket.details?.error === 'DeviceNotRegistered' && deliverTo[i]) {
+          await removeStaleToken(db, userId, deliverTo[i]);
         }
       }
     }
@@ -165,6 +243,28 @@ export async function sendPushNotificationsBatch(items) {
     const users = await db.collection('admin_users').find({ _id: { $in: objIds } }).toArray();
     const userMap = new Map(users.map((u) => [u._id.toString(), u]));
 
+    // Devices with one of these threads already open, resolved in ONE query
+    // for the whole batch rather than per recipient. Team and group fan-out
+    // comes through here, so without this a member reading a busy group is
+    // notified about every message they are actively watching arrive.
+    const allTokens = [];
+    for (const u of users) {
+      if (Array.isArray(u.expoPushTokens)) allTokens.push(...u.expoPushTokens);
+      if (u.expoPushToken) allTokens.push(u.expoPushToken);
+    }
+    const threadKeys = [...new Set(items.map((i) => threadKeyForData(i.data)).filter(Boolean))];
+    const viewingByThread = new Map();
+    for (const key of threadKeys) {
+      viewingByThread.set(key, await tokensViewingThread(db, [...new Set(allTokens)], key));
+    }
+
+    // One round trip for the whole fan-out, not one per recipient.
+    const quietCandidates = items
+      .filter((i) => isFloodProne(i.data) && !i.data?.isMention)
+      .map((i) => ({ userId: i.userId, threadKey: threadKeyForData(i.data) }))
+      .filter((p) => p.threadKey);
+    const quiet = await claimQuietWindow(db, quietCandidates);
+
     const messages = [];
     const tokenOwners = []; // parallel to `messages`, for stale-token cleanup below
     for (const item of items) {
@@ -179,13 +279,19 @@ export async function sendPushNotificationsBatch(items) {
       const { channelId, sound } = resolveNotificationRouting(user, item.data?.type);
       const categoryId = categoryIdForType(item.data?.type);
       const dataWithRecipient = { ...(item.data || {}), recipientUserId: user._id.toString() };
+      const itemThreadKey = threadKeyForData(item.data);
+      // A silent replacement: the tray entry updates, the phone stays quiet.
+      const isQuiet = quiet.has(`${item.userId}|${itemThreadKey}`);
+      const viewing = viewingByThread.get(itemThreadKey) || new Set();
       for (const token of tokens) {
+        if (viewing.has(token)) continue; // that device is reading this thread right now
         messages.push({
           to: token,
-          sound,
+          sound: isQuiet ? null : sound,
           priority: 'high',
           channelId,
           ...(categoryId ? { categoryId } : {}),
+          ...(itemThreadKey ? { tag: itemThreadKey, collapseId: itemThreadKey } : {}),
           title: item.title,
           body: item.body,
           data: dataWithRecipient,

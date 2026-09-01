@@ -371,7 +371,15 @@ export async function POST(req, { params }) {
               ? `🚨 ${senderName} mentioned you in group ${group.name}`
               : `${senderName} in group ${group.name}`,
             body: persistedBody,
-            data: { type: 'group_message', groupId, groupName: group.name, messageId: result.insertedId.toString() },
+            data: {
+              type: 'group_message',
+              groupId,
+              groupName: group.name,
+              messageId: result.insertedId.toString(),
+              // See the team route: exempts a message aimed at this person
+              // from the quiet window in lib/pushNotifications.js.
+              isMention: mentionedUserIds.has(recipientId),
+            },
           }))
         ).catch(err => console.error('[GroupChat Push Error]', err));
       }

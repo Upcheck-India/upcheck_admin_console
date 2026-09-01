@@ -310,7 +310,15 @@ export async function POST(request) {
           ? `🚨 ${senderName} mentioned you in team ${team.name}`
           : `${senderName} in ${team.name}`,
         body: persistedBody,
-        data: { type: 'team_message', teamId, teamName: team.name, messageId: result.insertedId.toString() },
+        data: {
+          type: 'team_message',
+          teamId,
+          teamName: team.name,
+          messageId: result.insertedId.toString(),
+          // Lets the quiet window below stay out of the way of a message that
+          // is actually addressed to this person.
+          isMention: mentionedUserIds.has(recipientId),
+        },
       }))
     ).catch(err => console.error('[TeamChat Push Error]', err));
 

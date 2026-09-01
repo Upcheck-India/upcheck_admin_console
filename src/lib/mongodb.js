@@ -49,7 +49,7 @@ if (process.env.NODE_ENV === 'development') {
 
 // Bump whenever an index is added to or changed in the list below. That is the
 // only thing that makes the ~180 createIndex calls run again.
-const INDEX_SET_VERSION = 1;
+const INDEX_SET_VERSION = 3;
 
 // How often stale bot-processing locks are swept, at most.
 const BOT_LOCK_SWEEP_MS = 5 * 60 * 1000;
@@ -346,6 +346,22 @@ clientPromise.then(async (resolvedClient) => {
         { unique: true, partialFilterExpression: { active: true } },
       ),
       db.collection('schedule_claim_slots').createIndex({ claimId: 1 }),
+      // Which device has which conversation open, so a push about a message
+      // the user is already reading is never sent (lib/activeChatViewers.js).
+      // Looked up on every chat notification, and the rows self-expire so a
+      // force-killed app starts notifying again on its own.
+      db.collection('chat_active_viewers').createIndex({ threadKey: 1 }),
+      db.collection('chat_active_viewers').createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0, name: 'active_viewer_ttl' },
+      ),
+      // Per-user, per-conversation "this already made a sound recently", so a
+      // busy group updates its notification silently instead of buzzing once
+      // per message. Rows self-expire with the quiet window.
+      db.collection('chat_push_throttle').createIndex(
+        { expiresAt: 1 },
+        { expireAfterSeconds: 0, name: 'push_throttle_ttl' },
+      ),
     ]);
 
     const failed = indexResults.filter((r) => r.status === 'rejected');
