@@ -199,8 +199,8 @@ export async function POST(req) {
       members,
       teams,
       createdBy: creatorObjId,
-      postingPolicy: normalizePostingPolicy(body?.postingPolicy),
-      reactionVisibility: normalizeReactionVisibility(body?.reactionVisibility),
+      postingPolicy: normalizePostingPolicy(data?.postingPolicy),
+      reactionVisibility: normalizeReactionVisibility(data?.reactionVisibility),
       // The creator is automatically the first group admin. Stored as its
       // own array (rather than reusing `members`, which is broader — team
       // members can be inherited members without being admins) so multiple
